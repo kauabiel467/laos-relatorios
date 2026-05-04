@@ -1,6 +1,14 @@
 // ─── EXTRAÇÃO DE DADOS VIA IA ────────────────────────────────────────────────
 
 const CLAUDE_API = "https://api.anthropic.com/v1/messages"
+const ANTHROPIC_KEY = process.env.REACT_APP_ANTHROPIC_KEY
+
+const HEADERS = {
+  "Content-Type": "application/json",
+  "x-api-key": ANTHROPIC_KEY,
+  "anthropic-version": "2023-06-01",
+  "anthropic-dangerous-direct-browser-access": "true",
+}
 
 // Converte arquivo para base64
 export async function fileToBase64(file) {
@@ -71,7 +79,7 @@ Responda SOMENTE em JSON válido, sem comentários:
 
   const response = await fetch(CLAUDE_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: HEADERS,
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
@@ -132,7 +140,7 @@ Responda SOMENTE em JSON válido:
 
   const response = await fetch(CLAUDE_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: HEADERS,
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1000,
@@ -201,7 +209,7 @@ Responda SOMENTE em JSON válido:
 
   const response = await fetch(CLAUDE_API, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: HEADERS,
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 1200,
