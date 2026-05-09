@@ -9,13 +9,15 @@ export async function GET(request: NextRequest) {
   const accountId = searchParams.get("accountId");
   const periodParam = searchParams.get("period") as PeriodKey | null;
   const period = periodParam && VALID_PERIODS.has(periodParam) ? periodParam : "last_30d";
+  const since = searchParams.get("since");
+  const until = searchParams.get("until");
 
   if (!accountId) {
     return NextResponse.json({ error: "Informe a conta da Meta para carregar o dashboard." }, { status: 400 });
   }
 
   try {
-    const bundle = await fetchMetaDashboardData(accountId, period);
+    const bundle = await fetchMetaDashboardData(accountId, period, { since, until });
     return NextResponse.json(bundle);
   } catch (error) {
     return NextResponse.json(

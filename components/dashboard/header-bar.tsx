@@ -9,9 +9,12 @@ interface HeaderBarProps {
   search: string;
   selectedClient: Client;
   period: PeriodKey;
+  customStartDate: string;
+  customEndDate: string;
   onSearchChange: (value: string) => void;
   onSelectClient: (client: Client) => void;
   onPeriodChange: (period: PeriodKey) => void;
+  onCustomRangeChange: (startDate: string, endDate: string) => void;
   onOpenConfig: () => void;
   onExport: () => void;
 }
@@ -33,25 +36,40 @@ export function HeaderBar({
   search,
   selectedClient,
   period,
+  customStartDate,
+  customEndDate,
   onSearchChange,
   onSelectClient,
   onPeriodChange,
+  onCustomRangeChange,
   onOpenConfig,
   onExport
 }: HeaderBarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [draftStartDate, setDraftStartDate] = useState(customStartDate);
+  const [draftEndDate, setDraftEndDate] = useState(customEndDate);
   const searchRef = useRef<HTMLDivElement | null>(null);
+  const periodRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (!searchRef.current?.contains(event.target as Node)) {
         setIsSearchOpen(false);
       }
+      if (!periodRef.current?.contains(event.target as Node)) {
+        setIsCalendarOpen(false);
+      }
     }
 
     window.addEventListener("mousedown", handleOutsideClick);
     return () => window.removeEventListener("mousedown", handleOutsideClick);
   }, []);
+
+  useEffect(() => {
+    setDraftStartDate(customStartDate);
+    setDraftEndDate(customEndDate);
+  }, [customStartDate, customEndDate]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-bg/95 backdrop-blur">
@@ -120,12 +138,20 @@ export function HeaderBar({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="panel-soft flex items-center gap-1 p-1">
+          <div ref={periodRef} className="panel-soft relative flex items-center gap-1 p-1">
             {periodOptions.map((option) => (
               <button
                 key={option.key}
                 type="button"
-                onClick={() => onPeriodChange(option.key)}
+                onClick={() => {
+                  if (option.key === "custom") {
+                    setIsCalendarOpen(true);
+                    return;
+                  }
+
+                  onPeriodChange(option.key);
+                  setIsCalendarOpen(false);
+                }}
                 className={clsx(
                   "rounded-md px-3 py-1.5 font-mono text-[11px] transition",
                   period === option.key ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
@@ -134,6 +160,45 @@ export function HeaderBar({
                 {option.label}
               </button>
             ))}
+            <div
+              className={clsx(
+                "panel absolute right-0 top-[calc(100%+10px)] z-[65] w-[min(20rem,calc(100vw-2rem))] p-4 shadow-panel transition duration-200",
+                isCalendarOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-1 scale-95 opacity-0"
+              )}
+            >
+              <div className="eyebrow mb-3">Periodo personalizado</div>
+              <div className="grid gap-3">
+                <label className="grid gap-1 text-xs text-muted">
+                  Inicio
+                  <input
+                    type="date"
+                    value={draftStartDate}
+                    onChange={(event) => setDraftStartDate(event.target.value)}
+                    className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition focus:border-blue"
+                  />
+                </label>
+                <label className="grid gap-1 text-xs text-muted">
+                  Fim
+                  <input
+                    type="date"
+                    value={draftEndDate}
+                    onChange={(event) => setDraftEndDate(event.target.value)}
+                    className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition focus:border-blue"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCustomRangeChange(draftStartDate, draftEndDate);
+                    onPeriodChange("custom");
+                    setIsCalendarOpen(false);
+                  }}
+                  className="rounded-lg bg-blue px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue/90"
+                >
+                  Aplicar periodo
+                </button>
+              </div>
+            </div>
           </div>
           <button type="button" onClick={onExport} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
             Exportar

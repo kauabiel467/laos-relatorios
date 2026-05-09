@@ -114,11 +114,27 @@ function formatISODate(date: Date) {
   return date.toISOString().slice(0, 10);
 }
 
-function getPeriodWindow(period: PeriodKey) {
+function parseISODate(value?: string | null) {
+  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const date = new Date(`${value}T12:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getPeriodWindow(period: PeriodKey, customRange?: { since?: string | null; until?: string | null }) {
   const today = new Date();
-  const days = period === "last_7d" ? 7 : period === "last_90d" ? 90 : 30;
-  const currentEnd = endOfDay(today);
-  const currentStart = startOfDay(subDays(today, days - 1));
+  const customSince = period === "custom" ? parseISODate(customRange?.since) : null;
+  const customUntil = period === "custom" ? parseISODate(customRange?.until) : null;
+  const hasValidCustomRange = Boolean(customSince && customUntil && customSince <= customUntil);
+  const days =
+    hasValidCustomRange && customSince && customUntil
+      ? Math.max(1, Math.round((startOfDay(customUntil).getTime() - startOfDay(customSince).getTime()) / 86_400_000) + 1)
+      : period === "last_7d"
+        ? 7
+        : period === "last_90d"
+          ? 90
+          : 30;
+  const currentEnd = endOfDay(hasValidCustomRange && customUntil ? customUntil : today);
+  const currentStart = startOfDay(hasValidCustomRange && customSince ? customSince : subDays(today, days - 1));
   const previousEnd = endOfDay(subDays(currentStart, 1));
   const previousStart = startOfDay(subDays(previousEnd, days - 1));
 
@@ -549,7 +565,11 @@ function ensureAccountAllowed(accountId: string, selectedAccountIds: string[]) {
   return selectedAccountIds.includes(normalized);
 }
 
-export async function fetchMetaDashboardData(accountId: string, period: PeriodKey): Promise<DashboardDataBundle> {
+export async function fetchMetaDashboardData(
+  accountId: string,
+  period: PeriodKey,
+  customRange?: { since?: string | null; until?: string | null }
+): Promise<DashboardDataBundle> {
   const session = await getMetaSession();
   const normalizedAccountId = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
 
@@ -557,7 +577,7 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
     throw new Error("Essa conta nao esta liberada na integracao atual da Meta.");
   }
 
-  const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindow(period);
+  const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindow(period, customRange);
   const accessToken = session.accessToken;
 
   const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, hourlyInsightsPayload, audienceInsightsPayload, campaignsPayload, campaignInsightsPayload] =
@@ -732,9 +752,13 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   };
 }
 
-export async function fetchMetaCampaignAds(campaignId: string, period: PeriodKey): Promise<AdItem[]> {
+export async function fetchMetaCampaignAds(
+  campaignId: string,
+  period: PeriodKey,
+  customRange?: { since?: string | null; until?: string | null }
+): Promise<AdItem[]> {
   const session = await getMetaSession();
-  const { currentStart, currentEnd } = getPeriodWindow(period);
+  const { currentStart, currentEnd } = getPeriodWindow(period, customRange);
   const accessToken = session.accessToken;
   const normalizedCampaignId = campaignId.replace(/^cmp_/, "");
 

@@ -78,12 +78,27 @@ const emptyGenderAudience: DashboardDataBundle["genderAudience"] = [];
 
 type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "cpa";
 
+function formatDateInput(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getDefaultCustomRange() {
+  const end = new Date();
+  const start = new Date();
+  start.setDate(end.getDate() - 29);
+  return {
+    start: formatDateInput(start),
+    end: formatDateInput(end)
+  };
+}
+
 export function DashboardApp() {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<DashboardTab>("meta");
   const [period, setPeriod] = useState<PeriodKey>("last_30d");
+  const [customRange, setCustomRange] = useState(getDefaultCustomRange);
   const [search, setSearch] = useState("");
   const [selectedClient, setSelectedClient] = useState<Client>(clients[0]);
   const [campaignFilter, setCampaignFilter] = useState<"all" | "ACTIVE" | "PAUSED">("all");
@@ -324,12 +339,14 @@ export function DashboardApp() {
   }, []);
 
   const loadDashboardData = useCallback(
-    async (clientId: string, selectedPeriod: PeriodKey) => {
+    async (clientId: string, selectedPeriod: PeriodKey, selectedRange = customRange) => {
       setDashboardLoading(true);
       setDashboardError(null);
 
       try {
-        const response = await fetch(`/api/meta/dashboard?accountId=${encodeURIComponent(clientId)}&period=${encodeURIComponent(selectedPeriod)}`, {
+        const customQuery =
+          selectedPeriod === "custom" ? `&since=${encodeURIComponent(selectedRange.start)}&until=${encodeURIComponent(selectedRange.end)}` : "";
+        const response = await fetch(`/api/meta/dashboard?accountId=${encodeURIComponent(clientId)}&period=${encodeURIComponent(selectedPeriod)}${customQuery}`, {
           cache: "no-store"
         });
 
@@ -346,16 +363,18 @@ export function DashboardApp() {
         setDashboardLoading(false);
       }
     },
-    []
+    [customRange]
   );
 
   const loadCampaignAds = useCallback(
-    async (campaignId: string, selectedPeriod: PeriodKey) => {
+    async (campaignId: string, selectedPeriod: PeriodKey, selectedRange = customRange) => {
       setCampaignAdsLoading(true);
       setCampaignAdsError(null);
 
       try {
-        const response = await fetch(`/api/meta/campaign-ads?campaignId=${encodeURIComponent(campaignId)}&period=${encodeURIComponent(selectedPeriod)}`, {
+        const customQuery =
+          selectedPeriod === "custom" ? `&since=${encodeURIComponent(selectedRange.start)}&until=${encodeURIComponent(selectedRange.end)}` : "";
+        const response = await fetch(`/api/meta/campaign-ads?campaignId=${encodeURIComponent(campaignId)}&period=${encodeURIComponent(selectedPeriod)}${customQuery}`, {
           cache: "no-store"
         });
         const payload = await response.json();
@@ -371,7 +390,7 @@ export function DashboardApp() {
         setCampaignAdsLoading(false);
       }
     },
-    []
+    [customRange]
   );
 
   useEffect(() => {
@@ -396,8 +415,8 @@ export function DashboardApp() {
       return;
     }
 
-    void loadDashboardData(selectedClient.id, period);
-  }, [activeTab, loadDashboardData, metaStatus?.accounts.length, metaStatus?.stage, period, selectedClient?.id]);
+    void loadDashboardData(selectedClient.id, period, customRange);
+  }, [activeTab, customRange, loadDashboardData, metaStatus?.accounts.length, metaStatus?.stage, period, selectedClient?.id]);
 
   useEffect(() => {
     if (!drawerCampaign) {
@@ -414,8 +433,8 @@ export function DashboardApp() {
       return;
     }
 
-    void loadCampaignAds(drawerCampaign.id, period);
-  }, [drawerCampaign, loadCampaignAds, period, shouldUseMockMeta]);
+    void loadCampaignAds(drawerCampaign.id, period, customRange);
+  }, [customRange, drawerCampaign, loadCampaignAds, period, shouldUseMockMeta]);
 
   async function openMetaModal() {
     setMetaOpen(true);
@@ -522,9 +541,12 @@ export function DashboardApp() {
         search={search}
         selectedClient={selectedClient}
         period={period}
+        customStartDate={customRange.start}
+        customEndDate={customRange.end}
         onSearchChange={setSearch}
         onSelectClient={handleSelectClient}
         onPeriodChange={setPeriod}
+        onCustomRangeChange={(startDate, endDate) => setCustomRange({ start: startDate, end: endDate })}
         onOpenConfig={openConfigModal}
         onExport={exportReport}
       />

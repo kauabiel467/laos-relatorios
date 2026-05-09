@@ -9,13 +9,15 @@ export async function GET(request: NextRequest) {
   const campaignId = searchParams.get("campaignId");
   const periodParam = searchParams.get("period") as PeriodKey | null;
   const period = periodParam && VALID_PERIODS.has(periodParam) ? periodParam : "last_30d";
+  const since = searchParams.get("since");
+  const until = searchParams.get("until");
 
   if (!campaignId) {
     return NextResponse.json({ error: "Informe a campanha da Meta para carregar os anuncios." }, { status: 400 });
   }
 
   try {
-    const ads = await fetchMetaCampaignAds(campaignId, period);
+    const ads = await fetchMetaCampaignAds(campaignId, period, { since, until });
     return NextResponse.json({ ads });
   } catch (error) {
     return NextResponse.json(
