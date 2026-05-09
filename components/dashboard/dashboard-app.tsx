@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
+import type { AdItem, CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
 import { adsByCampaign, cardapio, clients, snapshot as snapshotFallback } from "@/lib/mocks";
 import { formatCurrency, formatNumber, formatPercent, formatRoas } from "@/lib/utils/format";
 import { AiPanel } from "./ai-panel";
@@ -11,8 +11,10 @@ import { CampaignsTable } from "./campaigns-table";
 import { CardapioModal } from "./cardapio-modal";
 import { ConfigModal } from "./config-modal";
 import { HeaderBar } from "./header-bar";
+import { MediaMetricsSection } from "./media-metrics-section";
 import { MetaIntegrationCard } from "./meta-integration-card";
 import { MetaIntegrationModal } from "./meta-integration-modal";
+import { MetaVisualsSection } from "./meta-visuals-section";
 import { MetricCard } from "./metric-card";
 import { QuickInsightsSection } from "./quick-insights-section";
 import { SectionTitle } from "./section-title";
@@ -88,6 +90,9 @@ export function DashboardApp() {
   const [dashboardData, setDashboardData] = useState<DashboardDataBundle | null>(null);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState<string | null>(null);
+  const [campaignAds, setCampaignAds] = useState<AdItem[]>([]);
+  const [campaignAdsLoading, setCampaignAdsLoading] = useState(false);
+  const [campaignAdsError, setCampaignAdsError] = useState<string | null>(null);
   const [aiText, setAiText] = useState("");
   const [aiMessages, setAiMessages] = useState<string[]>([
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
@@ -115,6 +120,9 @@ export function DashboardApp() {
   const shouldUseMockMeta = metaStatus?.stage !== "connected";
   const resolvedSnapshot = dashboardData?.snapshot ?? (shouldUseMockMeta ? snapshotFallback : emptyMetaSnapshot);
   const resolvedDailySeries = dashboardData?.dailySeries ?? [];
+  const resolvedMediaMetrics = dashboardData?.mediaMetrics ?? [];
+  const resolvedObjectiveDistribution = dashboardData?.objectiveDistribution ?? [];
+  const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? [];
 
   useEffect(() => {
     if (!availableClients.length) {
@@ -221,6 +229,31 @@ export function DashboardApp() {
     []
   );
 
+  const loadCampaignAds = useCallback(
+    async (campaignId: string, selectedPeriod: PeriodKey) => {
+      setCampaignAdsLoading(true);
+      setCampaignAdsError(null);
+
+      try {
+        const response = await fetch(`/api/meta/campaign-ads?campaignId=${encodeURIComponent(campaignId)}&period=${encodeURIComponent(selectedPeriod)}`, {
+          cache: "no-store"
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof payload.error === "string" ? payload.error : "Nao foi possivel carregar os anuncios da campanha.");
+        }
+
+        setCampaignAds((payload.ads as AdItem[]) || []);
+      } catch (error) {
+        setCampaignAds([]);
+        setCampaignAdsError(error instanceof Error ? error.message : "Nao foi possivel carregar os anuncios da campanha.");
+      } finally {
+        setCampaignAdsLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     refreshMetaStatus().catch(() => {
       setMetaStatus({
@@ -245,6 +278,24 @@ export function DashboardApp() {
 
     void loadDashboardData(selectedClient.id, period);
   }, [activeTab, loadDashboardData, metaStatus?.accounts.length, metaStatus?.stage, period, selectedClient?.id]);
+
+  useEffect(() => {
+    if (!drawerCampaign) {
+      setCampaignAds([]);
+      setCampaignAdsError(null);
+      setCampaignAdsLoading(false);
+      return;
+    }
+
+    if (shouldUseMockMeta) {
+      setCampaignAds(adsByCampaign[drawerCampaign.id] || []);
+      setCampaignAdsError(null);
+      setCampaignAdsLoading(false);
+      return;
+    }
+
+    void loadCampaignAds(drawerCampaign.id, period);
+  }, [drawerCampaign, loadCampaignAds, period, shouldUseMockMeta]);
 
   async function openMetaModal() {
     setMetaOpen(true);
@@ -370,6 +421,8 @@ export function DashboardApp() {
             ) : null}
             <QuickInsightsSection snapshot={resolvedSnapshot} />
 
+            {resolvedMediaMetrics.length ? <MediaMetricsSection metrics={resolvedMediaMetrics} loading={dashboardLoading} /> : null}
+
             <section>
               <SectionTitle>Visao Geral</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -409,79 +462,55 @@ export function DashboardApp() {
               </div>
             </section>
 
-            <section className="grid gap-4 xl:grid-cols-2">
-              <div className="panel p-5">
-                <SectionTitle>Evolucao Temporal</SectionTitle>
-                {resolvedDailySeries.length ? (
-                  <>
-                    <div className="mt-5 grid h-72 grid-cols-7 items-end gap-3">
-                      {resolvedDailySeries.map((day) => {
-                        const maxSpend = Math.max(...resolvedDailySeries.map((item) => item.spend), 1);
-                        const maxRevenue = Math.max(...resolvedDailySeries.map((item) => item.revenue || 0), 1);
+            <MetaVisualsSection
+              dailySeries={resolvedDailySeries}
+              objectiveDistribution={resolvedObjectiveDistribution}
+              hourlyPerformance={resolvedHourlyPerformance}
+              resultLabel={resolvedSnapshot.resultLabel}
+            />
 
-                        return (
-                          <div key={`${day.label}-${day.spend}-${day.result}`} className="flex h-full flex-col items-center justify-end gap-2">
-                            <div className="flex h-full w-full items-end gap-1">
-                              <div className="w-1/2 rounded-t-md bg-blue" style={{ height: `${Math.max(6, (day.spend / maxSpend) * 100)}%` }} />
-                              <div className="w-1/2 rounded-t-md bg-orange/90" style={{ height: `${Math.max(6, ((day.revenue || 0) / maxRevenue) * 100)}%` }} />
-                            </div>
-                            <span className="font-mono text-[10px] text-muted">{day.label}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <p className="mt-4 text-xs text-muted">Azul = investimento. Laranja = faturamento estimado pela Meta quando houver valor de compra.</p>
-                  </>
-                ) : (
-                  <div className="mt-5 rounded-xl border border-border bg-bg p-4 text-sm text-muted">
-                    Ainda nao ha serie diaria suficiente para esta conta no periodo selecionado.
-                  </div>
-                )}
-              </div>
+            <section className="panel p-5">
+              <SectionTitle>Funil de Conversao</SectionTitle>
+              <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_280px]">
+                <div className="space-y-3">
+                  {resolvedSnapshot.funnel.map((step, index) => {
+                    const max = resolvedSnapshot.funnel[0]?.value || 1;
+                    const width = Math.max(6, (step.value / max) * 100);
+                    const colors: Record<string, string> = {
+                      blue: "from-blue to-blue/70",
+                      indigo: "from-blue/90 to-cyan/70",
+                      purple: "from-purple to-blue/60",
+                      orange: "from-orange to-orange/70",
+                      yellow: "from-yellow to-orange/60",
+                      green: "from-green to-emerald-300"
+                    };
 
-              <div className="panel p-5">
-                <SectionTitle>Funil de Conversao</SectionTitle>
-                <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_280px]">
-                  <div className="space-y-3">
-                    {resolvedSnapshot.funnel.map((step, index) => {
-                      const max = resolvedSnapshot.funnel[0]?.value || 1;
-                      const width = Math.max(6, (step.value / max) * 100);
-                      const colors: Record<string, string> = {
-                        blue: "from-blue to-blue/70",
-                        indigo: "from-blue/90 to-cyan/70",
-                        purple: "from-purple to-blue/60",
-                        orange: "from-orange to-orange/70",
-                        yellow: "from-yellow to-orange/60",
-                        green: "from-green to-emerald-300"
-                      };
-
-                      return (
-                        <div key={step.label}>
-                          <div className="mb-1 flex items-center justify-between text-sm text-muted">
-                            <span>{step.label}</span>
-                            <strong className="font-mono text-text">{formatNumber(step.value)}</strong>
-                          </div>
-                          <div className="h-8 rounded-lg bg-border/90">
-                            <div
-                              className={`flex h-full items-center rounded-lg bg-gradient-to-r px-3 text-xs font-semibold text-white ${colors[step.color]}`}
-                              style={{ width: `${width}%` }}
-                            >
-                              {index === 0 ? "100%" : formatPercent((step.value / resolvedSnapshot.funnel[index - 1].value) * 100, 1)}
-                            </div>
+                    return (
+                      <div key={step.label}>
+                        <div className="mb-1 flex items-center justify-between text-sm text-muted">
+                          <span>{step.label}</span>
+                          <strong className="font-mono text-text">{formatNumber(step.value)}</strong>
+                        </div>
+                        <div className="h-8 rounded-lg bg-border/90">
+                          <div
+                            className={`flex h-full items-center rounded-lg bg-gradient-to-r px-3 text-xs font-semibold text-white ${colors[step.color]}`}
+                            style={{ width: `${width}%` }}
+                          >
+                            {index === 0 ? "100%" : formatPercent((step.value / resolvedSnapshot.funnel[index - 1].value) * 100, 1)}
                           </div>
                         </div>
-                      );
-                    })}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="space-y-3">
+                  <div className="rounded-xl border border-border bg-bg p-4">
+                    <div className="mb-2 text-sm font-semibold">Gargalo principal</div>
+                    <p className="text-xs leading-6 text-muted">{resolvedSnapshot.bottleneck}</p>
                   </div>
-                  <div className="space-y-3">
-                    <div className="rounded-xl border border-border bg-bg p-4">
-                      <div className="mb-2 text-sm font-semibold">Gargalo principal</div>
-                      <p className="text-xs leading-6 text-muted">{resolvedSnapshot.bottleneck}</p>
-                    </div>
-                    <div className="rounded-xl border border-border bg-bg p-4">
-                      <div className="mb-2 text-sm font-semibold">Ponto forte</div>
-                      <p className="text-xs leading-6 text-muted">{resolvedSnapshot.strength}</p>
-                    </div>
+                  <div className="rounded-xl border border-border bg-bg p-4">
+                    <div className="mb-2 text-sm font-semibold">Ponto forte</div>
+                    <p className="text-xs leading-6 text-muted">{resolvedSnapshot.strength}</p>
                   </div>
                 </div>
               </div>
@@ -540,7 +569,13 @@ export function DashboardApp() {
         )}
       </main>
 
-      <CampaignDrawer campaign={drawerCampaign} ads={drawerCampaign ? adsByCampaign[drawerCampaign.id] || [] : []} onClose={() => setDrawerCampaign(null)} />
+      <CampaignDrawer
+        campaign={drawerCampaign}
+        ads={campaignAds}
+        loading={campaignAdsLoading}
+        error={campaignAdsError}
+        onClose={() => setDrawerCampaign(null)}
+      />
       <ConfigModal
         open={configOpen}
         metaStatus={metaStatus}

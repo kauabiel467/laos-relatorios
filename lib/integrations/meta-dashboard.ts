@@ -1,13 +1,17 @@
 import type {
+  AdItem,
   AlertItem,
   CampaignMetric,
   DashboardDataBundle,
   DashboardSnapshot,
   DailyPoint,
-  FunnelStep
+  FunnelStep,
+  HourlyPerformancePoint,
+  MediaMetricCard,
+  ObjectiveDistributionItem
 } from "@/lib/types";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
 import { readMetaSessionToken } from "@/lib/integrations/meta-oauth";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
 
 type PeriodKey = "last_7d" | "last_30d" | "last_90d" | "custom";
 
@@ -22,6 +26,7 @@ type MetaInsightRow = {
   reach?: string;
   clicks?: string;
   cpc?: string;
+  cpm?: string;
   ctr?: string;
   actions?: MetaInsightAction[];
   action_values?: MetaInsightAction[];
@@ -30,6 +35,7 @@ type MetaInsightRow = {
     value: string;
   }>;
   date_start?: string;
+  hourly_stats_aggregated_by_advertiser_time_zone?: string;
 };
 
 type MetaCampaignRow = {
@@ -44,10 +50,33 @@ type MetaCampaignInsightRow = MetaInsightRow & {
   campaign_name?: string;
 };
 
-type MetaStatusRow = {
+type MetaAdInsightRow = {
+  ad_id: string;
+  ad_name?: string;
+  ctr?: string;
+  cpc?: string;
+  spend?: string;
+  impressions?: string;
+};
+
+type MetaAdCreativeRow = {
+  id: string;
+  name?: string;
+  creative?: {
+    object_type?: string;
+    thumbnail_url?: string;
+  };
+};
+
+type MetaSessionRow = {
   access_token: string | null;
   selected_account_ids: string[];
 };
+
+interface MetaSessionInfo {
+  accessToken: string;
+  selectedAccountIds: string[];
+}
 
 const META_GRAPH_VERSION = "v22.0";
 
@@ -90,7 +119,6 @@ function getPeriodWindow(period: PeriodKey) {
   const previousStart = startOfDay(subDays(previousEnd, days - 1));
 
   return {
-    days,
     currentStart,
     currentEnd,
     previousStart,
@@ -120,40 +148,49 @@ function getActionValue(actions: MetaInsightAction[] | undefined, candidates: st
   return 0;
 }
 
-function getResultMetric(row: MetaInsightRow | undefined) {
-  const actions = row?.actions ?? [];
-  const priority = [
-    {
-      label: "Compras",
-      value: getActionValue(actions, [
-        "purchase",
-        "omni_purchase",
-        "offsite_conversion.fb_pixel_purchase",
-        "onsite_conversion.purchase"
-      ])
-    },
-    {
-      label: "Conversas",
-      value: getActionValue(actions, [
-        "onsite_conversion.messaging_conversation_started_7d",
-        "messaging_conversation_started_7d"
-      ])
-    },
-    {
-      label: "Leads",
-      value: getActionValue(actions, ["lead", "onsite_conversion.lead_grouped"])
-    },
-    {
-      label: "Cliques no link",
-      value: getActionValue(actions, ["link_click", "outbound_click"])
-    },
-    {
-      label: "Landing page views",
-      value: getActionValue(actions, ["landing_page_view"])
-    }
-  ];
+function getLinkClicks(row: MetaInsightRow | undefined) {
+  return getActionValue(row?.actions, ["link_click", "outbound_click"]);
+}
 
-  return priority.find((metric) => metric.value > 0) || { label: "Resultados", value: 0 };
+function getPurchaseCount(row: MetaInsightRow | undefined) {
+  return getActionValue(row?.actions, [
+    "purchase",
+    "omni_purchase",
+    "offsite_conversion.fb_pixel_purchase",
+    "onsite_conversion.purchase"
+  ]);
+}
+
+function getResultMetric(row: MetaInsightRow | undefined) {
+  const purchaseCount = getPurchaseCount(row);
+  if (purchaseCount > 0) {
+    return { label: "Vendas", value: purchaseCount };
+  }
+
+  const messageCount = getActionValue(row?.actions, [
+    "onsite_conversion.messaging_conversation_started_7d",
+    "messaging_conversation_started_7d"
+  ]);
+  if (messageCount > 0) {
+    return { label: "Conversas", value: messageCount };
+  }
+
+  const leadCount = getActionValue(row?.actions, ["lead", "onsite_conversion.lead_grouped"]);
+  if (leadCount > 0) {
+    return { label: "Leads", value: leadCount };
+  }
+
+  const linkClicks = getLinkClicks(row);
+  if (linkClicks > 0) {
+    return { label: "Cliques no link", value: linkClicks };
+  }
+
+  const landingPageViews = getActionValue(row?.actions, ["landing_page_view"]);
+  if (landingPageViews > 0) {
+    return { label: "Landing page views", value: landingPageViews };
+  }
+
+  return { label: "Resultados", value: 0 };
 }
 
 function getRevenueValue(row: MetaInsightRow | undefined) {
@@ -317,6 +354,87 @@ function buildQuickInsights(current: MetaInsightRow | undefined, previous: MetaI
   ];
 }
 
+function buildMediaMetrics(current: MetaInsightRow | undefined, previous: MetaInsightRow | undefined): MediaMetricCard[] {
+  const currentReach = parseNumber(current?.reach);
+  const previousReach = parseNumber(previous?.reach);
+  const currentLinkClicks = getLinkClicks(current);
+  const previousLinkClicks = getLinkClicks(previous);
+  const currentCtr = parseNumber(current?.ctr);
+  const previousCtr = parseNumber(previous?.ctr);
+  const currentCpm = parseNumber(current?.cpm);
+  const previousCpm = parseNumber(previous?.cpm);
+  const currentSpend = parseNumber(current?.spend);
+  const previousSpend = parseNumber(previous?.spend);
+  const currentCpc = currentLinkClicks > 0 ? currentSpend / currentLinkClicks : parseNumber(current?.cpc);
+  const previousCpc = previousLinkClicks > 0 ? previousSpend / previousLinkClicks : parseNumber(previous?.cpc);
+
+  return [
+    { label: "Alcance", value: currentReach, delta: getDelta(currentReach, previousReach), format: "compact", tone: "purple" },
+    { label: "Cliques no Link", value: currentLinkClicks, delta: getDelta(currentLinkClicks, previousLinkClicks), format: "compact", tone: "blue" },
+    { label: "CTR", value: currentCtr, delta: getDelta(currentCtr, previousCtr), format: "percent", tone: "cyan" },
+    { label: "CPM", value: currentCpm, delta: previousCpm > 0 ? getDelta(currentCpm, previousCpm) * -1 : null, format: "currency", tone: "orange" },
+    { label: "CPC", value: currentCpc, delta: previousCpc > 0 ? getDelta(currentCpc, previousCpc) * -1 : null, format: "currency", tone: "green" }
+  ];
+}
+
+function buildObjectiveDistribution(campaigns: CampaignMetric[]): ObjectiveDistributionItem[] {
+  const grouped = new Map<string, number>();
+
+  for (const campaign of campaigns) {
+    const current = grouped.get(campaign.objective) || 0;
+    grouped.set(campaign.objective, current + campaign.spend);
+  }
+
+  const totalSpend = [...grouped.values()].reduce((sum, value) => sum + value, 0);
+
+  return [...grouped.entries()]
+    .map(([label, spend]) => ({
+      label,
+      spend,
+      percentage: totalSpend > 0 ? (spend / totalSpend) * 100 : 0
+    }))
+    .sort((first, second) => second.spend - first.spend);
+}
+
+function buildHourlyPerformance(rows: MetaInsightRow[]): HourlyPerformancePoint[] {
+  const byHour = new Map<number, number>();
+
+  for (const row of rows) {
+    const rawHour = parseInt(row.hourly_stats_aggregated_by_advertiser_time_zone || "0", 10);
+    const value = getPurchaseCount(row) || getResultMetric(row).value || parseNumber(row.clicks);
+    byHour.set(rawHour, (byHour.get(rawHour) || 0) + value);
+  }
+
+  const values = [...byHour.values()];
+  const maxValue = Math.max(...values, 0);
+
+  return Array.from({ length: 24 }, (_, hour) => {
+    const value = byHour.get(hour) || 0;
+    const ratio = maxValue > 0 ? value / maxValue : 0;
+
+    return {
+      label: `${String(hour).padStart(2, "0")}h`,
+      value,
+      highlight: ratio > 0.8 ? "high" : ratio > 0.5 ? "medium" : "base"
+    };
+  });
+}
+
+function normalizeAdType(objectType?: string, adName?: string): AdItem["type"] {
+  const normalizedObjectType = String(objectType || "").toUpperCase();
+  const normalizedName = String(adName || "").toLowerCase();
+
+  if (normalizedObjectType === "VIDEO" || normalizedName.includes("video")) {
+    return "video";
+  }
+
+  if (normalizedObjectType === "LINK" && normalizedName.includes("carousel")) {
+    return "carousel";
+  }
+
+  return "image";
+}
+
 async function fetchGraph<T>(path: string, params: Record<string, string>, accessToken: string) {
   const searchParams = new URLSearchParams({
     ...params,
@@ -339,7 +457,7 @@ async function fetchGraph<T>(path: string, params: Record<string, string>, acces
   return payload as T;
 }
 
-async function getMetaSession() {
+async function getMetaSession(): Promise<MetaSessionInfo> {
   const sessionToken = await readMetaSessionToken();
   if (!sessionToken) {
     throw new Error("Nenhuma sessao ativa da Meta foi encontrada.");
@@ -360,7 +478,11 @@ async function getMetaSession() {
     throw new Error("A conexao da Meta nao possui token disponivel.");
   }
 
-  return data as MetaStatusRow;
+  const row = data as MetaSessionRow;
+  return {
+    accessToken: row.access_token!,
+    selectedAccountIds: row.selected_account_ids
+  };
 }
 
 function ensureAccountAllowed(accountId: string, selectedAccountIds: string[]) {
@@ -372,61 +494,69 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   const session = await getMetaSession();
   const normalizedAccountId = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
 
-  if (!ensureAccountAllowed(normalizedAccountId, session.selected_account_ids)) {
+  if (!ensureAccountAllowed(normalizedAccountId, session.selectedAccountIds)) {
     throw new Error("Essa conta nao esta liberada na integracao atual da Meta.");
   }
 
   const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindow(period);
-  const accessToken = session.access_token;
-  if (!accessToken) {
-    throw new Error("A conexao da Meta nao possui token valido para consulta.");
-  }
+  const accessToken = session.accessToken;
 
-  const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, campaignsPayload, campaignInsightsPayload] = await Promise.all([
-    fetchGraph<{ data: MetaInsightRow[] }>(
-      `${normalizedAccountId}/insights`,
-      {
-        fields: "spend,impressions,reach,clicks,cpc,ctr,actions,action_values,purchase_roas",
-        ...buildTimeRangeParams(currentStart, currentEnd)
-      },
-      accessToken
-    ),
-    fetchGraph<{ data: MetaInsightRow[] }>(
-      `${normalizedAccountId}/insights`,
-      {
-        fields: "spend,impressions,reach,clicks,cpc,ctr,actions,action_values,purchase_roas",
-        ...buildTimeRangeParams(previousStart, previousEnd)
-      },
-      accessToken
-    ),
-    fetchGraph<{ data: MetaInsightRow[] }>(
-      `${normalizedAccountId}/insights`,
-      {
-        fields: "date_start,spend,actions,action_values",
-        time_increment: "1",
-        ...buildTimeRangeParams(currentStart, currentEnd)
-      },
-      accessToken
-    ),
-    fetchGraph<{ data: MetaCampaignRow[] }>(
-      `${normalizedAccountId}/campaigns`,
-      {
-        fields: "id,name,status,objective",
-        limit: "200"
-      },
-      accessToken
-    ),
-    fetchGraph<{ data: MetaCampaignInsightRow[] }>(
-      `${normalizedAccountId}/insights`,
-      {
-        fields: "campaign_id,campaign_name,spend,reach,ctr,actions,action_values,purchase_roas",
-        level: "campaign",
-        limit: "200",
-        ...buildTimeRangeParams(currentStart, currentEnd)
-      },
-      accessToken
-    )
-  ]);
+  const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, hourlyInsightsPayload, campaignsPayload, campaignInsightsPayload] =
+    await Promise.all([
+      fetchGraph<{ data: MetaInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,purchase_roas",
+          ...buildTimeRangeParams(currentStart, currentEnd)
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,purchase_roas",
+          ...buildTimeRangeParams(previousStart, previousEnd)
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "date_start,spend,clicks,actions,action_values",
+          time_increment: "1",
+          ...buildTimeRangeParams(currentStart, currentEnd)
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "clicks,actions",
+          breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+          limit: "200",
+          ...buildTimeRangeParams(currentStart, currentEnd)
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaCampaignRow[] }>(
+        `${normalizedAccountId}/campaigns`,
+        {
+          fields: "id,name,status,objective",
+          limit: "200"
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaCampaignInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "campaign_id,campaign_name,spend,reach,ctr,actions,action_values,purchase_roas",
+          level: "campaign",
+          limit: "200",
+          ...buildTimeRangeParams(currentStart, currentEnd)
+        },
+        accessToken
+      )
+    ]);
 
   const current = currentInsightsPayload.data[0];
   const previous = previousInsightsPayload.data[0];
@@ -451,14 +581,14 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   const previousCpa = previousMetric.value > 0 ? previousSpend / previousMetric.value : 0;
   const cpaDelta = getDelta(cpa, previousCpa);
 
-  const dailySeries: DailyPoint[] = dailyInsightsPayload.data.slice(-7).map((row) => {
-    const dailyMetric = getResultMetric(row);
+  const dailySeries: DailyPoint[] = dailyInsightsPayload.data.map((row) => {
+    const resultMetric = getResultMetric(row);
     return {
       label: row.date_start
-        ? new Date(`${row.date_start}T12:00:00Z`).toLocaleDateString("pt-BR", { weekday: "short" }).slice(0, 3)
+        ? new Date(`${row.date_start}T12:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
         : "--",
       spend: parseNumber(row.spend),
-      result: dailyMetric.value,
+      result: resultMetric.value,
       revenue: getRevenueValue(row)
     };
   });
@@ -484,6 +614,9 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
     })
     .sort((first, second) => second.spend - first.spend);
 
+  const mediaMetrics = buildMediaMetrics(current, previous);
+  const objectiveDistribution = buildObjectiveDistribution(campaigns);
+  const hourlyPerformance = buildHourlyPerformance(hourlyInsightsPayload.data);
   const healthScore = buildHealthScore(spend, resultValue, roas, cpa, resultDelta, roasDelta);
   const health = buildHealthLabel(healthScore);
   const funnel = buildFunnel(current, resultValue);
@@ -519,6 +652,58 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   return {
     snapshot,
     dailySeries,
-    campaigns
+    campaigns,
+    mediaMetrics,
+    objectiveDistribution,
+    hourlyPerformance
   };
+}
+
+export async function fetchMetaCampaignAds(campaignId: string, period: PeriodKey): Promise<AdItem[]> {
+  const session = await getMetaSession();
+  const { currentStart, currentEnd } = getPeriodWindow(period);
+  const accessToken = session.accessToken;
+  const normalizedCampaignId = campaignId.replace(/^cmp_/, "");
+
+  const [insightsPayload, creativesPayload] = await Promise.all([
+    fetchGraph<{ data: MetaAdInsightRow[] }>(
+      `${normalizedCampaignId}/insights`,
+      {
+        fields: "ad_id,ad_name,ctr,cpc,spend,impressions",
+        level: "ad",
+        limit: "100",
+        ...buildTimeRangeParams(currentStart, currentEnd)
+      },
+      accessToken
+    ),
+    fetchGraph<{ data: MetaAdCreativeRow[] }>(
+      `${normalizedCampaignId}/ads`,
+      {
+        fields: "id,name,creative{object_type,thumbnail_url}",
+        limit: "100"
+      },
+      accessToken
+    )
+  ]);
+
+  const creativeMap = new Map(creativesPayload.data.map((item) => [item.id, item]));
+  const ranked = [...insightsPayload.data].sort((first, second) => parseNumber(second.ctr) - parseNumber(first.ctr));
+  const topIds = new Set(ranked.slice(0, 2).map((row) => row.ad_id));
+  const lowIds = ranked.length >= 4 ? new Set(ranked.slice(-2).map((row) => row.ad_id)) : new Set<string>();
+
+  return ranked.map((row) => {
+    const creative = creativeMap.get(row.ad_id);
+    return {
+      id: row.ad_id,
+      name: row.ad_name || creative?.name || "Anuncio sem nome",
+      type: normalizeAdType(creative?.creative?.object_type, row.ad_name),
+      ctr: parseNumber(row.ctr),
+      cpc: parseNumber(row.cpc),
+      spend: parseNumber(row.spend),
+      impressions: parseNumber(row.impressions),
+      thumbnailUrl: creative?.creative?.thumbnail_url,
+      top: topIds.has(row.ad_id),
+      lowPerformer: lowIds.has(row.ad_id) && !topIds.has(row.ad_id)
+    };
+  });
 }

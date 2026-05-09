@@ -16,6 +16,26 @@ export interface DailyPoint {
   revenue?: number;
 }
 
+export interface MediaMetricCard {
+  label: string;
+  value: number;
+  delta: number | null;
+  format: "compact" | "currency" | "percent";
+  tone: "blue" | "green" | "orange" | "yellow" | "cyan" | "purple";
+}
+
+export interface ObjectiveDistributionItem {
+  label: string;
+  spend: number;
+  percentage: number;
+}
+
+export interface HourlyPerformancePoint {
+  label: string;
+  value: number;
+  highlight: "base" | "medium" | "high";
+}
+
 export interface CampaignMetric {
   id: string;
   name: string;
@@ -35,7 +55,10 @@ export interface AdItem {
   ctr: number;
   cpc: number;
   spend: number;
+  impressions?: number;
+  thumbnailUrl?: string;
   top?: boolean;
+  lowPerformer?: boolean;
 }
 
 export interface QuickInsight {
@@ -91,6 +114,9 @@ export interface DashboardDataBundle {
   snapshot: DashboardSnapshot;
   dailySeries: DailyPoint[];
   campaigns: CampaignMetric[];
+  mediaMetrics: MediaMetricCard[];
+  objectiveDistribution: ObjectiveDistributionItem[];
+  hourlyPerformance: HourlyPerformancePoint[];
 }
 
 export interface MetaAdAccount {
