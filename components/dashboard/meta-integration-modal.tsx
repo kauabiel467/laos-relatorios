@@ -51,7 +51,7 @@ export function MetaIntegrationModal({
 
   return (
     <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={onClose}>
-      <div className="panel w-full max-w-3xl p-6" onClick={(event) => event.stopPropagation()}>
+      <div className="panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto p-6" onClick={(event) => event.stopPropagation()}>
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow mb-2">Passo a passo de integracao</div>
@@ -112,14 +112,14 @@ export function MetaIntegrationModal({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border bg-bg p-5">
+          <div className="flex max-h-[65vh] flex-col rounded-2xl border border-border bg-bg p-5">
             <div className="mb-4 text-sm font-semibold text-text">
               {isSelectionStage ? "Selecione as contas" : "Status da conexao"}
             </div>
 
             {isSelectionStage ? (
-              <div className="space-y-3">
-                <div className="max-h-72 space-y-2 overflow-auto">
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
                   {status.accounts.map((account) => {
                     const checked = selectedAccountIds.includes(account.id);
 
@@ -144,7 +144,7 @@ export function MetaIntegrationModal({
                   })}
                 </div>
 
-                <div className="flex flex-wrap gap-3">
+                <div className="mt-4 flex flex-wrap gap-3 border-t border-border pt-4">
                   <button
                     type="button"
                     onClick={() => setSelectedAccountIds(status.accounts.map((account) => account.id))}
@@ -165,13 +165,13 @@ export function MetaIntegrationModal({
                   type="button"
                   onClick={() => onConfirmSelection(selectedAccountIds)}
                   disabled={!canSubmitSelection}
-                  className="w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="mt-4 w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Conectar contas selecionadas
                 </button>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
                 {(status?.accounts || []).length ? (
                   status?.accounts.map((account) => (
                     <div key={account.id} className="rounded-xl border border-border p-3">

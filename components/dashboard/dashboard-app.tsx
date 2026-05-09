@@ -42,11 +42,37 @@ export function DashboardApp() {
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
   ]);
 
+  const availableClients = useMemo<Client[]>(() => {
+    if (metaStatus?.stage === "connected" && metaStatus.accounts.length) {
+      return metaStatus.accounts.map((account) => ({
+        id: `act_${account.accountId}`,
+        name: account.name,
+        status: account.status === "1" ? "ACTIVE" : "PAUSED",
+        objective: "SALES"
+      }));
+    }
+
+    return clients;
+  }, [metaStatus]);
+
   const filteredClients = useMemo(() => {
     const term = search.trim().toLowerCase();
-    if (!term) return clients;
-    return clients.filter((client) => `${client.name} ${client.id}`.toLowerCase().includes(term));
-  }, [search]);
+    if (!term) return availableClients;
+    return availableClients.filter((client) => `${client.name} ${client.id}`.toLowerCase().includes(term));
+  }, [availableClients, search]);
+
+  useEffect(() => {
+    if (!availableClients.length) {
+      return;
+    }
+
+    const stillExists = availableClients.some((client) => client.id === selectedClient.id);
+    if (!stillExists) {
+      const nextClient = availableClients[0];
+      setSelectedClient(nextClient);
+      setSearch(`${nextClient.name} (${nextClient.id})`);
+    }
+  }, [availableClients, selectedClient.id]);
 
   const visibleCampaigns = useMemo(() => {
     const filtered = campaigns.filter((campaign) => {
@@ -167,6 +193,7 @@ export function DashboardApp() {
 
       await refreshMetaStatus();
       setMetaFeedback("Conexao concluida com sucesso. As contas da Meta ja estao disponiveis no dashboard.");
+      setMetaOpen(false);
       router.replace("/");
     } catch (error) {
       setMetaFeedback(error instanceof Error ? error.message : "Falha ao conectar as contas selecionadas.");
