@@ -57,7 +57,7 @@ export function HeaderBar({
     <header className="sticky top-0 z-50 border-b border-border/80 bg-bg/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:px-6">
         <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-[0.18em] text-white/90">
-          <span className="inline-flex size-2.5 rounded-full bg-blue shadow-[0_0_0_6px_rgba(59,130,246,0.12)]" />
+          <span className="animate-pulse-dot inline-flex size-2.5 rounded-full bg-blue shadow-[0_0_0_6px_rgba(59,130,246,0.12)]" />
           LAOS | Meta Ads
         </div>
 

@@ -9,6 +9,8 @@ interface CampaignsTableProps {
   filter: "all" | "ACTIVE" | "PAUSED";
   onFilterChange: (value: "all" | "ACTIVE" | "PAUSED") => void;
   onSort: (column: keyof CampaignMetric) => void;
+  sortColumn: keyof CampaignMetric;
+  sortDirection: 1 | -1;
   onOpenCampaign: (campaign: CampaignMetric) => void;
 }
 
@@ -22,8 +24,12 @@ export function CampaignsTable({
   filter,
   onFilterChange,
   onSort,
+  sortColumn,
+  sortDirection,
   onOpenCampaign
 }: CampaignsTableProps) {
+  const maxSpend = Math.max(...campaigns.map((campaign) => campaign.spend), 1);
+
   return (
     <div className="panel mt-4 overflow-hidden">
       <div className="flex flex-col gap-3 border-b border-border px-5 py-4 lg:flex-row lg:items-center lg:justify-between">
@@ -62,7 +68,12 @@ export function CampaignsTable({
                 ["roas", "ROAS"]
               ].map(([key, label]) => (
                 <th key={key} className="cursor-pointer px-4 py-3" onClick={() => onSort(key as keyof CampaignMetric)}>
-                  {label}
+                  <span className="inline-flex items-center gap-1.5">
+                    {label}
+                    <span className={clsx(key === sortColumn ? "text-blue opacity-100" : "text-muted opacity-40")}>
+                      {key === sortColumn ? (sortDirection === 1 ? "↑" : "↓") : "↕"}
+                    </span>
+                  </span>
                 </th>
               ))}
             </tr>
@@ -72,12 +83,12 @@ export function CampaignsTable({
               campaigns.map((campaign) => (
                 <tr
                   key={campaign.id}
-                  className="cursor-pointer border-t border-border/80 text-sm transition hover:bg-blue/5"
+                  className="group cursor-pointer border-t border-border/80 text-sm transition hover:bg-blue/5"
                   onClick={() => onOpenCampaign(campaign)}
                 >
                   <td className="px-4 py-4">
                     <div className="font-semibold">{campaign.name}</div>
-                    <div className="text-xs text-blue">clique para detalhar</div>
+                    <div className="text-xs text-blue opacity-0 transition-opacity group-hover:opacity-100">clique para detalhar</div>
                   </td>
                   <td className="px-4 py-4">
                     <span className={clsx("rounded-md border px-2 py-1 font-mono text-[10px]", badgeStyles[campaign.status])}>
@@ -85,7 +96,14 @@ export function CampaignsTable({
                     </span>
                   </td>
                   <td className="px-4 py-4">{campaign.objective}</td>
-                  <td className="px-4 py-4 font-mono">{formatCurrency(campaign.spend)}</td>
+                  <td className="px-4 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs">{formatCurrency(campaign.spend)}</span>
+                      <div className="h-1 w-14 overflow-hidden rounded-full bg-border">
+                        <div className="h-full rounded-full bg-blue" style={{ width: `${(campaign.spend / maxSpend) * 100}%` }} />
+                      </div>
+                    </div>
+                  </td>
                   <td className="px-4 py-4 font-mono">{formatCompact(campaign.reach)}</td>
                   <td className="px-4 py-4 font-mono">{formatPercent(campaign.ctr)}</td>
                   <td className="px-4 py-4 font-mono">{formatRoas(campaign.roas)}</td>

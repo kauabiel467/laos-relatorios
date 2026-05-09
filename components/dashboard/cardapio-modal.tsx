@@ -1,16 +1,25 @@
 "use client";
 
+import clsx from "clsx";
+
 interface CardapioModalProps {
   open: boolean;
   onClose: () => void;
 }
 
 export function CardapioModal({ open, onClose }: CardapioModalProps) {
-  if (!open) return null;
-
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4" onClick={onClose}>
-      <div className="panel w-full max-w-xl p-6" onClick={(event) => event.stopPropagation()}>
+    <div
+      className={clsx(
+        "fixed inset-0 z-[80] grid place-items-center bg-black/60 p-4 transition-opacity duration-200",
+        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      )}
+      onClick={onClose}
+    >
+      <div
+        className={clsx("panel w-full max-w-xl p-6 transition duration-200", open ? "scale-100 opacity-100" : "scale-95 opacity-0")}
+        onClick={(event) => event.stopPropagation()}
+      >
         <h2 className="mb-1 text-xl font-bold">Conectar cardapio</h2>
         <p className="mb-6 text-sm text-muted">Preparado para integrar APIs de pedidos por cliente.</p>
         <div className="space-y-4">

@@ -26,13 +26,17 @@ export function AiPanel({
       <button
         type="button"
         onClick={onOpen}
-        className="fixed bottom-6 right-4 rounded-2xl bg-blue px-5 py-3 text-sm font-semibold text-white shadow-panel transition hover:bg-blue/90 lg:right-6"
+        className="fixed bottom-6 right-4 rounded-2xl bg-blue px-5 py-3 text-sm font-semibold text-white shadow-panel transition hover:-translate-y-0.5 hover:bg-blue/90 hover:shadow-[0_0_30px_rgba(59,130,246,0.5)] lg:right-6"
       >
         Perguntar a IA
       </button>
 
-      {open ? (
-        <div className="fixed bottom-24 right-4 z-[60] flex h-[34rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-panel lg:right-6">
+      <div
+        className={clsx(
+          "fixed bottom-24 right-4 z-[60] flex h-[34rem] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-panel transition-all duration-[250ms] lg:right-6",
+          open ? "pointer-events-auto translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-5 scale-90 opacity-0"
+        )}
+      >
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <div className="text-sm font-semibold">IA | Insights da conta</div>
@@ -75,8 +79,7 @@ export function AiPanel({
               </button>
             </div>
           </div>
-        </div>
-      ) : null}
+      </div>
     </>
   );
 }

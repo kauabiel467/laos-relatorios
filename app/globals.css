@@ -12,6 +12,27 @@ html {
   scroll-behavior: smooth;
 }
 
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(59,130,246,0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(59,130,246,0); }
+}
+
+.animate-pulse-dot {
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #1e2230 25%, #252a38 50%, #1e2230 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 4px;
+}
+
 body {
   @apply bg-bg text-text min-h-screen antialiased;
   font-family: var(--font-sans);

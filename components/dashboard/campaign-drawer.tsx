@@ -13,32 +13,41 @@ interface CampaignDrawerProps {
 }
 
 export function CampaignDrawer({ campaign, ads, loading, error, onClose }: CampaignDrawerProps) {
-  if (!campaign) return null;
+  const isOpen = Boolean(campaign);
 
   return (
-    <div className="fixed inset-0 z-[70] bg-black/50" onClick={onClose}>
+    <div
+      className={clsx(
+        "fixed inset-0 z-[70] bg-black/50 transition-opacity duration-300",
+        isOpen ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      )}
+      onClick={onClose}
+    >
       <aside
-        className="absolute right-0 top-0 h-full w-full max-w-xl overflow-y-auto border-l border-border bg-card p-5"
+        className={clsx(
+          "absolute right-0 top-0 h-full w-full max-w-xl overflow-y-auto border-l border-border bg-card p-5 transition-transform duration-[350ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+          isOpen ? "translate-x-0" : "translate-x-full"
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
-            <div className="text-lg font-bold">{campaign.name}</div>
+            <div className="text-lg font-bold">{campaign?.name}</div>
             <div className="mt-2 flex flex-wrap gap-2">
-              <span className={clsx("rounded-md border px-2 py-1 font-mono text-[10px]", campaign.status === "ACTIVE" ? "border-green/30 bg-green/10 text-green-200" : "border-orange/30 bg-orange/10 text-orange-200")}>
-                {campaign.status}
+              <span className={clsx("rounded-md border px-2 py-1 font-mono text-[10px]", campaign?.status === "ACTIVE" ? "border-green/30 bg-green/10 text-green-200" : "border-orange/30 bg-orange/10 text-orange-200")}>
+                {campaign?.status}
               </span>
-              <span className="rounded-md border border-blue/30 bg-blue/10 px-2 py-1 font-mono text-[10px] text-blue-200">{campaign.objective}</span>
+              <span className="rounded-md border border-blue/30 bg-blue/10 px-2 py-1 font-mono text-[10px] text-blue-200">{campaign?.objective}</span>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted hover:text-text">Fechar</button>
+          <button type="button" onClick={onClose} className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted transition hover:border-red hover:bg-red hover:text-white">Fechar</button>
         </div>
 
         <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">Spend</div><div className="font-mono text-lg font-bold">{formatCurrency(campaign.spend)}</div></div>
-          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">Reach</div><div className="font-mono text-lg font-bold">{formatCompact(campaign.reach)}</div></div>
-          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">CTR</div><div className="font-mono text-lg font-bold">{formatPercent(campaign.ctr)}</div></div>
-          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">ROAS</div><div className="font-mono text-lg font-bold">{formatRoas(campaign.roas)}</div></div>
+          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">Spend</div><div className="font-mono text-lg font-bold">{formatCurrency(campaign?.spend ?? 0)}</div></div>
+          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">Reach</div><div className="font-mono text-lg font-bold">{formatCompact(campaign?.reach ?? 0)}</div></div>
+          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">CTR</div><div className="font-mono text-lg font-bold">{formatPercent(campaign?.ctr ?? 0)}</div></div>
+          <div className="rounded-xl border border-border bg-bg p-3 text-center"><div className="eyebrow mb-1">ROAS</div><div className="font-mono text-lg font-bold">{formatRoas(campaign?.roas ?? 0)}</div></div>
         </div>
 
         <div className="eyebrow mb-3">Anuncios da campanha</div>
@@ -52,7 +61,7 @@ export function CampaignDrawer({ campaign, ads, loading, error, onClose }: Campa
           ) : null}
           {!loading && !error
             ? ads.map((ad: AdItem) => (
-                <div key={ad.id} className="rounded-xl border border-border bg-bg p-4">
+                <div key={ad.id} className="rounded-xl border border-border bg-bg p-4 transition hover:border-blue">
                   <div className="flex gap-4">
                     <div className="flex h-[72px] w-[72px] shrink-0 items-center justify-center overflow-hidden rounded-xl border border-border bg-panel text-xs text-muted">
                       {ad.thumbnailUrl ? (

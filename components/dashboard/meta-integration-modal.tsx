@@ -1,5 +1,6 @@
 "use client";
 
+import clsx from "clsx";
 import { useEffect, useMemo, useState } from "react";
 import type { MetaIntegrationStatus } from "@/lib/types";
 
@@ -44,14 +45,24 @@ export function MetaIntegrationModal({
 
   const canSubmitSelection = useMemo(() => selectedAccountIds.length > 0 && !pending, [pending, selectedAccountIds.length]);
 
-  if (!open) return null;
-
   const isSelectionStage = status?.stage === "needs_selection";
   const isConnectedStage = status?.stage === "connected";
 
   return (
-    <div className="fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4" onClick={onClose}>
-      <div className="panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto p-6" onClick={(event) => event.stopPropagation()}>
+    <div
+      className={clsx(
+        "fixed inset-0 z-[90] grid place-items-center bg-black/70 p-4 transition-opacity duration-200",
+        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      )}
+      onClick={onClose}
+    >
+      <div
+        className={clsx(
+          "panel max-h-[calc(100vh-2rem)] w-full max-w-5xl overflow-y-auto p-6 transition duration-200",
+          open ? "scale-100 opacity-100" : "scale-95 opacity-0"
+        )}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow mb-2">Passo a passo de integracao</div>

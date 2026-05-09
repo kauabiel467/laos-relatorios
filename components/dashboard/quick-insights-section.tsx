@@ -13,6 +13,14 @@ interface QuickInsightsSectionProps {
 }
 
 export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
+  const toneColor: Record<string, string> = {
+    green: "#22c55e",
+    yellow: "#eab308",
+    red: "#ef4444",
+    blue: "#3b82f6"
+  };
+  const scoreColor = toneColor[snapshot.healthTone] ?? "#eab308";
+
   return (
     <section className="grid gap-4 xl:grid-cols-[1.2fr_0.9fr_1fr]">
       <div className="grid gap-4 md:grid-cols-3">
@@ -28,7 +36,10 @@ export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
       <div className="panel p-5">
         <div className="eyebrow mb-4">Saude do Cliente</div>
         <div className="mb-5 flex items-center gap-4">
-          <div className="relative grid size-20 place-items-center rounded-full bg-[conic-gradient(#eab308_74%,#1e2230_0)]">
+          <div
+            className="relative grid size-20 place-items-center rounded-full"
+            style={{ background: `conic-gradient(${scoreColor} ${snapshot.healthScore}%, #1e2230 0)` }}
+          >
             <div className="absolute inset-2 rounded-full bg-card" />
             <span className="relative z-10 font-mono text-xl font-bold">{snapshot.healthScore}</span>
           </div>

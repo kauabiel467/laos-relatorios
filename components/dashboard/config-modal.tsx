@@ -84,13 +84,20 @@ const placeholderIntegrations = [
 ];
 
 export function ConfigModal({ open, metaStatus, metaPending, onClose, onOpenMeta, onOpenCardapio }: ConfigModalProps) {
-  if (!open) return null;
-
   const badge = getMetaBadge(metaStatus);
 
   return (
-    <div className="fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4" onClick={onClose}>
-      <div className="panel w-full max-w-5xl p-6 lg:p-7" onClick={(event) => event.stopPropagation()}>
+    <div
+      className={clsx(
+        "fixed inset-0 z-[80] grid place-items-center bg-black/70 p-4 transition-opacity duration-200",
+        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+      )}
+      onClick={onClose}
+    >
+      <div
+        className={clsx("panel w-full max-w-5xl p-6 transition duration-200 lg:p-7", open ? "scale-100 opacity-100" : "scale-95 opacity-0")}
+        onClick={(event) => event.stopPropagation()}
+      >
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <div className="eyebrow mb-2">Central de integracoes</div>

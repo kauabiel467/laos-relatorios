@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import clsx from "clsx";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AdItem, CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
 import { adsByCampaign, cardapio, clients, snapshot as snapshotFallback } from "@/lib/mocks";
@@ -68,6 +69,15 @@ const emptyMetaSnapshot: DashboardDataBundle["snapshot"] = {
   strength: "Ainda nao ha campanhas suficientes para destacar um ponto forte."
 };
 
+const emptyDailySeries: DashboardDataBundle["dailySeries"] = [];
+const emptyMediaMetrics: DashboardDataBundle["mediaMetrics"] = [];
+const emptyObjectiveDistribution: DashboardDataBundle["objectiveDistribution"] = [];
+const emptyHourlyPerformance: DashboardDataBundle["hourlyPerformance"] = [];
+const emptyAgeAudience: DashboardDataBundle["ageAudience"] = [];
+const emptyGenderAudience: DashboardDataBundle["genderAudience"] = [];
+
+type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "cpa";
+
 export function DashboardApp() {
   const pathname = usePathname();
   const router = useRouter();
@@ -94,6 +104,8 @@ export function DashboardApp() {
   const [campaignAdsLoading, setCampaignAdsLoading] = useState(false);
   const [campaignAdsError, setCampaignAdsError] = useState<string | null>(null);
   const [aiText, setAiText] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const [metricDrilldown, setMetricDrilldown] = useState<MetricDrillType | null>(null);
   const [aiMessages, setAiMessages] = useState<string[]>([
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
   ]);
@@ -119,12 +131,116 @@ export function DashboardApp() {
 
   const shouldUseMockMeta = metaStatus?.stage !== "connected";
   const resolvedSnapshot = dashboardData?.snapshot ?? (shouldUseMockMeta ? snapshotFallback : emptyMetaSnapshot);
-  const resolvedDailySeries = dashboardData?.dailySeries ?? [];
-  const resolvedMediaMetrics = dashboardData?.mediaMetrics ?? [];
-  const resolvedObjectiveDistribution = dashboardData?.objectiveDistribution ?? [];
-  const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? [];
-  const resolvedAgeAudience = dashboardData?.ageAudience ?? [];
-  const resolvedGenderAudience = dashboardData?.genderAudience ?? [];
+  const resolvedDailySeries = dashboardData?.dailySeries ?? emptyDailySeries;
+  const resolvedMediaMetrics = dashboardData?.mediaMetrics ?? emptyMediaMetrics;
+  const resolvedObjectiveDistribution = dashboardData?.objectiveDistribution ?? emptyObjectiveDistribution;
+  const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? emptyHourlyPerformance;
+  const resolvedAgeAudience = dashboardData?.ageAudience ?? emptyAgeAudience;
+  const resolvedGenderAudience = dashboardData?.genderAudience ?? emptyGenderAudience;
+
+  const drilldownContent = useMemo(() => {
+    if (!metricDrilldown) return null;
+
+    const campaigns = dashboardData?.campaigns ?? [];
+    const dailyCount = Math.max(resolvedDailySeries.length, 1);
+    const totalResult = Math.max(resolvedSnapshot.resultValue, 0);
+    const totalSpend = Math.max(resolvedSnapshot.spend, 0);
+    const totalRevenue = Math.max(resolvedSnapshot.revenue, 0);
+
+    const config = {
+      spend: {
+        title: "Detalhamento - Investimento",
+        accent: "#3b82f6",
+        label: "Investimento (R$)",
+        values: resolvedDailySeries.map((item) => item.spend),
+        stats: [
+          { label: "Total", value: formatCurrency(totalSpend) },
+          { label: "Media diaria", value: formatCurrency(totalSpend / dailyCount) }
+        ],
+        rows: [...campaigns]
+          .sort((a, b) => b.spend - a.spend)
+          .slice(0, 5)
+          .map((campaign) => ({ name: campaign.name, value: campaign.spend, formatted: formatCurrency(campaign.spend), shareBase: totalSpend }))
+      },
+      result: {
+        title: `Detalhamento - ${resolvedSnapshot.resultLabel}`,
+        accent: "#22c55e",
+        label: resolvedSnapshot.resultLabel,
+        values: resolvedDailySeries.map((item) => item.result),
+        stats: [
+          { label: "Total", value: formatNumber(totalResult) },
+          { label: "Custo por resultado", value: totalResult > 0 ? formatCurrency(totalSpend / totalResult) : "R$ 0,00" }
+        ],
+        rows: [...campaigns]
+          .sort((a, b) => b.result - a.result)
+          .slice(0, 5)
+          .map((campaign) => ({ name: campaign.name, value: campaign.result, formatted: formatNumber(campaign.result), shareBase: totalResult }))
+      },
+      revenue: {
+        title: "Detalhamento - Faturamento",
+        accent: "#eab308",
+        label: "Faturamento (R$)",
+        values: resolvedDailySeries.map((item) => item.revenue ?? 0),
+        stats: [
+          { label: "Total", value: formatCurrency(totalRevenue) },
+          { label: "ROAS medio", value: formatRoas(resolvedSnapshot.roas) }
+        ],
+        rows: [...campaigns]
+          .sort((a, b) => b.roas * b.spend - a.roas * a.spend)
+          .slice(0, 5)
+          .map((campaign) => {
+            const revenue = campaign.roas * campaign.spend;
+            return { name: campaign.name, value: revenue, formatted: formatCurrency(revenue), shareBase: totalRevenue };
+          })
+      },
+      roas: {
+        title: "Detalhamento - ROAS",
+        accent: "#a855f7",
+        label: "ROAS",
+        values: resolvedDailySeries.map((item) => (item.spend > 0 ? (item.revenue ?? 0) / item.spend : 0)),
+        stats: [
+          { label: "ROAS medio", value: formatRoas(resolvedSnapshot.roas) },
+          { label: "Receita", value: formatCurrency(totalRevenue) }
+        ],
+        rows: [...campaigns]
+          .sort((a, b) => b.roas - a.roas)
+          .slice(0, 5)
+          .map((campaign) => ({ name: campaign.name, value: campaign.roas, formatted: formatRoas(campaign.roas), shareBase: Math.max(resolvedSnapshot.roas, 1) }))
+      },
+      cpa: {
+        title: "Detalhamento - CPA",
+        accent: "#f97316",
+        label: "CPA (R$)",
+        values: resolvedDailySeries.map((item) => (item.result > 0 ? item.spend / item.result : 0)),
+        stats: [
+          { label: "CPA real", value: formatCurrency(resolvedSnapshot.cpa) },
+          { label: "Resultados", value: formatNumber(totalResult) }
+        ],
+        rows: [...campaigns]
+          .filter((campaign) => campaign.result > 0)
+          .sort((a, b) => a.spend / a.result - b.spend / b.result)
+          .slice(0, 5)
+          .map((campaign) => {
+            const cpa = campaign.spend / campaign.result;
+            return { name: campaign.name, value: cpa, formatted: formatCurrency(cpa), shareBase: Math.max(resolvedSnapshot.cpa, 1) };
+          })
+      }
+    }[metricDrilldown];
+
+    const width = 620;
+    const height = 180;
+    const padding = 18;
+    const maxValue = Math.max(...config.values, 1);
+    const points = config.values
+      .map((value, index) => {
+        const x = padding + (index / Math.max(config.values.length - 1, 1)) * (width - padding * 2);
+        const y = height - padding - (value / maxValue) * (height - padding * 2);
+        return `${x},${y}`;
+      })
+      .join(" ");
+
+    return { ...config, points, width, height, padding };
+  }, [dashboardData?.campaigns, metricDrilldown, resolvedDailySeries, resolvedSnapshot]);
 
   useEffect(() => {
     if (!availableClients.length) {
@@ -193,6 +309,8 @@ export function DashboardApp() {
     ].join("\n");
 
     navigator.clipboard.writeText(report).catch(() => undefined);
+    setToastVisible(true);
+    window.setTimeout(() => setToastVisible(false), 2000);
   }
 
   const refreshMetaStatus = useCallback(async () => {
@@ -428,27 +546,39 @@ export function DashboardApp() {
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard
                   label="Investimento Total"
-                  value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.spend)}
+                  value={formatCurrency(resolvedSnapshot.spend)}
                   delta={formatPercent(resolvedSnapshot.spendDelta)}
                   tone="blue"
+                  loading={dashboardLoading}
+                  clickable={!dashboardLoading}
+                  onClick={() => setMetricDrilldown("spend")}
                 />
                 <MetricCard
                   label={resolvedSnapshot.resultLabel}
-                  value={dashboardLoading ? "Carregando..." : formatNumber(resolvedSnapshot.resultValue)}
+                  value={formatNumber(resolvedSnapshot.resultValue)}
                   delta={formatPercent(resolvedSnapshot.resultDelta)}
                   tone="green"
+                  loading={dashboardLoading}
+                  clickable={!dashboardLoading}
+                  onClick={() => setMetricDrilldown("result")}
                 />
                 <MetricCard
                   label="Faturamento Gerado"
-                  value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.revenue)}
+                  value={formatCurrency(resolvedSnapshot.revenue)}
                   delta={formatPercent(resolvedSnapshot.revenueDelta)}
                   tone="yellow"
+                  loading={dashboardLoading}
+                  clickable={!dashboardLoading}
+                  onClick={() => setMetricDrilldown("revenue")}
                 />
                 <MetricCard
                   label="ROAS"
-                  value={dashboardLoading ? "Carregando..." : formatRoas(resolvedSnapshot.roas)}
+                  value={formatRoas(resolvedSnapshot.roas)}
                   delta={formatPercent(resolvedSnapshot.roasDelta)}
                   tone="purple"
+                  loading={dashboardLoading}
+                  clickable={!dashboardLoading}
+                  onClick={() => setMetricDrilldown("roas")}
                 />
               </div>
             </section>
@@ -456,7 +586,15 @@ export function DashboardApp() {
             <section>
               <SectionTitle>Resultados de Conversao</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <MetricCard label="CPA real" value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.cpa)} delta={formatPercent(resolvedSnapshot.cpaDelta)} tone="orange" />
+                <MetricCard
+                  label="CPA real"
+                  value={formatCurrency(resolvedSnapshot.cpa)}
+                  delta={formatPercent(resolvedSnapshot.cpaDelta)}
+                  tone="orange"
+                  loading={dashboardLoading}
+                  clickable={!dashboardLoading}
+                  onClick={() => setMetricDrilldown("cpa")}
+                />
                 <MetricCard label="Ticket medio" value={formatCurrency(cardapio.ticket)} delta="+16,0%" tone="cyan" />
                 <MetricCard label="Taxa clique para pedido" value={formatPercent(cardapio.conversao, 2)} delta="-0,8%" tone="green" />
               </div>
@@ -527,6 +665,8 @@ export function DashboardApp() {
                 filter={campaignFilter}
                 onFilterChange={setCampaignFilter}
                 onSort={handleSort}
+                sortColumn={sortColumn}
+                sortDirection={sortDirection}
                 onOpenCampaign={setDrawerCampaign}
               />
             </section>
@@ -580,6 +720,115 @@ export function DashboardApp() {
         error={campaignAdsError}
         onClose={() => setDrawerCampaign(null)}
       />
+      <div
+        className={clsx(
+          "fixed inset-0 z-[75] grid place-items-center bg-black/70 p-4 transition-opacity duration-200",
+          metricDrilldown ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
+        )}
+        onClick={() => setMetricDrilldown(null)}
+      >
+        <div
+          className={clsx(
+            "panel max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto p-5 transition duration-200 lg:p-6",
+            metricDrilldown ? "scale-100 opacity-100" : "scale-95 opacity-0"
+          )}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="mb-5 flex items-start justify-between gap-4">
+            <div>
+              <div className="eyebrow mb-2">Detalhamento da metrica</div>
+              <h2 className="text-2xl font-bold text-text">{drilldownContent?.title ?? "Detalhamento"}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted">
+                Leitura do periodo selecionado para {selectedClient.name}, com evolucao diaria e campanhas que mais puxaram o indicador.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setMetricDrilldown(null)}
+              className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-muted transition hover:border-red hover:bg-red hover:text-white"
+            >
+              Fechar
+            </button>
+          </div>
+
+          <div className="mb-5 grid gap-3 sm:grid-cols-2">
+            {(drilldownContent?.stats ?? []).map((stat) => (
+              <div key={stat.label} className="rounded-xl border border-border bg-bg p-4">
+                <div className="eyebrow mb-2">{stat.label}</div>
+                <div className="font-mono text-xl font-bold text-text">{stat.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[1.25fr_0.9fr]">
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-semibold text-text">Evolucao diaria</div>
+                  <div className="font-mono text-[11px] text-muted">{drilldownContent?.label}</div>
+                </div>
+                <span className="size-2.5 rounded-full" style={{ backgroundColor: drilldownContent?.accent ?? "#3b82f6" }} />
+              </div>
+              {drilldownContent?.points ? (
+                <div className="overflow-x-auto">
+                  <svg viewBox={`0 0 ${drilldownContent.width} ${drilldownContent.height}`} className="h-48 min-w-[560px]">
+                    {Array.from({ length: 4 }).map((_, index) => {
+                      const y = drilldownContent.padding + (index / 3) * (drilldownContent.height - drilldownContent.padding * 2);
+                      return <line key={y} x1={drilldownContent.padding} x2={drilldownContent.width - drilldownContent.padding} y1={y} y2={y} stroke="rgba(30,34,48,0.8)" />;
+                    })}
+                    <polyline points={drilldownContent.points} fill="none" stroke={drilldownContent.accent} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                    {drilldownContent.points.split(" ").map((point, index) => {
+                      const [x, y] = point.split(",");
+                      const label = resolvedDailySeries[index]?.label;
+                      return (
+                        <circle key={`${point}-${index}`} cx={x} cy={y} r="4" fill={drilldownContent.accent}>
+                          <title>{label}</title>
+                        </circle>
+                      );
+                    })}
+                  </svg>
+                </div>
+              ) : (
+                <div className="rounded-xl border border-border p-4 text-sm text-muted">
+                  Ainda nao ha serie diaria suficiente para esta metrica.
+                </div>
+              )}
+            </div>
+
+            <div className="rounded-xl border border-border bg-bg p-4">
+              <div className="mb-4">
+                <div className="text-sm font-semibold text-text">Top campanhas</div>
+                <div className="font-mono text-[11px] text-muted">Participacao no indicador</div>
+              </div>
+              <div className="space-y-3">
+                {(drilldownContent?.rows ?? []).length ? (
+                  drilldownContent?.rows.map((row) => (
+                    <div key={row.name} className="rounded-lg border border-border bg-card/70 p-3 transition hover:border-blue">
+                      <div className="mb-2 flex items-start justify-between gap-3">
+                        <div className="min-w-0 truncate text-sm font-semibold text-text">{row.name}</div>
+                        <div className="font-mono text-xs text-blue">{row.formatted}</div>
+                      </div>
+                      <div className="h-1.5 overflow-hidden rounded-full bg-border">
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${Math.min(100, Math.max(0, row.shareBase > 0 ? (row.value / row.shareBase) * 100 : 0))}%`,
+                            backgroundColor: drilldownContent?.accent ?? "#3b82f6"
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="rounded-xl border border-border p-4 text-sm text-muted">
+                    Sem campanhas suficientes para detalhar este indicador.
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
       <ConfigModal
         open={configOpen}
         metaStatus={metaStatus}
@@ -614,6 +863,14 @@ export function DashboardApp() {
         onTextChange={setAiText}
         onSend={handleSendAi}
       />
+      <div
+        className={clsx(
+          "fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-blue/30 bg-card px-4 py-3 text-sm font-semibold text-text shadow-panel transition-all duration-200",
+          toastVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+        )}
+      >
+        Relatório copiado!
+      </div>
     </div>
   );
 }
