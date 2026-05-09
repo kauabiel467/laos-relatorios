@@ -66,6 +66,7 @@ function highlightClass(highlight: HourlyPerformancePoint["highlight"]) {
 }
 
 type ChartTooltip = {
+  panelId: string;
   x: number;
   y: number;
   title: string;
@@ -114,10 +115,11 @@ export function MetaVisualsSection({
   const objectiveColors = ["#3b82f6", "#22c55e", "#a855f7", "#f97316", "#eab308", "#06b6d4"];
   const genderColors = ["#3b82f6", "#a855f7", "#64748b"];
 
-  function showTooltip(event: MouseEvent<Element>, title: string, lines: string[]) {
+  function showTooltip(event: MouseEvent<Element>, panelId: string, title: string, lines: string[]) {
     const panel = event.currentTarget.closest("[data-chart-panel]") as HTMLElement | null;
     const rect = panel?.getBoundingClientRect();
     setTooltip({
+      panelId,
       x: rect ? event.clientX - rect.left : 0,
       y: rect ? event.clientY - rect.top : 0,
       title,
@@ -125,8 +127,8 @@ export function MetaVisualsSection({
     });
   }
 
-  function renderTooltip() {
-    if (!tooltip) return null;
+  function renderTooltip(panelId: string) {
+    if (!tooltip || tooltip.panelId !== panelId) return null;
 
     return (
       <div
@@ -200,14 +202,14 @@ export function MetaVisualsSection({
                         height={height - padding * 2}
                         fill="transparent"
                         onMouseEnter={(event) =>
-                          showTooltip(event, item.label, [
+                          showTooltip(event, "daily", item.label, [
                             `Investimento: ${formatCurrency(item.spend)}`,
                             `${resultLabel}: ${formatNumber(item.result)}`,
                             `Faturamento: ${formatCurrency(item.revenue ?? 0)}`
                           ])
                         }
                         onMouseMove={(event) =>
-                          showTooltip(event, item.label, [
+                          showTooltip(event, "daily", item.label, [
                             `Investimento: ${formatCurrency(item.spend)}`,
                             `${resultLabel}: ${formatNumber(item.result)}`,
                             `Faturamento: ${formatCurrency(item.revenue ?? 0)}`
@@ -237,7 +239,7 @@ export function MetaVisualsSection({
               Ainda nao ha serie diaria suficiente para desenhar a evolucao temporal.
             </div>
           )}
-          {renderTooltip()}
+          {renderTooltip("daily")}
         </div>
 
         <div className="panel relative p-5" data-chart-panel onMouseLeave={() => setTooltip(null)}>
@@ -253,6 +255,7 @@ export function MetaVisualsSection({
                 onMouseEnter={(event) =>
                   showTooltip(
                     event,
+                    "objective",
                     "Distribuicao por objetivo",
                     objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.spend)} (${formatPercent(item.percentage)})`)
                   )
@@ -260,6 +263,7 @@ export function MetaVisualsSection({
                 onMouseMove={(event) =>
                   showTooltip(
                     event,
+                    "objective",
                     "Distribuicao por objetivo",
                     objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.spend)} (${formatPercent(item.percentage)})`)
                   )
@@ -278,8 +282,8 @@ export function MetaVisualsSection({
                   <div
                     key={item.label}
                     className="flex items-start gap-3 rounded-lg p-1 transition hover:bg-white/5"
-                    onMouseEnter={(event) => showTooltip(event, item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
-                    onMouseMove={(event) => showTooltip(event, item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
+                    onMouseEnter={(event) => showTooltip(event, "objective", item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
+                    onMouseMove={(event) => showTooltip(event, "objective", item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
                   >
                     <span
                       className="mt-1 inline-flex h-3 w-3 rounded-sm"
@@ -300,7 +304,7 @@ export function MetaVisualsSection({
               Ainda nao ha campanhas suficientes para distribuir o investimento por objetivo.
             </div>
           )}
-          {renderTooltip()}
+          {renderTooltip("objective")}
         </div>
       </div>
 
@@ -320,8 +324,8 @@ export function MetaVisualsSection({
                   </div>
                   <div
                     className="h-7 rounded-lg bg-border/90"
-                    onMouseEnter={(event) => showTooltip(event, item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
-                    onMouseMove={(event) => showTooltip(event, item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
+                    onMouseEnter={(event) => showTooltip(event, "age", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
+                    onMouseMove={(event) => showTooltip(event, "age", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                   >
                     <div className="h-full rounded-lg bg-indigo-500/80" style={{ width: `${Math.max(6, (item.value / ageMax) * 100)}%` }} />
                   </div>
@@ -333,7 +337,7 @@ export function MetaVisualsSection({
               Ainda nao ha dados de audiencia por idade para esta conta no periodo atual.
             </div>
           )}
-          {renderTooltip()}
+          {renderTooltip("age")}
         </div>
 
         <div className="panel relative p-5" data-chart-panel onMouseLeave={() => setTooltip(null)}>
@@ -349,6 +353,7 @@ export function MetaVisualsSection({
                 onMouseEnter={(event) =>
                   showTooltip(
                     event,
+                    "gender",
                     "Audiencia por genero",
                     genderAudience.map((item) => `${item.label}: ${formatNumber(item.value)} (${formatPercent(item.percentage)})`)
                   )
@@ -356,6 +361,7 @@ export function MetaVisualsSection({
                 onMouseMove={(event) =>
                   showTooltip(
                     event,
+                    "gender",
                     "Audiencia por genero",
                     genderAudience.map((item) => `${item.label}: ${formatNumber(item.value)} (${formatPercent(item.percentage)})`)
                   )
@@ -368,8 +374,8 @@ export function MetaVisualsSection({
                   <div
                     key={item.label}
                     className="flex items-start gap-3 rounded-lg p-1 transition hover:bg-white/5"
-                    onMouseEnter={(event) => showTooltip(event, item.label, [formatNumber(item.value), formatPercent(item.percentage)])}
-                    onMouseMove={(event) => showTooltip(event, item.label, [formatNumber(item.value), formatPercent(item.percentage)])}
+                    onMouseEnter={(event) => showTooltip(event, "gender", item.label, [formatNumber(item.value), formatPercent(item.percentage)])}
+                    onMouseMove={(event) => showTooltip(event, "gender", item.label, [formatNumber(item.value), formatPercent(item.percentage)])}
                   >
                     <span
                       className="mt-1 inline-flex h-3 w-3 rounded-full"
@@ -390,7 +396,7 @@ export function MetaVisualsSection({
               Ainda nao ha dados de audiencia por genero para esta conta no periodo atual.
             </div>
           )}
-          {renderTooltip()}
+          {renderTooltip("gender")}
         </div>
       </div>
 
@@ -407,8 +413,8 @@ export function MetaVisualsSection({
                   <div
                     className={`w-full rounded-t-md transition hover:opacity-90 ${highlightClass(item.highlight)}`}
                     style={{ height: `${Math.max(4, (item.value / hourlyMax) * 100)}%` }}
-                    onMouseEnter={(event) => showTooltip(event, item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
-                    onMouseMove={(event) => showTooltip(event, item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
+                    onMouseEnter={(event) => showTooltip(event, "hourly", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
+                    onMouseMove={(event) => showTooltip(event, "hourly", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                   />
                 </div>
                 <span className="font-mono text-[10px] text-muted">{item.label}</span>
@@ -420,7 +426,7 @@ export function MetaVisualsSection({
           Ainda nao ha distribuicao por horario suficiente para esta conta no periodo atual.
         </div>
       )}
-      {renderTooltip()}
+      {renderTooltip("hourly")}
       </div>
     </section>
   );
