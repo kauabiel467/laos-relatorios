@@ -139,7 +139,7 @@ export function HeaderBar({
             Exportar
           </button>
           <button type="button" onClick={onOpenConfig} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
-            Config
+            Integracoes
           </button>
         </div>
       </div>

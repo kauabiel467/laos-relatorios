@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import type { CampaignMetric, Client, DashboardTab, PeriodKey } from "@/lib/types";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { CampaignMetric, Client, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
 import { adsByCampaign, campaigns, cardapio, clients, dailySeries, snapshot } from "@/lib/mocks";
 import { formatCurrency, formatNumber, formatPercent, formatRoas } from "@/lib/utils/format";
 import { AiPanel } from "./ai-panel";
@@ -10,12 +11,17 @@ import { CampaignsTable } from "./campaigns-table";
 import { CardapioModal } from "./cardapio-modal";
 import { ConfigModal } from "./config-modal";
 import { HeaderBar } from "./header-bar";
+import { MetaIntegrationCard } from "./meta-integration-card";
+import { MetaIntegrationModal } from "./meta-integration-modal";
 import { MetricCard } from "./metric-card";
 import { QuickInsightsSection } from "./quick-insights-section";
 import { SectionTitle } from "./section-title";
 import { TabsNav } from "./tabs-nav";
 
 export function DashboardApp() {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<DashboardTab>("meta");
   const [period, setPeriod] = useState<PeriodKey>("last_30d");
   const [search, setSearch] = useState("");
@@ -27,6 +33,10 @@ export function DashboardApp() {
   const [cardapioOpen, setCardapioOpen] = useState(false);
   const [drawerCampaign, setDrawerCampaign] = useState<CampaignMetric | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [metaOpen, setMetaOpen] = useState(false);
+  const [metaStatus, setMetaStatus] = useState<MetaIntegrationStatus | null>(null);
+  const [metaPending, setMetaPending] = useState(false);
+  const [metaFeedback, setMetaFeedback] = useState<string | null>(null);
   const [aiText, setAiText] = useState("");
   const [aiMessages, setAiMessages] = useState<string[]>([
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
@@ -94,6 +104,123 @@ export function DashboardApp() {
     navigator.clipboard.writeText(report).catch(() => undefined);
   }
 
+  const refreshMetaStatus = useCallback(async () => {
+    const response = await fetch("/api/integrations/meta/status", {
+      cache: "no-store"
+    });
+
+    const payload = (await response.json()) as MetaIntegrationStatus;
+    setMetaStatus(payload);
+    return payload;
+  }, []);
+
+  useEffect(() => {
+    refreshMetaStatus().catch(() => {
+      setMetaStatus({
+        stage: "disconnected",
+        accounts: [],
+        error: "Nao foi possivel consultar o status da integracao da Meta."
+      });
+    });
+  }, [refreshMetaStatus]);
+
+  async function openMetaModal() {
+    setMetaOpen(true);
+    setMetaPending(true);
+    setMetaFeedback(null);
+
+    try {
+      await refreshMetaStatus();
+    } finally {
+      setMetaPending(false);
+    }
+  }
+
+  async function openConfigModal() {
+    setConfigOpen(true);
+    setMetaPending(true);
+
+    try {
+      await refreshMetaStatus();
+    } finally {
+      setMetaPending(false);
+    }
+  }
+
+  async function confirmMetaSelection(accountIds: string[]) {
+    setMetaPending(true);
+    setMetaFeedback(null);
+
+    try {
+      const response = await fetch("/api/integrations/meta/select", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ accountIds })
+      });
+
+      const payload = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof payload.error === "string" ? payload.error : "Nao foi possivel finalizar a conexao.");
+      }
+
+      await refreshMetaStatus();
+      setMetaFeedback("Conexao concluida com sucesso. As contas da Meta ja estao disponiveis no dashboard.");
+      router.replace("/");
+    } catch (error) {
+      setMetaFeedback(error instanceof Error ? error.message : "Falha ao conectar as contas selecionadas.");
+    } finally {
+      setMetaPending(false);
+    }
+  }
+
+  async function disconnectMeta() {
+    setMetaPending(true);
+    setMetaFeedback(null);
+
+    try {
+      await fetch("/api/integrations/meta/disconnect", {
+        method: "POST"
+      });
+
+      await refreshMetaStatus();
+      setMetaFeedback("A conexao com a Meta foi removida.");
+    } finally {
+      setMetaPending(false);
+    }
+  }
+
+  function startMetaOAuth() {
+    const returnTo = pathname || "/";
+    window.location.href = `/api/integrations/meta/start?returnTo=${encodeURIComponent(returnTo)}`;
+  }
+
+  useEffect(() => {
+    const metaStep = searchParams.get("meta");
+    const reason = searchParams.get("reason");
+
+    if (!metaStep) {
+      return;
+    }
+
+    setMetaOpen(true);
+    setMetaPending(true);
+
+    refreshMetaStatus()
+      .then(() => {
+        if (metaStep === "select") {
+          setMetaFeedback("Login da Meta concluido. Agora selecione quais contas deseja integrar.");
+        } else if (metaStep === "error") {
+          setMetaFeedback(reason ? decodeURIComponent(reason) : "A autenticacao com a Meta nao foi concluida.");
+        }
+      })
+      .finally(() => {
+        setMetaPending(false);
+        router.replace(pathname || "/");
+      });
+  }, [pathname, router, searchParams, refreshMetaStatus]);
+
   return (
     <div className="min-h-screen">
       <HeaderBar
@@ -104,7 +231,7 @@ export function DashboardApp() {
         onSearchChange={setSearch}
         onSelectClient={handleSelectClient}
         onPeriodChange={setPeriod}
-        onOpenConfig={() => setConfigOpen(true)}
+        onOpenConfig={openConfigModal}
         onExport={exportReport}
       />
       <TabsNav activeTab={activeTab} onChange={setActiveTab} />
@@ -112,6 +239,7 @@ export function DashboardApp() {
       <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6">
         {activeTab === "meta" ? (
           <div className="space-y-7">
+            <MetaIntegrationCard status={metaStatus} loading={metaPending} onOpen={openMetaModal} />
             <QuickInsightsSection snapshot={snapshot} />
 
             <section>
@@ -252,8 +380,31 @@ export function DashboardApp() {
       </main>
 
       <CampaignDrawer campaign={drawerCampaign} ads={drawerCampaign ? adsByCampaign[drawerCampaign.id] || [] : []} onClose={() => setDrawerCampaign(null)} />
-      <ConfigModal open={configOpen} onClose={() => setConfigOpen(false)} />
+      <ConfigModal
+        open={configOpen}
+        metaStatus={metaStatus}
+        metaPending={metaPending}
+        onClose={() => setConfigOpen(false)}
+        onOpenMeta={() => {
+          setConfigOpen(false);
+          void openMetaModal();
+        }}
+        onOpenCardapio={() => {
+          setConfigOpen(false);
+          setCardapioOpen(true);
+        }}
+      />
       <CardapioModal open={cardapioOpen} onClose={() => setCardapioOpen(false)} />
+      <MetaIntegrationModal
+        open={metaOpen}
+        status={metaStatus}
+        pending={metaPending}
+        feedback={metaFeedback}
+        onClose={() => setMetaOpen(false)}
+        onStart={startMetaOAuth}
+        onDisconnect={disconnectMeta}
+        onConfirmSelection={confirmMetaSelection}
+      />
       <AiPanel
         open={aiOpen}
         text={aiText}

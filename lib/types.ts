@@ -86,3 +86,21 @@ export interface DashboardSnapshot {
   bottleneck: string;
   strength: string;
 }
+
+export interface MetaAdAccount {
+  id: string;
+  name: string;
+  accountId: string;
+  status: string;
+  currency?: string;
+  timezoneName?: string;
+}
+
+export type MetaIntegrationStage = "missing_config" | "disconnected" | "needs_selection" | "connected";
+
+export interface MetaIntegrationStatus {
+  stage: MetaIntegrationStage;
+  connectedAt?: string;
+  error?: string;
+  accounts: MetaAdAccount[];
+}

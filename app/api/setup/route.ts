@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { env, hasServerSupabaseEnv, hasSupabaseEnv } from "@/lib/env";
+import { hasMetaOAuthConfig } from "@/lib/integrations/meta-oauth";
 
 export async function GET() {
   return NextResponse.json({
@@ -10,7 +11,10 @@ export async function GET() {
         serverReady: hasServerSupabaseEnv()
       },
       openai: Boolean(env.OPENAI_API_KEY),
-      metaAds: Boolean(env.META_SYSTEM_USER_TOKEN),
+      metaAds: {
+        oauthReady: hasMetaOAuthConfig(),
+        systemUserReady: Boolean(env.META_SYSTEM_USER_TOKEN)
+      },
       cardapio: Boolean(env.CARDAPIO_API_URL && env.CARDAPIO_API_TOKEN)
     }
   });
