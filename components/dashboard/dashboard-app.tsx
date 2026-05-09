@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import type { CampaignMetric, Client, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
-import { adsByCampaign, campaigns, cardapio, clients, dailySeries, snapshot } from "@/lib/mocks";
+import type { CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
+import { adsByCampaign, cardapio, clients, snapshot as snapshotFallback } from "@/lib/mocks";
 import { formatCurrency, formatNumber, formatPercent, formatRoas } from "@/lib/utils/format";
 import { AiPanel } from "./ai-panel";
 import { CampaignDrawer } from "./campaign-drawer";
@@ -17,6 +17,54 @@ import { MetricCard } from "./metric-card";
 import { QuickInsightsSection } from "./quick-insights-section";
 import { SectionTitle } from "./section-title";
 import { TabsNav } from "./tabs-nav";
+
+const emptyMetaSnapshot: DashboardDataBundle["snapshot"] = {
+  spend: 0,
+  spendDelta: 0,
+  resultLabel: "Resultados",
+  resultValue: 0,
+  resultDelta: 0,
+  revenue: 0,
+  revenueDelta: 0,
+  roas: 0,
+  roasDelta: 0,
+  cpa: 0,
+  cpaDelta: 0,
+  quickInsights: [
+    {
+      label: "O que aconteceu",
+      title: "Ainda nao ha dados carregados para esta conta.",
+      description: "Conecte a Meta e selecione uma conta com historico no periodo para preencher o resumo automatico.",
+      tone: "blue"
+    },
+    {
+      label: "Por que importa",
+      title: "Sem dados reais, o painel nao consegue diagnosticar a conta.",
+      description: "Assim que a API retornar investimento e resultados, essa leitura passa a ser automatica.",
+      tone: "orange"
+    },
+    {
+      label: "Proxima acao",
+      title: "Valide a conta conectada e o periodo selecionado.",
+      description: "Se a conta estiver correta, o dashboard carrega os indicadores reais desta selecao.",
+      tone: "green"
+    }
+  ],
+  alerts: [
+    {
+      id: "empty",
+      title: "Aguardando dados da Meta",
+      description: "Nao ha metrica suficiente para gerar alertas desta conta neste momento.",
+      tone: "neutral"
+    }
+  ],
+  healthScore: 0,
+  healthLabel: "Aguardando dados",
+  healthTone: "yellow",
+  funnel: [],
+  bottleneck: "Ainda nao foi possivel calcular gargalos para esta conta.",
+  strength: "Ainda nao ha campanhas suficientes para destacar um ponto forte."
+};
 
 export function DashboardApp() {
   const pathname = usePathname();
@@ -37,6 +85,9 @@ export function DashboardApp() {
   const [metaStatus, setMetaStatus] = useState<MetaIntegrationStatus | null>(null);
   const [metaPending, setMetaPending] = useState(false);
   const [metaFeedback, setMetaFeedback] = useState<string | null>(null);
+  const [dashboardData, setDashboardData] = useState<DashboardDataBundle | null>(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [aiText, setAiText] = useState("");
   const [aiMessages, setAiMessages] = useState<string[]>([
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
@@ -61,6 +112,10 @@ export function DashboardApp() {
     return availableClients.filter((client) => `${client.name} ${client.id}`.toLowerCase().includes(term));
   }, [availableClients, search]);
 
+  const shouldUseMockMeta = metaStatus?.stage !== "connected";
+  const resolvedSnapshot = dashboardData?.snapshot ?? (shouldUseMockMeta ? snapshotFallback : emptyMetaSnapshot);
+  const resolvedDailySeries = dashboardData?.dailySeries ?? [];
+
   useEffect(() => {
     if (!availableClients.length) {
       return;
@@ -75,7 +130,7 @@ export function DashboardApp() {
   }, [availableClients, selectedClient.id]);
 
   const visibleCampaigns = useMemo(() => {
-    const filtered = campaigns.filter((campaign) => {
+    const filtered = (dashboardData?.campaigns ?? []).filter((campaign) => {
       if (campaignFilter === "all") return true;
       return campaign.status === campaignFilter;
     });
@@ -88,7 +143,7 @@ export function DashboardApp() {
       }
       return ((Number(first) || 0) - (Number(second) || 0)) * sortDirection;
     });
-  }, [campaignFilter, sortColumn, sortDirection]);
+  }, [campaignFilter, dashboardData?.campaigns, sortColumn, sortDirection]);
 
   function handleSelectClient(client: Client) {
     setSelectedClient(client);
@@ -121,10 +176,10 @@ export function DashboardApp() {
     const report = [
       `Cliente: ${selectedClient.name}`,
       `Periodo: ${period}`,
-      `Investimento: ${formatCurrency(snapshot.spend)}`,
-      `${snapshot.resultLabel}: ${formatNumber(snapshot.resultValue)}`,
-      `Faturamento: ${formatCurrency(snapshot.revenue)}`,
-      `ROAS: ${formatRoas(snapshot.roas)}`
+      `Investimento: ${formatCurrency(resolvedSnapshot.spend)}`,
+      `${resolvedSnapshot.resultLabel}: ${formatNumber(resolvedSnapshot.resultValue)}`,
+      `Faturamento: ${formatCurrency(resolvedSnapshot.revenue)}`,
+      `ROAS: ${formatRoas(resolvedSnapshot.roas)}`
     ].join("\n");
 
     navigator.clipboard.writeText(report).catch(() => undefined);
@@ -140,6 +195,32 @@ export function DashboardApp() {
     return payload;
   }, []);
 
+  const loadDashboardData = useCallback(
+    async (clientId: string, selectedPeriod: PeriodKey) => {
+      setDashboardLoading(true);
+      setDashboardError(null);
+
+      try {
+        const response = await fetch(`/api/meta/dashboard?accountId=${encodeURIComponent(clientId)}&period=${encodeURIComponent(selectedPeriod)}`, {
+          cache: "no-store"
+        });
+
+        const payload = await response.json();
+        if (!response.ok) {
+          throw new Error(typeof payload.error === "string" ? payload.error : "Nao foi possivel carregar os dados da Meta.");
+        }
+
+        setDashboardData(payload as DashboardDataBundle);
+      } catch (error) {
+        setDashboardData(null);
+        setDashboardError(error instanceof Error ? error.message : "Nao foi possivel carregar os dados da Meta.");
+      } finally {
+        setDashboardLoading(false);
+      }
+    },
+    []
+  );
+
   useEffect(() => {
     refreshMetaStatus().catch(() => {
       setMetaStatus({
@@ -149,6 +230,21 @@ export function DashboardApp() {
       });
     });
   }, [refreshMetaStatus]);
+
+  useEffect(() => {
+    if (activeTab !== "meta") {
+      return;
+    }
+
+    const hasConnectedMeta = metaStatus?.stage === "connected" && metaStatus.accounts.length > 0;
+    if (!hasConnectedMeta || !selectedClient?.id) {
+      setDashboardData(null);
+      setDashboardError(null);
+      return;
+    }
+
+    void loadDashboardData(selectedClient.id, period);
+  }, [activeTab, loadDashboardData, metaStatus?.accounts.length, metaStatus?.stage, period, selectedClient?.id]);
 
   async function openMetaModal() {
     setMetaOpen(true);
@@ -267,22 +363,47 @@ export function DashboardApp() {
         {activeTab === "meta" ? (
           <div className="space-y-7">
             <MetaIntegrationCard status={metaStatus} loading={metaPending} onOpen={openMetaModal} />
-            <QuickInsightsSection snapshot={snapshot} />
+            {dashboardError ? (
+              <div className="rounded-2xl border border-red/30 bg-red/10 px-4 py-3 text-sm text-red-100">
+                Nao conseguimos carregar os dados reais desta conta agora. {dashboardError}
+              </div>
+            ) : null}
+            <QuickInsightsSection snapshot={resolvedSnapshot} />
 
             <section>
               <SectionTitle>Visao Geral</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Investimento Total" value={formatCurrency(snapshot.spend)} delta={`+${formatPercent(snapshot.spendDelta)}`} tone="blue" />
-                <MetricCard label={snapshot.resultLabel} value={formatNumber(snapshot.resultValue)} delta={formatPercent(snapshot.resultDelta)} tone="green" />
-                <MetricCard label="Faturamento Gerado" value={formatCurrency(snapshot.revenue)} delta={`+${formatPercent(snapshot.revenueDelta)}`} tone="yellow" />
-                <MetricCard label="ROAS" value={formatRoas(snapshot.roas)} delta={formatPercent(snapshot.roasDelta)} tone="purple" />
+                <MetricCard
+                  label="Investimento Total"
+                  value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.spend)}
+                  delta={formatPercent(resolvedSnapshot.spendDelta)}
+                  tone="blue"
+                />
+                <MetricCard
+                  label={resolvedSnapshot.resultLabel}
+                  value={dashboardLoading ? "Carregando..." : formatNumber(resolvedSnapshot.resultValue)}
+                  delta={formatPercent(resolvedSnapshot.resultDelta)}
+                  tone="green"
+                />
+                <MetricCard
+                  label="Faturamento Gerado"
+                  value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.revenue)}
+                  delta={formatPercent(resolvedSnapshot.revenueDelta)}
+                  tone="yellow"
+                />
+                <MetricCard
+                  label="ROAS"
+                  value={dashboardLoading ? "Carregando..." : formatRoas(resolvedSnapshot.roas)}
+                  delta={formatPercent(resolvedSnapshot.roasDelta)}
+                  tone="purple"
+                />
               </div>
             </section>
 
             <section>
               <SectionTitle>Resultados de Conversao</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <MetricCard label="CPA real" value={formatCurrency(snapshot.cpa)} delta={`+${formatPercent(snapshot.cpaDelta)}`} tone="orange" />
+                <MetricCard label="CPA real" value={dashboardLoading ? "Carregando..." : formatCurrency(resolvedSnapshot.cpa)} delta={formatPercent(resolvedSnapshot.cpaDelta)} tone="orange" />
                 <MetricCard label="Ticket medio" value={formatCurrency(cardapio.ticket)} delta="+16,0%" tone="cyan" />
                 <MetricCard label="Taxa clique para pedido" value={formatPercent(cardapio.conversao, 2)} delta="-0,8%" tone="green" />
               </div>
@@ -291,26 +412,39 @@ export function DashboardApp() {
             <section className="grid gap-4 xl:grid-cols-2">
               <div className="panel p-5">
                 <SectionTitle>Evolucao Temporal</SectionTitle>
-                <div className="mt-5 grid h-72 grid-cols-7 items-end gap-3">
-                  {dailySeries.map((day) => (
-                    <div key={day.label} className="flex h-full flex-col items-center justify-end gap-2">
-                      <div className="flex h-full w-full items-end gap-1">
-                        <div className="w-1/2 rounded-t-md bg-blue" style={{ height: `${(day.spend / 520) * 100}%` }} />
-                        <div className="w-1/2 rounded-t-md bg-orange/90" style={{ height: `${((day.revenue || 0) / 2020) * 100}%` }} />
-                      </div>
-                      <span className="font-mono text-[10px] text-muted">{day.label}</span>
+                {resolvedDailySeries.length ? (
+                  <>
+                    <div className="mt-5 grid h-72 grid-cols-7 items-end gap-3">
+                      {resolvedDailySeries.map((day) => {
+                        const maxSpend = Math.max(...resolvedDailySeries.map((item) => item.spend), 1);
+                        const maxRevenue = Math.max(...resolvedDailySeries.map((item) => item.revenue || 0), 1);
+
+                        return (
+                          <div key={`${day.label}-${day.spend}-${day.result}`} className="flex h-full flex-col items-center justify-end gap-2">
+                            <div className="flex h-full w-full items-end gap-1">
+                              <div className="w-1/2 rounded-t-md bg-blue" style={{ height: `${Math.max(6, (day.spend / maxSpend) * 100)}%` }} />
+                              <div className="w-1/2 rounded-t-md bg-orange/90" style={{ height: `${Math.max(6, ((day.revenue || 0) / maxRevenue) * 100)}%` }} />
+                            </div>
+                            <span className="font-mono text-[10px] text-muted">{day.label}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
-                <p className="mt-4 text-xs text-muted">Azul = investimento. Laranja = faturamento do cardapio.</p>
+                    <p className="mt-4 text-xs text-muted">Azul = investimento. Laranja = faturamento estimado pela Meta quando houver valor de compra.</p>
+                  </>
+                ) : (
+                  <div className="mt-5 rounded-xl border border-border bg-bg p-4 text-sm text-muted">
+                    Ainda nao ha serie diaria suficiente para esta conta no periodo selecionado.
+                  </div>
+                )}
               </div>
 
               <div className="panel p-5">
                 <SectionTitle>Funil de Conversao</SectionTitle>
                 <div className="mt-5 grid gap-4 xl:grid-cols-[1fr_280px]">
                   <div className="space-y-3">
-                    {snapshot.funnel.map((step, index) => {
-                      const max = snapshot.funnel[0]?.value || 1;
+                    {resolvedSnapshot.funnel.map((step, index) => {
+                      const max = resolvedSnapshot.funnel[0]?.value || 1;
                       const width = Math.max(6, (step.value / max) * 100);
                       const colors: Record<string, string> = {
                         blue: "from-blue to-blue/70",
@@ -332,7 +466,7 @@ export function DashboardApp() {
                               className={`flex h-full items-center rounded-lg bg-gradient-to-r px-3 text-xs font-semibold text-white ${colors[step.color]}`}
                               style={{ width: `${width}%` }}
                             >
-                              {index === 0 ? "100%" : formatPercent((step.value / snapshot.funnel[index - 1].value) * 100, 1)}
+                              {index === 0 ? "100%" : formatPercent((step.value / resolvedSnapshot.funnel[index - 1].value) * 100, 1)}
                             </div>
                           </div>
                         </div>
@@ -342,11 +476,11 @@ export function DashboardApp() {
                   <div className="space-y-3">
                     <div className="rounded-xl border border-border bg-bg p-4">
                       <div className="mb-2 text-sm font-semibold">Gargalo principal</div>
-                      <p className="text-xs leading-6 text-muted">{snapshot.bottleneck}</p>
+                      <p className="text-xs leading-6 text-muted">{resolvedSnapshot.bottleneck}</p>
                     </div>
                     <div className="rounded-xl border border-border bg-bg p-4">
                       <div className="mb-2 text-sm font-semibold">Ponto forte</div>
-                      <p className="text-xs leading-6 text-muted">{snapshot.strength}</p>
+                      <p className="text-xs leading-6 text-muted">{resolvedSnapshot.strength}</p>
                     </div>
                   </div>
                 </div>

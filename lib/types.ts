@@ -87,6 +87,12 @@ export interface DashboardSnapshot {
   strength: string;
 }
 
+export interface DashboardDataBundle {
+  snapshot: DashboardSnapshot;
+  dailySeries: DailyPoint[];
+  campaigns: CampaignMetric[];
+}
+
 export interface MetaAdAccount {
   id: string;
   name: string;

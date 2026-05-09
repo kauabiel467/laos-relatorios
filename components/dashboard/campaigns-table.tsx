@@ -68,28 +68,36 @@ export function CampaignsTable({
             </tr>
           </thead>
           <tbody>
-            {campaigns.map((campaign) => (
-              <tr
-                key={campaign.id}
-                className="cursor-pointer border-t border-border/80 text-sm transition hover:bg-blue/5"
-                onClick={() => onOpenCampaign(campaign)}
-              >
-                <td className="px-4 py-4">
-                  <div className="font-semibold">{campaign.name}</div>
-                  <div className="text-xs text-blue">clique para detalhar</div>
+            {campaigns.length ? (
+              campaigns.map((campaign) => (
+                <tr
+                  key={campaign.id}
+                  className="cursor-pointer border-t border-border/80 text-sm transition hover:bg-blue/5"
+                  onClick={() => onOpenCampaign(campaign)}
+                >
+                  <td className="px-4 py-4">
+                    <div className="font-semibold">{campaign.name}</div>
+                    <div className="text-xs text-blue">clique para detalhar</div>
+                  </td>
+                  <td className="px-4 py-4">
+                    <span className={clsx("rounded-md border px-2 py-1 font-mono text-[10px]", badgeStyles[campaign.status])}>
+                      {campaign.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-4">{campaign.objective}</td>
+                  <td className="px-4 py-4 font-mono">{formatCurrency(campaign.spend)}</td>
+                  <td className="px-4 py-4 font-mono">{formatCompact(campaign.reach)}</td>
+                  <td className="px-4 py-4 font-mono">{formatPercent(campaign.ctr)}</td>
+                  <td className="px-4 py-4 font-mono">{formatRoas(campaign.roas)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr className="border-t border-border/80 text-sm">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted">
+                  Nenhuma campanha com dados disponiveis para este filtro e periodo.
                 </td>
-                <td className="px-4 py-4">
-                  <span className={clsx("rounded-md border px-2 py-1 font-mono text-[10px]", badgeStyles[campaign.status])}>
-                    {campaign.status}
-                  </span>
-                </td>
-                <td className="px-4 py-4">{campaign.objective}</td>
-                <td className="px-4 py-4 font-mono">{formatCurrency(campaign.spend)}</td>
-                <td className="px-4 py-4 font-mono">{formatCompact(campaign.reach)}</td>
-                <td className="px-4 py-4 font-mono">{formatPercent(campaign.ctr)}</td>
-                <td className="px-4 py-4 font-mono">{formatRoas(campaign.roas)}</td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
