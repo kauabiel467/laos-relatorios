@@ -1,11 +1,13 @@
 import type {
   AdItem,
+  AgeAudiencePoint,
   AlertItem,
   CampaignMetric,
   DashboardDataBundle,
   DashboardSnapshot,
   DailyPoint,
   FunnelStep,
+  GenderAudiencePoint,
   HourlyPerformancePoint,
   MediaMetricCard,
   ObjectiveDistributionItem
@@ -36,6 +38,8 @@ type MetaInsightRow = {
   }>;
   date_start?: string;
   hourly_stats_aggregated_by_advertiser_time_zone?: string;
+  age?: string;
+  gender?: string;
 };
 
 type MetaCampaignRow = {
@@ -420,6 +424,40 @@ function buildHourlyPerformance(rows: MetaInsightRow[]): HourlyPerformancePoint[
   });
 }
 
+function buildAgeAudience(rows: MetaInsightRow[]): AgeAudiencePoint[] {
+  const grouped = new Map<string, number>();
+
+  for (const row of rows) {
+    const label = row.age || "—";
+    grouped.set(label, (grouped.get(label) || 0) + parseNumber(row.reach));
+  }
+
+  return [...grouped.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((first, second) => first.label.localeCompare(second.label, "pt-BR"));
+}
+
+function buildGenderAudience(rows: MetaInsightRow[]): GenderAudiencePoint[] {
+  const grouped = new Map<string, number>([
+    ["Masculino", 0],
+    ["Feminino", 0],
+    ["Desconhecido", 0]
+  ]);
+
+  for (const row of rows) {
+    const normalized = String(row.gender || "").toLowerCase();
+    const label = normalized === "male" ? "Masculino" : normalized === "female" ? "Feminino" : "Desconhecido";
+    grouped.set(label, (grouped.get(label) || 0) + parseNumber(row.reach));
+  }
+
+  const total = [...grouped.values()].reduce((sum, value) => sum + value, 0);
+  return [...grouped.entries()].map(([label, value]) => ({
+    label,
+    value,
+    percentage: total > 0 ? (value / total) * 100 : 0
+  }));
+}
+
 function normalizeAdType(objectType?: string, adName?: string): AdItem["type"] {
   const normalizedObjectType = String(objectType || "").toUpperCase();
   const normalizedName = String(adName || "").toLowerCase();
@@ -501,7 +539,7 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindow(period);
   const accessToken = session.accessToken;
 
-  const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, hourlyInsightsPayload, campaignsPayload, campaignInsightsPayload] =
+  const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, hourlyInsightsPayload, audienceInsightsPayload, campaignsPayload, campaignInsightsPayload] =
     await Promise.all([
       fetchGraph<{ data: MetaInsightRow[] }>(
         `${normalizedAccountId}/insights`,
@@ -533,6 +571,16 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
         {
           fields: "clicks,actions",
           breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
+          limit: "200",
+          ...buildTimeRangeParams(currentStart, currentEnd)
+        },
+        accessToken
+      ),
+      fetchGraph<{ data: MetaInsightRow[] }>(
+        `${normalizedAccountId}/insights`,
+        {
+          fields: "reach",
+          breakdowns: "age,gender",
           limit: "200",
           ...buildTimeRangeParams(currentStart, currentEnd)
         },
@@ -617,6 +665,8 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
   const mediaMetrics = buildMediaMetrics(current, previous);
   const objectiveDistribution = buildObjectiveDistribution(campaigns);
   const hourlyPerformance = buildHourlyPerformance(hourlyInsightsPayload.data);
+  const ageAudience = buildAgeAudience(audienceInsightsPayload.data);
+  const genderAudience = buildGenderAudience(audienceInsightsPayload.data);
   const healthScore = buildHealthScore(spend, resultValue, roas, cpa, resultDelta, roasDelta);
   const health = buildHealthLabel(healthScore);
   const funnel = buildFunnel(current, resultValue);
@@ -655,7 +705,9 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
     campaigns,
     mediaMetrics,
     objectiveDistribution,
-    hourlyPerformance
+    hourlyPerformance,
+    ageAudience,
+    genderAudience
   };
 }
 

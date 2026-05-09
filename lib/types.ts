@@ -36,6 +36,17 @@ export interface HourlyPerformancePoint {
   highlight: "base" | "medium" | "high";
 }
 
+export interface AgeAudiencePoint {
+  label: string;
+  value: number;
+}
+
+export interface GenderAudiencePoint {
+  label: string;
+  value: number;
+  percentage: number;
+}
+
 export interface CampaignMetric {
   id: string;
   name: string;
@@ -117,6 +128,8 @@ export interface DashboardDataBundle {
   mediaMetrics: MediaMetricCard[];
   objectiveDistribution: ObjectiveDistributionItem[];
   hourlyPerformance: HourlyPerformancePoint[];
+  ageAudience: AgeAudiencePoint[];
+  genderAudience: GenderAudiencePoint[];
 }
 
 export interface MetaAdAccount {

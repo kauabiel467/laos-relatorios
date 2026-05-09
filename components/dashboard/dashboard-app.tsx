@@ -123,6 +123,8 @@ export function DashboardApp() {
   const resolvedMediaMetrics = dashboardData?.mediaMetrics ?? [];
   const resolvedObjectiveDistribution = dashboardData?.objectiveDistribution ?? [];
   const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? [];
+  const resolvedAgeAudience = dashboardData?.ageAudience ?? [];
+  const resolvedGenderAudience = dashboardData?.genderAudience ?? [];
 
   useEffect(() => {
     if (!availableClients.length) {
@@ -466,6 +468,8 @@ export function DashboardApp() {
               dailySeries={resolvedDailySeries}
               objectiveDistribution={resolvedObjectiveDistribution}
               hourlyPerformance={resolvedHourlyPerformance}
+              ageAudience={resolvedAgeAudience}
+              genderAudience={resolvedGenderAudience}
               resultLabel={resolvedSnapshot.resultLabel}
             />
 

@@ -1,6 +1,6 @@
 "use client";
 
-import type { DailyPoint, HourlyPerformancePoint, ObjectiveDistributionItem } from "@/lib/types";
+import type { AgeAudiencePoint, DailyPoint, GenderAudiencePoint, HourlyPerformancePoint, ObjectiveDistributionItem } from "@/lib/types";
 import { formatCurrency, formatPercent } from "@/lib/utils/format";
 import { SectionTitle } from "./section-title";
 
@@ -8,6 +8,8 @@ interface MetaVisualsSectionProps {
   dailySeries: DailyPoint[];
   objectiveDistribution: ObjectiveDistributionItem[];
   hourlyPerformance: HourlyPerformancePoint[];
+  ageAudience: AgeAudiencePoint[];
+  genderAudience: GenderAudiencePoint[];
   resultLabel: string;
 }
 
@@ -65,6 +67,8 @@ export function MetaVisualsSection({
   dailySeries,
   objectiveDistribution,
   hourlyPerformance,
+  ageAudience,
+  genderAudience,
   resultLabel
 }: MetaVisualsSectionProps) {
   const width = 760;
@@ -85,6 +89,7 @@ export function MetaVisualsSection({
   const spendArea = buildArea(spendPoints, width, height, padding);
   const totalObjectiveSpend = objectiveDistribution.reduce((sum, item) => sum + item.spend, 0);
   const hourlyMax = Math.max(...hourlyPerformance.map((item) => item.value), 1);
+  const ageMax = Math.max(...ageAudience.map((item) => item.value), 1);
 
   return (
     <section className="space-y-4">
@@ -167,6 +172,79 @@ export function MetaVisualsSection({
           ) : (
             <div className="rounded-xl border border-border bg-bg p-4 text-sm text-muted">
               Ainda nao ha campanhas suficientes para distribuir o investimento por objetivo.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-[1fr_0.9fr]">
+        <div className="panel p-5">
+          <div className="mb-4">
+            <div className="text-lg font-bold">Audiencia por Idade</div>
+            <p className="text-xs leading-5 text-muted">Alcance agregado por faixa etaria da conta selecionada.</p>
+          </div>
+          {ageAudience.length ? (
+            <div className="grid gap-3">
+              {ageAudience.map((item) => (
+                <div key={item.label}>
+                  <div className="mb-1 flex items-center justify-between text-sm text-muted">
+                    <span>{item.label}</span>
+                    <strong className="font-mono text-text">{item.value.toLocaleString("pt-BR")}</strong>
+                  </div>
+                  <div className="h-7 rounded-lg bg-border/90">
+                    <div className="h-full rounded-lg bg-indigo-500/80" style={{ width: `${Math.max(6, (item.value / ageMax) * 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-bg p-4 text-sm text-muted">
+              Ainda nao ha dados de audiencia por idade para esta conta no periodo atual.
+            </div>
+          )}
+        </div>
+
+        <div className="panel p-5">
+          <div className="mb-4">
+            <div className="text-lg font-bold">Audiencia por Genero</div>
+            <p className="text-xs leading-5 text-muted">Distribuicao de alcance por genero retornada pela Meta.</p>
+          </div>
+          {genderAudience.some((item) => item.value > 0) ? (
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
+              <div
+                className="relative mx-auto h-48 w-48 rounded-full"
+                style={{
+                  backgroundImage: buildConicGradient(
+                    genderAudience.map((item) => ({
+                      label: item.label,
+                      spend: item.value,
+                      percentage: item.percentage
+                    }))
+                  )
+                }}
+              >
+                <div className="absolute inset-8 rounded-full bg-card" />
+              </div>
+              <div className="flex-1 space-y-3">
+                {genderAudience.map((item, index) => (
+                  <div key={item.label} className="flex items-start gap-3">
+                    <span
+                      className="mt-1 inline-flex h-3 w-3 rounded-full"
+                      style={{ backgroundColor: ["#3b82f6", "#a855f7", "#64748b"][index % 3] }}
+                    />
+                    <div>
+                      <div className="text-sm font-semibold">{item.label}</div>
+                      <div className="font-mono text-[11px] text-muted">
+                        {item.value.toLocaleString("pt-BR")} · {formatPercent(item.percentage)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-bg p-4 text-sm text-muted">
+              Ainda nao ha dados de audiencia por genero para esta conta no periodo atual.
             </div>
           )}
         </div>
