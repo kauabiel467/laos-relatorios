@@ -1,0 +1,148 @@
+"use client";
+
+import clsx from "clsx";
+import { useEffect, useRef, useState } from "react";
+import type { Client, PeriodKey } from "@/lib/types";
+
+interface HeaderBarProps {
+  filteredClients: Client[];
+  search: string;
+  selectedClient: Client;
+  period: PeriodKey;
+  onSearchChange: (value: string) => void;
+  onSelectClient: (client: Client) => void;
+  onPeriodChange: (period: PeriodKey) => void;
+  onOpenConfig: () => void;
+  onExport: () => void;
+}
+
+const periodOptions: Array<{ key: PeriodKey; label: string }> = [
+  { key: "last_7d", label: "7D" },
+  { key: "last_30d", label: "30D" },
+  { key: "last_90d", label: "90D" },
+  { key: "custom", label: "Personalizado" }
+];
+
+const statusStyles = {
+  ACTIVE: "border-green/30 bg-green/10 text-green-200",
+  PAUSED: "border-orange/30 bg-orange/10 text-orange-200"
+};
+
+export function HeaderBar({
+  filteredClients,
+  search,
+  selectedClient,
+  period,
+  onSearchChange,
+  onSelectClient,
+  onPeriodChange,
+  onOpenConfig,
+  onExport
+}: HeaderBarProps) {
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function handleOutsideClick(event: MouseEvent) {
+      if (!searchRef.current?.contains(event.target as Node)) {
+        setIsSearchOpen(false);
+      }
+    }
+
+    window.addEventListener("mousedown", handleOutsideClick);
+    return () => window.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
+
+  return (
+    <header className="sticky top-0 z-50 border-b border-border/80 bg-bg/95 backdrop-blur">
+      <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:px-6">
+        <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-[0.18em] text-white/90">
+          <span className="inline-flex size-2.5 rounded-full bg-blue shadow-[0_0_0_6px_rgba(59,130,246,0.12)]" />
+          LAOS | Meta Ads
+        </div>
+
+        <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-center">
+          <div ref={searchRef} className="panel-soft relative flex min-h-12 flex-1 items-center gap-3 px-3 py-2 lg:max-w-xl">
+            <div className="hidden text-xs font-medium text-muted sm:block">Buscar</div>
+            <div className="relative flex-1">
+              <input
+                value={search}
+                type="search"
+                onChange={(event) => {
+                  onSearchChange(event.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setIsSearchOpen(false);
+                  }
+
+                  if (event.key === "Enter" && filteredClients[0]) {
+                    onSelectClient(filteredClients[0]);
+                    setIsSearchOpen(false);
+                  }
+                }}
+                placeholder="Buscar cliente..."
+                className="w-full rounded-lg border border-border bg-bg px-3 py-2 pr-10 text-sm text-text outline-none transition focus:border-blue"
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[10px] text-muted">▼</span>
+              {isSearchOpen && (
+                <div className="panel absolute left-0 right-0 top-[calc(100%+8px)] max-h-64 overflow-auto p-1">
+                  {filteredClients.length ? (
+                    filteredClients.map((client) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => {
+                          onSelectClient(client);
+                          setIsSearchOpen(false);
+                        }}
+                        className="w-full rounded-lg px-3 py-2 text-left transition hover:bg-blue/10"
+                      >
+                        <div className="text-sm font-semibold text-text">{client.name}</div>
+                        <div className="font-mono text-[11px] text-muted">{client.id}</div>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="px-3 py-3 text-sm text-muted">Nenhum cliente encontrado.</div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="hidden min-w-0 max-w-52 truncate text-sm font-semibold text-text lg:block">
+              {selectedClient.name} <span className="text-muted">|</span>
+            </div>
+          </div>
+          <span className={clsx("w-fit rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em]", statusStyles[selectedClient.status])}>
+            {selectedClient.status === "ACTIVE" ? "ATIVO" : "PAUSADO"}
+          </span>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="panel-soft flex items-center gap-1 p-1">
+            {periodOptions.map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onPeriodChange(option.key)}
+                className={clsx(
+                  "rounded-md px-3 py-1.5 font-mono text-[11px] transition",
+                  period === option.key ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+          <button type="button" onClick={onExport} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+            Exportar
+          </button>
+          <button type="button" onClick={onOpenConfig} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+            Config
+          </button>
+        </div>
+      </div>
+    </header>
+  );
+}
