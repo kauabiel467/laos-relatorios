@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  exchangeCodeForToken,
-  fetchMetaAdAccounts,
-  getMetaCookieOptions,
-  META_DRAFT_COOKIE,
   META_OAUTH_STATE_COOKIE,
   META_RETURN_COOKIE,
+  readMetaSessionToken,
   readMetaOAuthState,
   readMetaReturnTo,
-  serializeMetaDraft
+  exchangeCodeForToken,
+  fetchMetaAdAccounts,
+  saveMetaDraft
 } from "@/lib/integrations/meta-oauth";
 
 export async function GET(request: NextRequest) {
@@ -36,21 +35,25 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const sessionToken = await readMetaSessionToken();
+    if (!sessionToken) {
+      const response = NextResponse.redirect(new URL(`${returnTo}?meta=error&reason=session_missing`, request.url));
+      response.cookies.delete(META_OAUTH_STATE_COOKIE);
+      response.cookies.delete(META_RETURN_COOKIE);
+      return response;
+    }
+
     const accessToken = await exchangeCodeForToken(code);
     const accounts = await fetchMetaAdAccounts(accessToken);
 
     const response = NextResponse.redirect(new URL(`${returnTo}?meta=select`, request.url));
     response.cookies.delete(META_OAUTH_STATE_COOKIE);
     response.cookies.delete(META_RETURN_COOKIE);
-    response.cookies.set(
-      META_DRAFT_COOKIE,
-      serializeMetaDraft({
-        accessToken,
-        accounts,
-        connectedAt: new Date().toISOString()
-      }),
-      getMetaCookieOptions(60 * 60 * 24 * 30)
-    );
+    await saveMetaDraft(sessionToken, {
+      accessToken,
+      accounts,
+      connectedAt: new Date().toISOString()
+    });
 
     return response;
   } catch (error) {
