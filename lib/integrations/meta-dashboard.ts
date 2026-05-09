@@ -300,15 +300,17 @@ function buildHealthLabel(score: number) {
   return { label: "Revisao urgente", tone: "red" as const };
 }
 
-function buildFunnel(row: MetaInsightRow | undefined, resultValue: number): FunnelStep[] {
+function buildFunnel(row: MetaInsightRow | undefined): FunnelStep[] {
   const clicks = parseNumber(row?.clicks);
   const landingPageViews = getActionValue(row?.actions, ["landing_page_view"]);
   const initiatedCheckouts = getActionValue(row?.actions, ["initiate_checkout", "omni_initiated_checkout"]);
+  const purchases = getPurchaseCount(row);
 
   return ([
     { label: "Cliques", value: clicks, color: "indigo" },
     { label: "Page views", value: landingPageViews || Math.round(clicks * 0.78), color: "purple" },
-    { label: "Checkout iniciado", value: initiatedCheckouts || Math.max(resultValue, Math.round(clicks * 0.2)), color: "orange" }
+    { label: "Checkout iniciado", value: initiatedCheckouts || Math.max(purchases, Math.round(clicks * 0.2)), color: "orange" },
+    { label: "Vendas", value: purchases, color: "green" }
   ] satisfies FunnelStep[]).filter((step) => step.value > 0);
 }
 
@@ -418,23 +420,54 @@ function buildMediaMetrics(current: MetaInsightRow | undefined, previous: MetaIn
   ];
 }
 
-function buildObjectiveDistribution(campaigns: CampaignMetric[]): ObjectiveDistributionItem[] {
-  const grouped = new Map<string, number>();
+function getCampaignObjectiveMetric(campaign: CampaignMetric) {
+  const objective = campaign.objective.toLowerCase();
 
-  for (const campaign of campaigns) {
-    const current = grouped.get(campaign.objective) || 0;
-    grouped.set(campaign.objective, current + campaign.spend);
+  if (objective.includes("venda")) {
+    return { label: "Vendas", value: campaign.purchases ?? campaign.result };
   }
 
-  const totalSpend = [...grouped.values()].reduce((sum, value) => sum + value, 0);
+  if (objective.includes("trafego") || objective.includes("reconhecimento") || objective.includes("alcance")) {
+    return { label: "Cliques", value: campaign.clicks ?? campaign.result };
+  }
+
+  if (objective.includes("mensagem")) {
+    return { label: "Conversas", value: campaign.result };
+  }
+
+  if (objective.includes("lead")) {
+    return { label: "Leads", value: campaign.result };
+  }
+
+  if (objective.includes("engajamento")) {
+    return { label: "Engajamentos", value: campaign.result };
+  }
+
+  return { label: "Resultados", value: campaign.result };
+}
+
+function buildObjectiveDistribution(campaigns: CampaignMetric[]): ObjectiveDistributionItem[] {
+  const grouped = new Map<string, { value: number; valueLabel: string }>();
+
+  for (const campaign of campaigns) {
+    const metric = getCampaignObjectiveMetric(campaign);
+    const current = grouped.get(campaign.objective) || { value: 0, valueLabel: metric.label };
+    grouped.set(campaign.objective, {
+      value: current.value + metric.value,
+      valueLabel: current.valueLabel
+    });
+  }
+
+  const totalValue = [...grouped.values()].reduce((sum, item) => sum + item.value, 0);
 
   return [...grouped.entries()]
-    .map(([label, spend]) => ({
+    .map(([label, item]) => ({
       label,
-      spend,
-      percentage: totalSpend > 0 ? (spend / totalSpend) * 100 : 0
+      value: item.value,
+      valueLabel: item.valueLabel,
+      percentage: totalValue > 0 ? (item.value / totalValue) * 100 : 0
     }))
-    .sort((first, second) => second.spend - first.spend);
+    .sort((first, second) => second.value - first.value);
 }
 
 function buildHourlyPerformance(rows: MetaInsightRow[]): HourlyPerformancePoint[] {
@@ -638,7 +671,7 @@ export async function fetchMetaDashboardData(
       fetchGraph<{ data: MetaCampaignInsightRow[] }>(
         `${normalizedAccountId}/insights`,
         {
-          fields: "campaign_id,campaign_name,spend,reach,ctr,actions,action_values,purchase_roas",
+          fields: "campaign_id,campaign_name,spend,reach,clicks,ctr,actions,action_values,purchase_roas",
           level: "campaign",
           limit: "200",
           ...buildTimeRangeParams(currentStart, currentEnd)
@@ -688,6 +721,7 @@ export async function fetchMetaDashboardData(
       const metaCampaign = campaignMeta.get(row.campaign_id);
       const campaignSpend = parseNumber(row.spend);
       const campaignRevenue = getRevenueValue(row);
+      const campaignPurchases = getPurchaseCount(row);
 
       return {
         id: row.campaign_id,
@@ -696,6 +730,8 @@ export async function fetchMetaDashboardData(
         objective: formatObjective(metaCampaign?.objective),
         spend: campaignSpend,
         reach: parseNumber(row.reach),
+        clicks: parseNumber(row.clicks),
+        purchases: campaignPurchases,
         ctr: parseNumber(row.ctr),
         roas: getRoasValue(row, campaignSpend, campaignRevenue),
         result: getResultMetric(row).value
@@ -710,7 +746,7 @@ export async function fetchMetaDashboardData(
   const genderAudience = buildGenderAudience(audienceInsightsPayload.data);
   const healthScore = buildHealthScore(spend, resultValue, roas, cpa, resultDelta, roasDelta);
   const health = buildHealthLabel(healthScore);
-  const funnel = buildFunnel(current, resultValue);
+  const funnel = buildFunnel(current);
   const bestCampaign = [...campaigns].sort((first, second) => second.roas - first.roas)[0];
 
   const snapshot: DashboardSnapshot = {

@@ -66,7 +66,7 @@ export const snapshot: DashboardSnapshot = {
     { label: "Cliques", value: 4920, color: "indigo" },
     { label: "Acessos ao cardapio", value: 3840, color: "purple" },
     { label: "Pedidos iniciados", value: 142, color: "orange" },
-    { label: "Pedidos concluidos", value: 80, color: "green" }
+    { label: "Vendas", value: 80, color: "green" }
   ],
   bottleneck: "Maior perda entre acessos ao cardapio e pedidos iniciados. O problema parece mais de conversao do que de volume.",
   strength: "Combo Hot segue com o melhor custo por pedido e melhor ticket medio da conta."

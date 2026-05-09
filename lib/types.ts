@@ -26,7 +26,8 @@ export interface MediaMetricCard {
 
 export interface ObjectiveDistributionItem {
   label: string;
-  spend: number;
+  value: number;
+  valueLabel: string;
   percentage: number;
 }
 
@@ -54,6 +55,8 @@ export interface CampaignMetric {
   objective: string;
   spend: number;
   reach: number;
+  clicks?: number;
+  purchases?: number;
   ctr: number;
   roas: number;
   result: number;

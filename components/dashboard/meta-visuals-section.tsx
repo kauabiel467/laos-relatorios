@@ -109,7 +109,7 @@ export function MetaVisualsSection({
     [dailySeries]
   );
   const spendArea = useMemo(() => buildArea(spendPoints, width, height, padding), [spendPoints]);
-  const totalObjectiveSpend = objectiveDistribution.reduce((sum, item) => sum + item.spend, 0);
+  const totalObjectiveValue = objectiveDistribution.reduce((sum, item) => sum + item.value, 0);
   const hourlyMax = Math.max(...hourlyPerformance.map((item) => item.value), 1);
   const ageMax = Math.max(...ageAudience.map((item) => item.value), 1);
   const objectiveColors = ["#3b82f6", "#22c55e", "#a855f7", "#f97316", "#eab308", "#06b6d4"];
@@ -245,7 +245,7 @@ export function MetaVisualsSection({
         <div className="panel relative p-5" data-chart-panel onMouseLeave={() => setTooltip(null)}>
           <div className="mb-4">
             <div className="text-lg font-bold">Distribuicao por Objetivo</div>
-            <p className="text-xs leading-5 text-muted">% de investimento por tipo de campanha.</p>
+            <p className="text-xs leading-5 text-muted">Resultados por objetivo de campanha.</p>
           </div>
           {objectiveDistribution.length ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
@@ -257,7 +257,7 @@ export function MetaVisualsSection({
                     event,
                     "objective",
                     "Distribuicao por objetivo",
-                    objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.spend)} (${formatPercent(item.percentage)})`)
+                    objectiveDistribution.map((item) => `${item.label}: ${formatNumber(item.value)} ${item.valueLabel.toLowerCase()} (${formatPercent(item.percentage)})`)
                   )
                 }
                 onMouseMove={(event) =>
@@ -265,7 +265,7 @@ export function MetaVisualsSection({
                     event,
                     "objective",
                     "Distribuicao por objetivo",
-                    objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.spend)} (${formatPercent(item.percentage)})`)
+                    objectiveDistribution.map((item) => `${item.label}: ${formatNumber(item.value)} ${item.valueLabel.toLowerCase()} (${formatPercent(item.percentage)})`)
                   )
                 }
               >
@@ -273,7 +273,7 @@ export function MetaVisualsSection({
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
                     <div className="font-mono text-xs text-muted">Total</div>
-                    <div className="text-xl font-bold">{formatCurrency(totalObjectiveSpend)}</div>
+                    <div className="text-xl font-bold">{formatNumber(totalObjectiveValue)}</div>
                   </div>
                 </div>
               </div>
@@ -282,8 +282,8 @@ export function MetaVisualsSection({
                   <div
                     key={item.label}
                     className="flex items-start gap-3 rounded-lg p-1 transition hover:bg-white/5"
-                    onMouseEnter={(event) => showTooltip(event, "objective", item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
-                    onMouseMove={(event) => showTooltip(event, "objective", item.label, [formatCurrency(item.spend), formatPercent(item.percentage)])}
+                    onMouseEnter={(event) => showTooltip(event, "objective", item.label, [`${formatNumber(item.value)} ${item.valueLabel.toLowerCase()}`, formatPercent(item.percentage)])}
+                    onMouseMove={(event) => showTooltip(event, "objective", item.label, [`${formatNumber(item.value)} ${item.valueLabel.toLowerCase()}`, formatPercent(item.percentage)])}
                   >
                     <span
                       className="mt-1 inline-flex h-3 w-3 rounded-sm"
@@ -292,7 +292,7 @@ export function MetaVisualsSection({
                     <div>
                       <div className="text-sm font-semibold">{item.label}</div>
                       <div className="font-mono text-[11px] text-muted">
-                        {formatCurrency(item.spend)} · {formatPercent(item.percentage)}
+                        {formatNumber(item.value)} {item.valueLabel.toLowerCase()} · {formatPercent(item.percentage)}
                       </div>
                     </div>
                   </div>
