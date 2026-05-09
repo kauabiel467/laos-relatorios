@@ -228,6 +228,30 @@ function clamp(value: number, min: number, max: number) {
 
 function formatObjective(value?: string) {
   if (!value) return "Sem objetivo";
+  const objectiveMap: Record<string, string> = {
+    SALES: "Vendas",
+    OUTCOME_SALES: "Vendas",
+    TRAFFIC: "Trafego",
+    OUTCOME_TRAFFIC: "Trafego",
+    ENGAGEMENT: "Engajamento",
+    OUTCOME_ENGAGEMENT: "Engajamento",
+    BRAND_AWARENESS: "Reconhecimento de marca",
+    OUTCOME_AWARENESS: "Reconhecimento de marca",
+    REACH: "Alcance",
+    LEADS: "Leads",
+    OUTCOME_LEADS: "Leads",
+    APP_PROMOTION: "Promocao de aplicativo",
+    OUTCOME_APP_PROMOTION: "Promocao de aplicativo",
+    VIDEO_VIEWS: "Visualizacoes de video",
+    MESSAGES: "Mensagens",
+    OUTCOME_MESSAGES: "Mensagens"
+  };
+
+  const normalizedKey = String(value).toUpperCase();
+  if (objectiveMap[normalizedKey]) {
+    return objectiveMap[normalizedKey];
+  }
+
   const normalized = value.replaceAll("_", " ").toLowerCase();
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
@@ -261,17 +285,14 @@ function buildHealthLabel(score: number) {
 }
 
 function buildFunnel(row: MetaInsightRow | undefined, resultValue: number): FunnelStep[] {
-  const impressions = parseNumber(row?.impressions);
   const clicks = parseNumber(row?.clicks);
   const landingPageViews = getActionValue(row?.actions, ["landing_page_view"]);
   const initiatedCheckouts = getActionValue(row?.actions, ["initiate_checkout", "omni_initiated_checkout"]);
 
   return ([
-    { label: "Impressoes", value: impressions, color: "blue" },
     { label: "Cliques", value: clicks, color: "indigo" },
-    { label: "Landing page views", value: landingPageViews || Math.round(clicks * 0.78), color: "purple" },
-    { label: "Checkout iniciado", value: initiatedCheckouts || Math.round(resultValue * 1.35), color: "orange" },
-    { label: "Resultado final", value: resultValue, color: "green" }
+    { label: "Page views", value: landingPageViews || Math.round(clicks * 0.78), color: "purple" },
+    { label: "Checkout iniciado", value: initiatedCheckouts || Math.max(resultValue, Math.round(clicks * 0.2)), color: "orange" }
   ] satisfies FunnelStep[]).filter((step) => step.value > 0);
 }
 
@@ -429,7 +450,7 @@ function buildAgeAudience(rows: MetaInsightRow[]): AgeAudiencePoint[] {
 
   for (const row of rows) {
     const label = row.age || "—";
-    grouped.set(label, (grouped.get(label) || 0) + parseNumber(row.reach));
+    grouped.set(label, (grouped.get(label) || 0) + getResultMetric(row).value);
   }
 
   return [...grouped.entries()]
@@ -447,7 +468,7 @@ function buildGenderAudience(rows: MetaInsightRow[]): GenderAudiencePoint[] {
   for (const row of rows) {
     const normalized = String(row.gender || "").toLowerCase();
     const label = normalized === "male" ? "Masculino" : normalized === "female" ? "Feminino" : "Desconhecido";
-    grouped.set(label, (grouped.get(label) || 0) + parseNumber(row.reach));
+    grouped.set(label, (grouped.get(label) || 0) + getResultMetric(row).value);
   }
 
   const total = [...grouped.values()].reduce((sum, value) => sum + value, 0);
@@ -579,7 +600,7 @@ export async function fetchMetaDashboardData(accountId: string, period: PeriodKe
       fetchGraph<{ data: MetaInsightRow[] }>(
         `${normalizedAccountId}/insights`,
         {
-          fields: "reach",
+          fields: "actions,clicks",
           breakdowns: "age,gender",
           limit: "200",
           ...buildTimeRangeParams(currentStart, currentEnd)

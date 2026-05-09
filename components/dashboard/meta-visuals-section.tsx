@@ -1,7 +1,8 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import type { AgeAudiencePoint, DailyPoint, GenderAudiencePoint, HourlyPerformancePoint, ObjectiveDistributionItem } from "@/lib/types";
-import { formatCurrency, formatPercent } from "@/lib/utils/format";
+import { formatCurrency, formatNumber, formatPercent } from "@/lib/utils/format";
 import { SectionTitle } from "./section-title";
 
 interface MetaVisualsSectionProps {
@@ -15,7 +16,6 @@ interface MetaVisualsSectionProps {
 
 function buildPolyline(values: number[], width: number, height: number, padding: number) {
   if (!values.length) return "";
-
   const max = Math.max(...values, 1);
   const innerWidth = width - padding * 2;
   const innerHeight = height - padding * 2;
@@ -32,14 +32,15 @@ function buildPolyline(values: number[], width: number, height: number, padding:
 function buildArea(points: string, width: number, height: number, padding: number) {
   if (!points) return "";
 
-  const firstPoint = points.split(" ")[0];
-  const lastPoint = points.split(" ").at(-1);
+  const entries = points.split(" ");
+  const firstPoint = entries[0];
+  const lastPoint = entries.at(-1);
   if (!firstPoint || !lastPoint) return "";
 
   return `${firstPoint} ${points} ${lastPoint.split(",")[0]},${height - padding} ${firstPoint.split(",")[0]},${height - padding}`;
 }
 
-function buildConicGradient(items: ObjectiveDistributionItem[]) {
+function buildConicGradient(items: Array<{ percentage: number }>) {
   if (!items.length) {
     return "conic-gradient(#1e2230 0deg 360deg)";
   }
@@ -71,22 +72,33 @@ export function MetaVisualsSection({
   genderAudience,
   resultLabel
 }: MetaVisualsSectionProps) {
+  const [showSpend, setShowSpend] = useState(true);
+  const [showResult, setShowResult] = useState(true);
   const width = 760;
   const height = 280;
   const padding = 24;
-  const spendPoints = buildPolyline(
-    dailySeries.map((item) => item.spend),
-    width,
-    height,
-    padding
+
+  const spendPoints = useMemo(
+    () =>
+      buildPolyline(
+        dailySeries.map((item) => item.spend),
+        width,
+        height,
+        padding
+      ),
+    [dailySeries]
   );
-  const resultPoints = buildPolyline(
-    dailySeries.map((item) => item.result),
-    width,
-    height,
-    padding
+  const resultPoints = useMemo(
+    () =>
+      buildPolyline(
+        dailySeries.map((item) => item.result),
+        width,
+        height,
+        padding
+      ),
+    [dailySeries]
   );
-  const spendArea = buildArea(spendPoints, width, height, padding);
+  const spendArea = useMemo(() => buildArea(spendPoints, width, height, padding), [spendPoints]);
   const totalObjectiveSpend = objectiveDistribution.reduce((sum, item) => sum + item.spend, 0);
   const hourlyMax = Math.max(...hourlyPerformance.map((item) => item.value), 1);
   const ageMax = Math.max(...ageAudience.map((item) => item.value), 1);
@@ -96,9 +108,27 @@ export function MetaVisualsSection({
       <SectionTitle>Evolucao Temporal</SectionTitle>
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
         <div className="panel p-5">
-          <div className="mb-4">
-            <div className="text-lg font-bold">Investimento vs Resultado</div>
-            <p className="text-xs leading-5 text-muted">Linha azul = investimento. Linha verde = {resultLabel.toLowerCase()}.</p>
+          <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <div className="text-lg font-bold">Investimento vs Resultado</div>
+              <p className="text-xs leading-5 text-muted">Passe o mouse nos pontos para ver os dados do dia e clique nas legendas para ativar ou ocultar as linhas.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowSpend((value) => !value)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${showSpend ? "border-blue bg-blue/10 text-blue-100" : "border-border bg-bg text-muted"}`}
+              >
+                Investimento
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowResult((value) => !value)}
+                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${showResult ? "border-green bg-green/10 text-green-100" : "border-border bg-bg text-muted"}`}
+              >
+                {resultLabel}
+              </button>
+            </div>
           </div>
           {dailySeries.length ? (
             <div className="overflow-x-auto">
@@ -113,15 +143,30 @@ export function MetaVisualsSection({
                   const y = padding + (index / 4) * (height - padding * 2);
                   return <line key={y} x1={padding} x2={width - padding} y1={y} y2={y} stroke="rgba(30,34,48,0.8)" strokeWidth="1" />;
                 })}
-                {spendArea ? <polygon points={spendArea} fill="url(#line-spend-fill)" /> : null}
-                <polyline points={spendPoints} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
-                <polyline points={resultPoints} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+                {showSpend && spendArea ? <polygon points={spendArea} fill="url(#line-spend-fill)" /> : null}
+                {showSpend ? <polyline points={spendPoints} fill="none" stroke="#3b82f6" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" /> : null}
+                {showResult ? <polyline points={resultPoints} fill="none" stroke="#22c55e" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" /> : null}
                 {dailySeries.map((item, index) => {
                   const x = padding + (index / Math.max(dailySeries.length - 1, 1)) * (width - padding * 2);
+                  const spendY = height - padding - (item.spend / Math.max(...dailySeries.map((entry) => entry.spend), 1)) * (height - padding * 2);
+                  const resultY = height - padding - (item.result / Math.max(...dailySeries.map((entry) => entry.result), 1)) * (height - padding * 2);
+
                   return (
-                    <text key={`${item.label}-${index}`} x={x} y={height - 2} fill="#64748b" fontSize="10" textAnchor="middle">
-                      {item.label}
-                    </text>
+                    <g key={`${item.label}-${index}`}>
+                      {showSpend ? (
+                        <circle cx={x} cy={spendY} r="4" fill="#3b82f6">
+                          <title>{`${item.label} — Investimento: ${formatCurrency(item.spend)}`}</title>
+                        </circle>
+                      ) : null}
+                      {showResult ? (
+                        <circle cx={x} cy={resultY} r="4" fill="#22c55e">
+                          <title>{`${item.label} — ${resultLabel}: ${formatNumber(item.result)}`}</title>
+                        </circle>
+                      ) : null}
+                      <text x={x} y={height - 2} fill="#64748b" fontSize="10" textAnchor="middle">
+                        {item.label}
+                      </text>
+                    </g>
                   );
                 })}
               </svg>
@@ -140,10 +185,7 @@ export function MetaVisualsSection({
           </div>
           {objectiveDistribution.length ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
-              <div
-                className="relative mx-auto h-52 w-52 rounded-full"
-                style={{ backgroundImage: buildConicGradient(objectiveDistribution) }}
-              >
+              <div className="relative mx-auto h-52 w-52 rounded-full" style={{ backgroundImage: buildConicGradient(objectiveDistribution) }}>
                 <div className="absolute inset-8 rounded-full bg-card" />
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
@@ -181,7 +223,7 @@ export function MetaVisualsSection({
         <div className="panel p-5">
           <div className="mb-4">
             <div className="text-lg font-bold">Audiencia por Idade</div>
-            <p className="text-xs leading-5 text-muted">Alcance agregado por faixa etaria da conta selecionada.</p>
+            <p className="text-xs leading-5 text-muted">{resultLabel} agrupado por faixa etaria da conta selecionada.</p>
           </div>
           {ageAudience.length ? (
             <div className="grid gap-3">
@@ -189,9 +231,9 @@ export function MetaVisualsSection({
                 <div key={item.label}>
                   <div className="mb-1 flex items-center justify-between text-sm text-muted">
                     <span>{item.label}</span>
-                    <strong className="font-mono text-text">{item.value.toLocaleString("pt-BR")}</strong>
+                    <strong className="font-mono text-text">{formatNumber(item.value)}</strong>
                   </div>
-                  <div className="h-7 rounded-lg bg-border/90">
+                  <div className="h-7 rounded-lg bg-border/90" title={`${item.label} — ${resultLabel}: ${formatNumber(item.value)}`}>
                     <div className="h-full rounded-lg bg-indigo-500/80" style={{ width: `${Math.max(6, (item.value / ageMax) * 100)}%` }} />
                   </div>
                 </div>
@@ -207,21 +249,14 @@ export function MetaVisualsSection({
         <div className="panel p-5">
           <div className="mb-4">
             <div className="text-lg font-bold">Audiencia por Genero</div>
-            <p className="text-xs leading-5 text-muted">Distribuicao de alcance por genero retornada pela Meta.</p>
+            <p className="text-xs leading-5 text-muted">{resultLabel} distribuido por genero retornado pela Meta.</p>
           </div>
           {genderAudience.some((item) => item.value > 0) ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
               <div
                 className="relative mx-auto h-48 w-48 rounded-full"
-                style={{
-                  backgroundImage: buildConicGradient(
-                    genderAudience.map((item) => ({
-                      label: item.label,
-                      spend: item.value,
-                      percentage: item.percentage
-                    }))
-                  )
-                }}
+                style={{ backgroundImage: buildConicGradient(genderAudience) }}
+                title={genderAudience.map((item) => `${item.label}: ${formatNumber(item.value)}`).join(" | ")}
               >
                 <div className="absolute inset-8 rounded-full bg-card" />
               </div>
@@ -235,7 +270,7 @@ export function MetaVisualsSection({
                     <div>
                       <div className="text-sm font-semibold">{item.label}</div>
                       <div className="font-mono text-[11px] text-muted">
-                        {item.value.toLocaleString("pt-BR")} · {formatPercent(item.percentage)}
+                        {formatNumber(item.value)} · {formatPercent(item.percentage)}
                       </div>
                     </div>
                   </div>
@@ -252,8 +287,8 @@ export function MetaVisualsSection({
 
       <div className="panel p-5">
         <div className="mb-4">
-          <div className="text-lg font-bold">Pico de Vendas por Horario</div>
-          <p className="text-xs leading-5 text-muted">Resultado principal agrupado por hora do dia, priorizando vendas quando houver compras.</p>
+          <div className="text-lg font-bold">Pico por Horario</div>
+          <p className="text-xs leading-5 text-muted">Passe o mouse nas barras para ver o volume de {resultLabel.toLowerCase()} por horario.</p>
         </div>
         {hourlyPerformance.some((item) => item.value > 0) ? (
           <div className="grid h-72 grid-cols-12 gap-2 sm:grid-cols-24">
@@ -261,8 +296,9 @@ export function MetaVisualsSection({
               <div key={item.label} className="flex h-full flex-col items-center justify-end gap-2">
                 <div className="relative flex h-full w-full items-end">
                   <div
-                    className={`w-full rounded-t-md ${highlightClass(item.highlight)}`}
+                    className={`w-full rounded-t-md transition hover:opacity-90 ${highlightClass(item.highlight)}`}
                     style={{ height: `${Math.max(4, (item.value / hourlyMax) * 100)}%` }}
+                    title={`${item.label} — ${resultLabel}: ${formatNumber(item.value)}`}
                   />
                 </div>
                 <span className="font-mono text-[10px] text-muted">{item.label}</span>

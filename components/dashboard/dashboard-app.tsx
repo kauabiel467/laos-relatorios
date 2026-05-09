@@ -423,8 +423,6 @@ export function DashboardApp() {
             ) : null}
             <QuickInsightsSection snapshot={resolvedSnapshot} />
 
-            {resolvedMediaMetrics.length ? <MediaMetricsSection metrics={resolvedMediaMetrics} loading={dashboardLoading} /> : null}
-
             <section>
               <SectionTitle>Visao Geral</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -463,6 +461,8 @@ export function DashboardApp() {
                 <MetricCard label="Taxa clique para pedido" value={formatPercent(cardapio.conversao, 2)} delta="-0,8%" tone="green" />
               </div>
             </section>
+
+            {resolvedMediaMetrics.length ? <MediaMetricsSection metrics={resolvedMediaMetrics} loading={dashboardLoading} /> : null}
 
             <MetaVisualsSection
               dailySeries={resolvedDailySeries}
