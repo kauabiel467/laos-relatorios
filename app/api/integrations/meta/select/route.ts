@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { finalizeMetaSelection, getMetaDraft } from "@/lib/integrations/meta-oauth";
+import {
+  finalizeMetaSelection,
+  getMetaCookieOptions,
+  getMetaDraft,
+  META_CONNECTION_COOKIE,
+  META_DRAFT_COOKIE
+} from "@/lib/integrations/meta-oauth";
 
 export async function POST(request: NextRequest) {
   const payload = (await request.json()) as { accountIds?: string[] };
@@ -21,10 +27,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Nenhuma das contas selecionadas pertence a conexao atual." }, { status: 400 });
   }
 
-  await finalizeMetaSelection(normalizedSelection);
+  const connection = await finalizeMetaSelection(normalizedSelection);
 
-  return NextResponse.json({
+  const response = NextResponse.json({
     ok: true,
     selectedCount: normalizedSelection.length
   });
+
+  response.cookies.set(META_CONNECTION_COOKIE, connection.serialized, getMetaCookieOptions(60 * 60 * 24 * 30));
+  response.cookies.delete(META_DRAFT_COOKIE);
+
+  return response;
 }

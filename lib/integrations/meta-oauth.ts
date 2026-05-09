@@ -3,19 +3,18 @@ import { env } from "@/lib/env";
 import type { MetaAdAccount, MetaIntegrationStatus } from "@/lib/types";
 
 const META_GRAPH_VERSION = "v22.0";
-const META_OAUTH_STATE_COOKIE = "laos_meta_oauth_state";
-const META_DRAFT_COOKIE = "laos_meta_oauth_draft";
-const META_CONNECTION_COOKIE = "laos_meta_oauth_connection";
-const META_RETURN_COOKIE = "laos_meta_oauth_return";
-const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+export const META_OAUTH_STATE_COOKIE = "laos_meta_oauth_state";
+export const META_DRAFT_COOKIE = "laos_meta_oauth_draft";
+export const META_CONNECTION_COOKIE = "laos_meta_oauth_connection";
+export const META_RETURN_COOKIE = "laos_meta_oauth_return";
 
-interface StoredDraft {
+export interface StoredDraft {
   accessToken: string;
   connectedAt: string;
   accounts: MetaAdAccount[];
 }
 
-interface StoredConnection extends StoredDraft {
+export interface StoredConnection extends StoredDraft {
   selectedAccountIds: string[];
 }
 
@@ -23,7 +22,7 @@ function isSecureCookieEnabled() {
   return env.NEXT_PUBLIC_APP_URL.startsWith("https://");
 }
 
-function getCookieOptions(maxAge: number) {
+export function getMetaCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
     sameSite: "lax" as const,
@@ -45,7 +44,7 @@ function toBase64Url(value: string) {
   return Buffer.from(value, "utf8").toString("base64url");
 }
 
-function fromBase64Url<T>(value: string | undefined): T | null {
+export function fromBase64Url<T>(value: string | undefined): T | null {
   if (!value) return null;
 
   try {
@@ -186,33 +185,25 @@ export async function getMetaStatus(): Promise<MetaIntegrationStatus> {
 }
 
 export async function createMetaOAuthState(returnTo?: string) {
-  const cookieStore = await cookies();
   const state = crypto.randomUUID();
-
-  cookieStore.set(META_OAUTH_STATE_COOKIE, state, getCookieOptions(60 * 15));
-
-  cookieStore.set(META_RETURN_COOKIE, sanitizeReturnTo(returnTo), getCookieOptions(60 * 15));
-
-  return state;
+  return {
+    state,
+    returnTo: sanitizeReturnTo(returnTo)
+  };
 }
 
-export async function consumeMetaOAuthState() {
+export async function readMetaOAuthState() {
   const cookieStore = await cookies();
-  const state = cookieStore.get(META_OAUTH_STATE_COOKIE)?.value;
-  cookieStore.delete(META_OAUTH_STATE_COOKIE);
-  return state;
+  return cookieStore.get(META_OAUTH_STATE_COOKIE)?.value;
 }
 
-export async function consumeMetaReturnTo() {
+export async function readMetaReturnTo() {
   const cookieStore = await cookies();
-  const value = cookieStore.get(META_RETURN_COOKIE)?.value || "/";
-  cookieStore.delete(META_RETURN_COOKIE);
-  return value;
+  return cookieStore.get(META_RETURN_COOKIE)?.value || "/";
 }
 
-export async function saveMetaDraft(draft: StoredDraft) {
-  const cookieStore = await cookies();
-  cookieStore.set(META_DRAFT_COOKIE, toBase64Url(JSON.stringify(draft)), getCookieOptions(COOKIE_MAX_AGE));
+export function serializeMetaDraft(draft: StoredDraft) {
+  return toBase64Url(JSON.stringify(draft));
 }
 
 export async function getMetaDraft() {
@@ -220,31 +211,32 @@ export async function getMetaDraft() {
   return fromBase64Url<StoredDraft>(cookieStore.get(META_DRAFT_COOKIE)?.value);
 }
 
+export function serializeMetaConnection(draft: StoredDraft, selectedAccountIds: string[]) {
+  return toBase64Url(
+    JSON.stringify({
+      ...draft,
+      selectedAccountIds
+    } satisfies StoredConnection)
+  );
+}
+
 export async function finalizeMetaSelection(selectedAccountIds: string[]) {
-  const cookieStore = await cookies();
   const draft = await getMetaDraft();
   if (!draft) {
     throw new Error("Nenhuma conexao pendente da Meta foi encontrada.");
   }
 
-  cookieStore.set(
-    META_CONNECTION_COOKIE,
-    toBase64Url(
-      JSON.stringify({
-        ...draft,
-        selectedAccountIds
-      } satisfies StoredConnection)
-    ),
-    getCookieOptions(COOKIE_MAX_AGE)
-  );
-
-  cookieStore.delete(META_DRAFT_COOKIE);
+  return {
+    draft,
+    serialized: serializeMetaConnection(draft, selectedAccountIds)
+  };
 }
 
 export async function disconnectMetaIntegration() {
-  const cookieStore = await cookies();
-  cookieStore.delete(META_CONNECTION_COOKIE);
-  cookieStore.delete(META_DRAFT_COOKIE);
-  cookieStore.delete(META_OAUTH_STATE_COOKIE);
-  cookieStore.delete(META_RETURN_COOKIE);
+  return [
+    META_CONNECTION_COOKIE,
+    META_DRAFT_COOKIE,
+    META_OAUTH_STATE_COOKIE,
+    META_RETURN_COOKIE
+  ];
 }
