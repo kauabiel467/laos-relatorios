@@ -6,6 +6,7 @@ interface AiPanelProps {
   open: boolean;
   text: string;
   messages: string[];
+  loading?: boolean;
   onClose: () => void;
   onOpen: () => void;
   onTextChange: (value: string) => void;
@@ -16,6 +17,7 @@ export function AiPanel({
   open,
   text,
   messages,
+  loading,
   onClose,
   onOpen,
   onTextChange,
@@ -40,7 +42,7 @@ export function AiPanel({
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
             <div>
               <div className="text-sm font-semibold">IA | Insights da conta</div>
-              <div className="text-xs text-muted">Pronta para integrar OpenAI API</div>
+              <div className="text-xs text-muted">{loading ? "Analisando dados..." : "Conectada ao painel"}</div>
             </div>
             <button type="button" onClick={onClose} className="text-sm text-muted hover:text-text">
               Fechar
@@ -51,7 +53,7 @@ export function AiPanel({
               <div
                 key={`${message}-${index}`}
                 className={clsx(
-                  "rounded-2xl px-3 py-3 text-sm leading-6",
+                  "whitespace-pre-line rounded-2xl px-3 py-3 text-sm leading-6",
                   message.startsWith("Voce:") ? "ml-6 bg-blue text-white" : "mr-6 border border-border bg-bg text-text"
                 )}
               >
@@ -72,10 +74,16 @@ export function AiPanel({
                 value={text}
                 onChange={(event) => onTextChange(event.target.value)}
                 placeholder="Pergunte sobre sua conta..."
+                disabled={loading}
                 className="h-10 flex-1 resize-none rounded-lg border border-border bg-bg px-3 py-2 text-sm outline-none focus:border-blue"
               />
-              <button type="button" onClick={onSend} className="rounded-lg bg-blue px-4 text-sm font-semibold text-white hover:bg-blue/90">
-                Enviar
+              <button
+                type="button"
+                onClick={onSend}
+                disabled={loading || !text.trim()}
+                className="rounded-lg bg-blue px-4 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:cursor-wait disabled:opacity-60"
+              >
+                {loading ? "..." : "Enviar"}
               </button>
             </div>
           </div>

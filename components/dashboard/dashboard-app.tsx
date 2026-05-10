@@ -119,6 +119,7 @@ export function DashboardApp() {
   const [campaignAdsLoading, setCampaignAdsLoading] = useState(false);
   const [campaignAdsError, setCampaignAdsError] = useState<string | null>(null);
   const [aiText, setAiText] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [metricDrilldown, setMetricDrilldown] = useState<MetricDrillType | null>(null);
   const [aiMessages, setAiMessages] = useState<string[]>([
@@ -301,16 +302,55 @@ export function DashboardApp() {
     setSortDirection(-1);
   }
 
-  function handleSendAi() {
+  async function handleSendAi() {
     const value = aiText.trim();
-    if (!value) return;
+    if (!value || aiLoading) return;
 
-    setAiMessages((current) => [
-      ...current,
-      `Voce: ${value}`,
-      "IA: Estrutura pronta para integrar OpenAI ou outro motor de insights no proximo passo."
-    ]);
+    setAiMessages((current) => [...current, `Voce: ${value}`]);
     setAiText("");
+    setAiLoading(true);
+
+    try {
+      const response = await fetch("/api/ai/insights", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          question: value,
+          context: {
+            client: selectedClient,
+            period,
+            customRange: period === "custom" ? customRange : null,
+            snapshot: resolvedSnapshot,
+            quickInsights: resolvedSnapshot.quickInsights,
+            alerts: resolvedSnapshot.alerts,
+            funnel: resolvedSnapshot.funnel,
+            campaigns: visibleCampaigns.slice(0, 12),
+            dailySeries: resolvedDailySeries,
+            mediaMetrics: resolvedMediaMetrics,
+            objectiveDistribution: resolvedObjectiveDistribution,
+            hourlyPerformance: resolvedHourlyPerformance,
+            ageAudience: resolvedAgeAudience,
+            genderAudience: resolvedGenderAudience
+          }
+        })
+      });
+
+      const payload = (await response.json()) as { answer?: string; error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error || "Nao foi possivel consultar a IA agora.");
+      }
+
+      setAiMessages((current) => [...current, `IA: ${payload.answer || "Nao consegui gerar uma resposta com os dados atuais."}`]);
+    } catch (error) {
+      setAiMessages((current) => [
+        ...current,
+        `IA: ${error instanceof Error ? error.message : "Nao foi possivel consultar a IA agora."}`
+      ]);
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   function exportReport() {
@@ -880,6 +920,7 @@ export function DashboardApp() {
         open={aiOpen}
         text={aiText}
         messages={aiMessages}
+        loading={aiLoading}
         onClose={() => setAiOpen(false)}
         onOpen={() => setAiOpen((value) => !value)}
         onTextChange={setAiText}
