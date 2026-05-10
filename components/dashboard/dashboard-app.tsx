@@ -93,7 +93,11 @@ function getDefaultCustomRange() {
   };
 }
 
-export function DashboardApp() {
+interface DashboardAppProps {
+  requiresWorkspaceSetup?: boolean;
+}
+
+export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppProps) {
   const pathname = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -127,6 +131,12 @@ export function DashboardApp() {
   const [aiMessages, setAiMessages] = useState<string[]>([
     "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
   ]);
+
+  useEffect(() => {
+    if (requiresWorkspaceSetup) {
+      setTeamOpen(true);
+    }
+  }, [requiresWorkspaceSetup]);
 
   const availableClients = useMemo<Client[]>(() => {
     if (metaStatus?.stage === "connected" && metaStatus.accounts.length) {
@@ -596,6 +606,25 @@ export function DashboardApp() {
       <TabsNav activeTab={activeTab} onChange={setActiveTab} />
 
       <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6">
+        {requiresWorkspaceSetup ? (
+          <div className="mb-6 flex flex-col gap-3 rounded-2xl border border-yellow/30 bg-yellow/10 px-4 py-4 text-sm text-yellow-100 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <div className="font-semibold text-text">Finalize sua equipe para liberar convites e permissoes.</div>
+              <div className="mt-1 text-yellow-100/80">
+                O dashboard continua acessivel enquanto concluimos essa configuracao. Se a criacao falhar, a mensagem agora mostra a causa com mais clareza.
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setTeamOpen(true)}
+                className="rounded-lg border border-yellow/40 px-4 py-2 font-semibold text-text transition hover:border-blue hover:text-text"
+              >
+                Configurar equipe
+              </button>
+            </div>
+          </div>
+        ) : null}
         {activeTab === "meta" ? (
           <div className="space-y-7">
             <MetaIntegrationCard status={metaStatus} loading={metaPending} onOpen={openMetaModal} />

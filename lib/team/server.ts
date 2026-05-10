@@ -18,8 +18,46 @@ type TeamInvitationRow = {
   role: TeamRole;
 };
 
+type SupabaseLikeError = {
+  code?: string;
+  details?: string;
+  hint?: string;
+  message?: string;
+};
+
 function canManage(role: TeamRole | null) {
   return role === "owner" || role === "manager";
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof (error as SupabaseLikeError).message === "string") {
+    return (error as SupabaseLikeError).message as string;
+  }
+
+  return fallback;
+}
+
+function normalizeTeamError(error: unknown) {
+  const message = getErrorMessage(error, "Nao foi possivel concluir a operacao.");
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("permission denied")) {
+    return "O Supabase bloqueou o acesso as tabelas da equipe. Falta liberar a Data API para teams, team_members e team_invitations ou aplicar a migration com os GRANTs.";
+  }
+
+  if (normalized.includes("row-level security")) {
+    return "O Supabase bloqueou a criacao pela policy de seguranca. Verifique se a migration das equipes foi aplicada por completo no banco.";
+  }
+
+  if (normalized.includes("could not find the table") || normalized.includes("relation") && normalized.includes("does not exist")) {
+    return "As tabelas de equipe ainda nao existem nesse projeto Supabase. A migration de auth/equipes precisa ser aplicada no banco de producao.";
+  }
+
+  return message;
 }
 
 function normalizeEmailProviderError(message: string) {
@@ -141,28 +179,53 @@ export async function getTeamContext(): Promise<TeamContext> {
 
 export async function createTeam(name: string) {
   const supabase = await getSupabaseServerClient();
+  const admin = getSupabaseAdminClient();
   const user = await getCurrentUser();
 
   if (!supabase || !user) {
     throw new Error("Voce precisa estar logado para criar uma equipe.");
   }
 
-  const { data: team, error: teamError } = await supabase
-    .from("teams")
-    .insert({ name, created_by: user.id })
-    .select("id")
-    .single();
-  if (teamError) throw teamError;
+  const currentUser = user;
 
-  const { error: memberError } = await supabase.from("team_members").insert({
-    team_id: team.id,
-    user_id: user.id,
-    email: user.email,
-    role: "owner"
-  });
-  if (memberError) throw memberError;
+  async function insertWithClient(client: NonNullable<Awaited<ReturnType<typeof getSupabaseServerClient>>> | NonNullable<ReturnType<typeof getSupabaseAdminClient>>) {
+    const { data: team, error: teamError } = await client
+      .from("teams")
+      .insert({ name, created_by: currentUser.id })
+      .select("id")
+      .single();
 
-  return team.id as string;
+    if (teamError) {
+      throw teamError;
+    }
+
+    const { error: memberError } = await client.from("team_members").insert({
+      team_id: team.id,
+      user_id: currentUser.id,
+      email: currentUser.email,
+      role: "owner"
+    });
+
+    if (memberError) {
+      throw memberError;
+    }
+
+    return team.id as string;
+  }
+
+  try {
+    return await insertWithClient(supabase);
+  } catch (error) {
+    if (admin) {
+      try {
+        return await insertWithClient(admin);
+      } catch (adminError) {
+        throw new Error(normalizeTeamError(adminError));
+      }
+    }
+
+    throw new Error(normalizeTeamError(error));
+  }
 }
 
 export async function inviteTeamMember(email: string, role: TeamRole) {

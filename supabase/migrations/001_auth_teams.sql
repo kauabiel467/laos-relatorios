@@ -35,6 +35,11 @@ alter table public.teams enable row level security;
 alter table public.team_members enable row level security;
 alter table public.team_invitations enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on public.teams to authenticated;
+grant select, insert, update, delete on public.team_members to authenticated;
+grant select, insert, update, delete on public.team_invitations to authenticated;
+
 create schema if not exists private;
 grant usage on schema private to authenticated;
 

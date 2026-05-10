@@ -6,6 +6,8 @@ import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getTeamContext } from "@/lib/team/server";
 
 export default async function HomePage() {
+  let requiresWorkspaceSetup = false;
+
   if (hasSupabaseEnv()) {
     const supabase = await getSupabaseServerClient();
     const {
@@ -18,13 +20,13 @@ export default async function HomePage() {
 
     const teamContext = await getTeamContext();
     if (!teamContext.team) {
-      redirect("/new-workspace");
+      requiresWorkspaceSetup = true;
     }
   }
 
   return (
     <Suspense fallback={<div className="min-h-screen bg-bg" />}>
-      <DashboardApp />
+      <DashboardApp requiresWorkspaceSetup={requiresWorkspaceSetup} />
     </Suspense>
   );
 }
