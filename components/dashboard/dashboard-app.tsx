@@ -20,6 +20,7 @@ import { MetricCard } from "./metric-card";
 import { QuickInsightsSection } from "./quick-insights-section";
 import { SectionTitle } from "./section-title";
 import { TabsNav } from "./tabs-nav";
+import { TeamSettingsModal } from "./team-settings-modal";
 
 const emptyMetaSnapshot: DashboardDataBundle["snapshot"] = {
   spend: 0,
@@ -105,6 +106,7 @@ export function DashboardApp() {
   const [sortColumn, setSortColumn] = useState<keyof CampaignMetric>("spend");
   const [sortDirection, setSortDirection] = useState<1 | -1>(-1);
   const [configOpen, setConfigOpen] = useState(false);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [cardapioOpen, setCardapioOpen] = useState(false);
   const [drawerCampaign, setDrawerCampaign] = useState<CampaignMetric | null>(null);
   const [aiOpen, setAiOpen] = useState(false);
@@ -587,6 +589,7 @@ export function DashboardApp() {
         onSelectClient={handleSelectClient}
         onPeriodChange={setPeriod}
         onCustomRangeChange={(startDate, endDate) => setCustomRange({ start: startDate, end: endDate })}
+        onOpenTeam={() => setTeamOpen(true)}
         onOpenConfig={openConfigModal}
         onExport={exportReport}
       />
@@ -906,6 +909,7 @@ export function DashboardApp() {
         }}
       />
       <CardapioModal open={cardapioOpen} onClose={() => setCardapioOpen(false)} />
+      <TeamSettingsModal open={teamOpen} onClose={() => setTeamOpen(false)} />
       <MetaIntegrationModal
         open={metaOpen}
         status={metaStatus}

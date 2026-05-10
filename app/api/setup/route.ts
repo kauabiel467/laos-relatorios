@@ -10,7 +10,7 @@ export async function GET() {
         browserReady: hasSupabaseEnv(),
         serverReady: hasServerSupabaseEnv()
       },
-      openai: Boolean(env.OPENAI_API_KEY),
+      ai: Boolean(env.ANTHROPIC_API_KEY),
       metaAds: {
         oauthReady: hasMetaOAuthConfig(),
         systemUserReady: Boolean(env.META_SYSTEM_USER_TOKEN)

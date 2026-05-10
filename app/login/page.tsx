@@ -1,24 +1,23 @@
-import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { DashboardApp } from "@/components/dashboard/dashboard-app";
+import { LoginForm } from "@/components/auth/login-form";
 import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
-export default async function HomePage() {
+export default async function LoginPage() {
   if (hasSupabaseEnv()) {
     const supabase = await getSupabaseServerClient();
     const {
       data: { user }
     } = await supabase!.auth.getUser();
 
-    if (!user) {
-      redirect("/login");
+    if (user) {
+      redirect("/");
     }
   }
 
   return (
-    <Suspense fallback={<div className="min-h-screen bg-bg" />}>
-      <DashboardApp />
-    </Suspense>
+    <main className="grid min-h-screen place-items-center px-4 py-10">
+      <LoginForm supabaseReady={hasSupabaseEnv()} />
+    </main>
   );
 }

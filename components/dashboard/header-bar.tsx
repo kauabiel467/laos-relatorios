@@ -15,6 +15,7 @@ interface HeaderBarProps {
   onSelectClient: (client: Client) => void;
   onPeriodChange: (period: PeriodKey) => void;
   onCustomRangeChange: (startDate: string, endDate: string) => void;
+  onOpenTeam: () => void;
   onOpenConfig: () => void;
   onExport: () => void;
 }
@@ -42,6 +43,7 @@ export function HeaderBar({
   onSelectClient,
   onPeriodChange,
   onCustomRangeChange,
+  onOpenTeam,
   onOpenConfig,
   onExport
 }: HeaderBarProps) {
@@ -202,6 +204,9 @@ export function HeaderBar({
           </div>
           <button type="button" onClick={onExport} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
             Exportar
+          </button>
+          <button type="button" onClick={onOpenTeam} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+            Equipe
           </button>
           <button type="button" onClick={onOpenConfig} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
             Integracoes
