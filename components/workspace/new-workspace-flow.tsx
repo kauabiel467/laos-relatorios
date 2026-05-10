@@ -94,6 +94,15 @@ export function NewWorkspaceFlow() {
               {loading ? "Criando..." : "Criar workspace"}
             </button>
           </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              type="button"
+              onClick={() => router.replace("/")}
+              className="rounded-lg border border-border px-4 py-3 text-sm font-semibold text-text transition hover:border-blue"
+            >
+              Entrar no dashboard
+            </button>
+          </div>
         </section>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
