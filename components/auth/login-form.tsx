@@ -17,7 +17,21 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
   const [loading, setLoading] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  async function handleSubmit() {
+  function normalizeAuthError(message: string) {
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes("email rate limit exceeded")) {
+      return "O provedor de e-mail do Supabase atingiu o limite de envios agora. Tente entrar com link por e-mail daqui a pouco ou ajuste o limite no projeto.";
+    }
+
+    if (normalized.includes("user already registered")) {
+      return "Este e-mail ja esta cadastrado. Use a aba Entrar ou solicite um link por e-mail.";
+    }
+
+    return message;
+  }
+
+  async function handlePasswordSubmit() {
     const supabase = getSupabaseBrowserClient();
     if (!supabase) {
       setFeedback("Supabase ainda nao esta configurado.");
@@ -41,7 +55,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
     setLoading(false);
 
     if (result.error) {
-      setFeedback(result.error.message);
+      setFeedback(normalizeAuthError(result.error.message));
       return;
     }
 
@@ -52,6 +66,33 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
 
     router.replace("/");
     router.refresh();
+  }
+
+  async function handleEmailLink() {
+    const supabase = getSupabaseBrowserClient();
+    if (!supabase) {
+      setFeedback("Supabase ainda nao esta configurado.");
+      return;
+    }
+
+    setLoading(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`
+      }
+    });
+
+    setLoading(false);
+
+    if (error) {
+      setFeedback(normalizeAuthError(error.message));
+      return;
+    }
+
+    setFeedback("Link enviado por e-mail. Assim que abrir, voce entra direto e segue para criar o workspace.");
   }
 
   return (
@@ -101,16 +142,24 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           type="password"
-          placeholder="Senha"
+          placeholder={mode === "login" ? "Senha" : "Crie uma senha"}
           className="w-full rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text outline-none transition focus:border-blue"
         />
         <button
           type="button"
-          onClick={handleSubmit}
+          onClick={handlePasswordSubmit}
           disabled={loading || !email || !password || !supabaseReady}
           className="w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {loading ? "Aguarde..." : mode === "login" ? "Entrar" : "Criar conta"}
+          {loading ? "Aguarde..." : mode === "login" ? "Entrar com senha" : "Criar conta"}
+        </button>
+        <button
+          type="button"
+          onClick={handleEmailLink}
+          disabled={loading || !email || !supabaseReady}
+          className="w-full rounded-lg border border-border px-4 py-3 text-sm font-semibold text-text transition hover:border-blue hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {mode === "login" ? "Entrar por e-mail" : "Criar acesso por e-mail"}
         </button>
       </div>
 

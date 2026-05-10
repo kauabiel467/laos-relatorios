@@ -76,6 +76,27 @@ export function TeamSettingsModal({ open, onClose }: TeamSettingsModalProps) {
     await loadContext();
   }
 
+  async function removeMember(memberId: string) {
+    setLoading(true);
+    setFeedback(null);
+
+    const response = await fetch("/api/team/members/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ memberId })
+    });
+    const payload = (await response.json()) as { error?: string };
+
+    setLoading(false);
+    if (!response.ok) {
+      setFeedback(payload.error || "Nao foi possivel remover o membro.");
+      return;
+    }
+
+    setFeedback("Membro removido.");
+    await loadContext();
+  }
+
   async function signOut() {
     await fetch("/api/auth/signout", { method: "POST" });
     window.location.href = "/login";
@@ -154,17 +175,37 @@ export function TeamSettingsModal({ open, onClose }: TeamSettingsModalProps) {
                 ) : null}
               </div>
               <div className="space-y-2">
-                {context.members.map((member) => (
+                {context.members.map((member) => {
+                  const canRemove =
+                    context.currentRole === "owner"
+                      ? true
+                      : context.currentRole === "manager"
+                        ? member.role === "operator"
+                        : false;
+
+                  return (
                   <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-text">{member.email || member.user_id}</div>
                       <div className="font-mono text-[11px] text-muted">{member.user_id}</div>
                     </div>
-                    <span className="rounded-md border border-border px-2 py-1 font-mono text-[10px] text-muted">
-                      {teamRoleLabels[member.role]}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-md border border-border px-2 py-1 font-mono text-[10px] text-muted">
+                        {teamRoleLabels[member.role]}
+                      </span>
+                      {canRemove ? (
+                        <button
+                          type="button"
+                          onClick={() => removeMember(member.id)}
+                          className="rounded-md border border-red/30 px-2 py-1 font-mono text-[10px] text-red transition hover:bg-red hover:text-white"
+                        >
+                          Remover
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                ))}
+                );
+                })}
               </div>
             </section>
 
