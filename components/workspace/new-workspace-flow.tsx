@@ -48,7 +48,7 @@ export function NewWorkspaceFlow() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail, role: inviteRole })
     });
-    const payload = (await response.json()) as { error?: string };
+    const payload = (await response.json()) as { error?: string; message?: string };
 
     setLoading(false);
     if (!response.ok) {
@@ -59,7 +59,7 @@ export function NewWorkspaceFlow() {
     setInvites((current) => [{ email: inviteEmail, role: inviteRole }, ...current]);
     setInviteEmail("");
     setInviteRole("operator");
-    setFeedback("Convite enviado.");
+    setFeedback(payload.message || "Convite enviado.");
   }
 
   return (

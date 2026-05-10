@@ -62,7 +62,7 @@ export function TeamSettingsModal({ open, onClose }: TeamSettingsModalProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: inviteEmail, role: inviteRole })
     });
-    const payload = (await response.json()) as { error?: string };
+    const payload = (await response.json()) as { error?: string; message?: string };
 
     setLoading(false);
     if (!response.ok) {
@@ -72,7 +72,7 @@ export function TeamSettingsModal({ open, onClose }: TeamSettingsModalProps) {
 
     setInviteEmail("");
     setInviteRole("operator");
-    setFeedback("Convite enviado.");
+    setFeedback(payload.message || "Convite enviado.");
     await loadContext();
   }
 

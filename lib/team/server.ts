@@ -22,6 +22,20 @@ function canManage(role: TeamRole | null) {
   return role === "owner" || role === "manager";
 }
 
+function normalizeEmailProviderError(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (normalized.includes("email rate limit exceeded")) {
+    return "O Supabase atingiu o limite do provedor de e-mail. O convite ficou salvo, mas para enviar e-mails em producao voce precisa configurar um SMTP proprio no projeto.";
+  }
+
+  if (normalized.includes("email address not authorized")) {
+    return "O convite ficou salvo, mas o e-mail nao foi disparado. O SMTP padrao do Supabase so envia para enderecos autorizados da equipe do projeto.";
+  }
+
+  return message;
+}
+
 function canRemoveActor(currentRole: TeamRole | null, targetRole: TeamRole, isSelf: boolean) {
   if (isSelf) return false;
   if (currentRole === "owner") return true;
@@ -126,17 +140,21 @@ export async function getTeamContext(): Promise<TeamContext> {
 }
 
 export async function createTeam(name: string) {
-  const admin = getSupabaseAdminClient();
+  const supabase = await getSupabaseServerClient();
   const user = await getCurrentUser();
 
-  if (!admin || !user) {
+  if (!supabase || !user) {
     throw new Error("Voce precisa estar logado para criar uma equipe.");
   }
 
-  const { data: team, error: teamError } = await admin.from("teams").insert({ name, created_by: user.id }).select("id").single();
+  const { data: team, error: teamError } = await supabase
+    .from("teams")
+    .insert({ name, created_by: user.id })
+    .select("id")
+    .single();
   if (teamError) throw teamError;
 
-  const { error: memberError } = await admin.from("team_members").insert({
+  const { error: memberError } = await supabase.from("team_members").insert({
     team_id: team.id,
     user_id: user.id,
     email: user.email,
@@ -149,24 +167,49 @@ export async function createTeam(name: string) {
 
 export async function inviteTeamMember(email: string, role: TeamRole) {
   const context = await getTeamContext();
+  const supabase = await getSupabaseServerClient();
   const admin = getSupabaseAdminClient();
+  const user = await getCurrentUser();
 
-  if (!admin || !context.team || !canManage(context.currentRole)) {
+  if (!supabase || !context.team || !canManage(context.currentRole)) {
     throw new Error("Voce nao tem permissao para convidar membros.");
   }
 
   const normalizedEmail = email.trim().toLowerCase();
-  const { error } = await admin.from("team_invitations").insert({
+  const { error } = await supabase.from("team_invitations").upsert({
     team_id: context.team.id,
     email: normalizedEmail,
     role,
-    invited_by: (await getCurrentUser())?.id
-  });
+    invited_by: user?.id,
+    status: "pending"
+  }, { onConflict: "team_id,email,status" });
   if (error) throw error;
 
-  await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
-    redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`
-  });
+  if (!admin) {
+    return {
+      emailSent: false,
+      message:
+        "Convite salvo. Para disparar o e-mail automaticamente, configure SUPABASE_SECRET_KEY no app e um SMTP proprio no Supabase Auth."
+    };
+  }
+
+  try {
+    await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
+      redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`
+    });
+
+    return {
+      emailSent: true,
+      message: "Convite enviado por e-mail."
+    };
+  } catch (error) {
+    const message = error instanceof Error ? normalizeEmailProviderError(error.message) : "Convite salvo, mas nao foi possivel enviar o e-mail agora.";
+
+    return {
+      emailSent: false,
+      message
+    };
+  }
 }
 
 export async function removeTeamMember(memberId: string) {

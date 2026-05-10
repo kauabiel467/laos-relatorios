@@ -14,8 +14,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    await inviteTeamMember(email, role);
-    return NextResponse.json({ ok: true });
+    const result = await inviteTeamMember(email, role);
+    return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Nao foi possivel enviar o convite." }, { status: 500 });
   }

@@ -21,7 +21,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
     const normalized = message.toLowerCase();
 
     if (normalized.includes("email rate limit exceeded")) {
-      return "O provedor de e-mail do Supabase atingiu o limite de envios agora. Tente entrar com link por e-mail daqui a pouco ou ajuste o limite no projeto.";
+      return "O Supabase atingiu o limite do provedor de e-mail. Para corrigir de vez, configure um SMTP proprio em Auth > Email no painel do Supabase. Enquanto isso, quem ja tiver conta pode entrar com senha sem depender de novo envio.";
     }
 
     if (normalized.includes("user already registered")) {
@@ -60,7 +60,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
     }
 
     if (mode === "signup" && !result.data.session) {
-      setFeedback("Conta criada. Confirme seu e-mail para entrar.");
+      setFeedback("Conta criada. Falta confirmar o e-mail para liberar o acesso. Se o projeto estiver no limite de envio do Supabase, configure um SMTP proprio no painel.");
       return;
     }
 
@@ -164,6 +164,10 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
       </div>
 
       {feedback ? <div className="mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+
+      <div className="mt-4 rounded-xl border border-border bg-bg p-3 text-xs leading-5 text-muted">
+        Se aparecer limite de e-mail do Supabase, a correcao e feita no painel do projeto em Auth &gt; Email com um SMTP proprio. O login com senha continua sendo o caminho mais estavel no dia a dia.
+      </div>
     </div>
   );
 }
