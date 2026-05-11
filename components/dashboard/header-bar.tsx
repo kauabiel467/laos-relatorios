@@ -39,6 +39,124 @@ function formatDateLabel(value: string) {
   return `${day}/${month}`;
 }
 
+function toDate(value: string) {
+  return new Date(`${value}T12:00:00`);
+}
+
+function toDateInputValue(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12);
+}
+
+function isSameDay(first: Date, second: Date) {
+  return (
+    first.getFullYear() === second.getFullYear() &&
+    first.getMonth() === second.getMonth() &&
+    first.getDate() === second.getDate()
+  );
+}
+
+function startOfWeek(date: Date) {
+  const next = new Date(date);
+  const day = (next.getDay() + 6) % 7;
+  next.setDate(next.getDate() - day);
+  next.setHours(12, 0, 0, 0);
+  return next;
+}
+
+function endOfWeek(date: Date) {
+  return addDays(startOfWeek(date), 6);
+}
+
+function getPresetRange(key: string) {
+  const today = new Date();
+  today.setHours(12, 0, 0, 0);
+
+  if (key === "yesterday") {
+    const yesterday = addDays(today, -1);
+    return { start: yesterday, end: yesterday };
+  }
+
+  if (key === "today") {
+    return { start: today, end: today };
+  }
+
+  if (key === "last_7") {
+    return { start: addDays(today, -6), end: today };
+  }
+
+  if (key === "last_30") {
+    return { start: addDays(today, -29), end: today };
+  }
+
+  if (key === "last_90") {
+    return { start: addDays(today, -89), end: today };
+  }
+
+  if (key === "last_week") {
+    const end = addDays(startOfWeek(today), -1);
+    return { start: startOfWeek(end), end };
+  }
+
+  if (key === "this_week") {
+    return { start: startOfWeek(today), end: endOfWeek(today) };
+  }
+
+  if (key === "last_month") {
+    const base = new Date(today.getFullYear(), today.getMonth() - 1, 1, 12);
+    return {
+      start: base,
+      end: new Date(base.getFullYear(), base.getMonth() + 1, 0, 12)
+    };
+  }
+
+  if (key === "this_month") {
+    return {
+      start: new Date(today.getFullYear(), today.getMonth(), 1, 12),
+      end: new Date(today.getFullYear(), today.getMonth() + 1, 0, 12)
+    };
+  }
+
+  if (key === "last_3_months") {
+    return { start: new Date(today.getFullYear(), today.getMonth() - 2, 1, 12), end: today };
+  }
+
+  return { start: new Date(today.getFullYear(), today.getMonth() - 3, 1, 12), end: today };
+}
+
+function buildCalendarDays(month: Date) {
+  const firstDay = startOfMonth(month);
+  const start = addDays(firstDay, -((firstDay.getDay() + 6) % 7));
+
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
+const presetOptions = [
+  { key: "yesterday", label: "Ontem" },
+  { key: "today", label: "Hoje" },
+  { key: "last_7", label: "Ultimos 7 dias" },
+  { key: "last_30", label: "Ultimos 30 dias" },
+  { key: "last_90", label: "Ultimos 90 dias" },
+  { key: "last_week", label: "Semana passada" },
+  { key: "this_week", label: "Essa semana" },
+  { key: "last_month", label: "Mes passado" },
+  { key: "this_month", label: "Esse mes" },
+  { key: "last_3_months", label: "Ultimos 3 meses" },
+  { key: "last_4_months", label: "Ultimos 4 meses" }
+] as const;
+
+const weekLabels = ["se", "te", "qu", "qu", "se", "sa", "do"];
+const monthLabels = ["Jan.", "Fev.", "Mar.", "Abr.", "Mai.", "Jun.", "Jul.", "Ago.", "Set.", "Out.", "Nov.", "Dez."];
+
 export function HeaderBar({
   filteredClients,
   search,
@@ -57,8 +175,10 @@ export function HeaderBar({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [isActionsOpen, setIsActionsOpen] = useState(false);
+  const [isSelectingRangeEnd, setIsSelectingRangeEnd] = useState(false);
   const [draftStartDate, setDraftStartDate] = useState(customStartDate);
   const [draftEndDate, setDraftEndDate] = useState(customEndDate);
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(toDate(customStartDate)));
   const searchRef = useRef<HTMLDivElement | null>(null);
   const periodRef = useRef<HTMLDivElement | null>(null);
   const actionsRef = useRef<HTMLDivElement | null>(null);
@@ -88,7 +208,35 @@ export function HeaderBar({
   useEffect(() => {
     setDraftStartDate(customStartDate);
     setDraftEndDate(customEndDate);
+    setCalendarMonth(startOfMonth(toDate(customStartDate)));
   }, [customStartDate, customEndDate]);
+
+  const calendarDays = buildCalendarDays(calendarMonth);
+  const draftStart = toDate(draftStartDate);
+  const draftEnd = toDate(draftEndDate);
+
+  function applyPreset(key: (typeof presetOptions)[number]["key"]) {
+    const range = getPresetRange(key);
+    setDraftStartDate(toDateInputValue(range.start));
+    setDraftEndDate(toDateInputValue(range.end));
+    setCalendarMonth(startOfMonth(range.start));
+    setIsSelectingRangeEnd(false);
+  }
+
+  function selectCalendarDay(day: Date) {
+    if (!isSelectingRangeEnd) {
+      setDraftStartDate(toDateInputValue(day));
+      setDraftEndDate(toDateInputValue(day));
+      setIsSelectingRangeEnd(true);
+      return;
+    }
+
+    const nextStart = day < draftStart ? day : draftStart;
+    const nextEnd = day < draftStart ? draftStart : day;
+    setDraftStartDate(toDateInputValue(nextStart));
+    setDraftEndDate(toDateInputValue(nextEnd));
+    setIsSelectingRangeEnd(false);
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-bg/95 backdrop-blur">
@@ -170,6 +318,8 @@ export function HeaderBar({
                     if (option.key === "custom") {
                       setDraftStartDate(customStartDate);
                       setDraftEndDate(customEndDate);
+                      setCalendarMonth(startOfMonth(toDate(customStartDate)));
+                      setIsSelectingRangeEnd(false);
                       setIsCalendarOpen((value) => !value);
                       return;
                     }
@@ -188,41 +338,124 @@ export function HeaderBar({
             </div>
             <div
               className={clsx(
-                "panel absolute left-0 top-[calc(100%+10px)] z-[70] w-[min(20rem,calc(100vw-2rem))] p-4 shadow-panel transition duration-200 sm:left-auto sm:right-0",
+                "panel absolute left-0 top-[calc(100%+10px)] z-[70] w-[min(44rem,calc(100vw-1rem))] p-0 shadow-panel transition duration-200 sm:left-auto sm:right-0",
                 isCalendarOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-1 scale-95 opacity-0"
               )}
             >
-              <div className="eyebrow mb-3">Periodo personalizado</div>
-              <div className="grid gap-3">
-                <label className="grid gap-1 text-xs text-muted">
-                  Inicio
-                  <input
-                    type="date"
-                    value={draftStartDate}
-                    onChange={(event) => setDraftStartDate(event.target.value)}
-                    className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition focus:border-blue"
-                  />
-                </label>
-                <label className="grid gap-1 text-xs text-muted">
-                  Fim
-                  <input
-                    type="date"
-                    value={draftEndDate}
-                    onChange={(event) => setDraftEndDate(event.target.value)}
-                    className="rounded-lg border border-border bg-bg px-3 py-2 text-sm text-text outline-none transition focus:border-blue"
-                  />
-                </label>
+              <div className="border-b border-border/70 px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => {
-                    onCustomRangeChange(draftStartDate, draftEndDate);
-                    onPeriodChange("custom");
-                    setIsCalendarOpen(false);
-                  }}
-                  className="rounded-lg bg-blue px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue/90"
+                  className="flex w-full items-center gap-2 rounded-lg border border-border bg-bg px-3 py-2 text-left text-sm text-text"
                 >
-                  Aplicar periodo
+                  <svg viewBox="0 0 24 24" className="h-4 w-4 text-muted" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M8 2v4" />
+                    <path d="M16 2v4" />
+                    <rect x="3" y="4" width="18" height="18" rx="2" />
+                    <path d="M3 10h18" />
+                  </svg>
+                  {formatDateLabel(draftStartDate)} - {formatDateLabel(draftEndDate)}
                 </button>
+              </div>
+              <div className="grid sm:grid-cols-[180px_1fr]">
+                <div className="border-b border-border/70 p-3 sm:border-b-0 sm:border-r">
+                  <div className="grid gap-1">
+                    {presetOptions.map((preset) => (
+                      <button
+                        key={preset.key}
+                        type="button"
+                        onClick={() => applyPreset(preset.key)}
+                        className="rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-blue/10 hover:text-text"
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-3">
+                  <div className="mb-3 flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() - 1, 1, 12))}
+                      className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-white/5 hover:text-text"
+                    >
+                      ‹
+                    </button>
+                    <div className="font-medium text-text">
+                      {monthLabels[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth((value) => new Date(value.getFullYear(), value.getMonth() + 1, 1, 12))}
+                      className="grid h-8 w-8 place-items-center rounded-md text-muted transition hover:bg-white/5 hover:text-text"
+                    >
+                      ›
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1 text-center text-xs font-semibold text-muted">
+                    {weekLabels.map((label, index) => (
+                      <div key={`${label}-${index}`} className="py-1">
+                        {label}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 grid grid-cols-7 gap-1">
+                    {calendarDays.map((day) => {
+                      const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                      const isStart = isSameDay(day, draftStart);
+                      const isEnd = isSameDay(day, draftEnd);
+                      const isInRange = day >= draftStart && day <= draftEnd;
+
+                      return (
+                        <button
+                          key={day.toISOString()}
+                          type="button"
+                          onClick={() => selectCalendarDay(day)}
+                          className={clsx(
+                            "relative h-10 rounded-lg text-sm transition",
+                            isStart || isEnd
+                              ? "bg-blue text-white"
+                              : isInRange
+                                ? "bg-blue/10 text-text"
+                                : isCurrentMonth
+                                  ? "text-text hover:bg-white/5"
+                                  : "text-muted/50 hover:bg-white/5"
+                          )}
+                        >
+                          {day.getDate()}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-between border-t border-border/70 px-4 py-3">
+                <div className="font-mono text-[11px] text-muted">
+                  {formatDateLabel(draftStartDate)} - {formatDateLabel(draftEndDate)}
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsSelectingRangeEnd(false);
+                      setIsCalendarOpen(false);
+                    }}
+                    className="rounded-lg border border-border px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onCustomRangeChange(draftStartDate, draftEndDate);
+                      onPeriodChange("custom");
+                      setIsSelectingRangeEnd(false);
+                      setIsCalendarOpen(false);
+                    }}
+                    className="rounded-lg bg-blue px-3 py-2 text-sm font-semibold text-white transition hover:bg-blue/90"
+                  >
+                    Selecionar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
