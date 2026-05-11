@@ -35,7 +35,7 @@ export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
 
       <div className="panel p-5">
         <div className="eyebrow mb-4">Saude do Cliente</div>
-        <div className="mb-5 flex items-center gap-4">
+        <div className="mb-5 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
           <div
             className="relative grid size-20 place-items-center rounded-full"
             style={{ background: `conic-gradient(${scoreColor} ${snapshot.healthScore}%, #1e2230 0)` }}
@@ -43,7 +43,7 @@ export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
             <div className="absolute inset-2 rounded-full bg-card" />
             <span className="relative z-10 font-mono text-xl font-bold">{snapshot.healthScore}</span>
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="text-lg font-bold">{snapshot.healthLabel}</div>
             <p className="max-w-xs text-sm leading-6 text-muted">
               Nota calculada por eficiencia, tendencia, CPA, ROAS e gargalos do funil.

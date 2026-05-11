@@ -35,7 +35,7 @@ export function MetricCard({
       type="button"
       onClick={onClick}
       className={clsx(
-        "panel group relative overflow-hidden p-5 text-left transition hover:-translate-y-0.5 hover:border-white/10 before:absolute before:left-0 before:top-0 before:h-0.5 before:w-full",
+        "panel group relative overflow-hidden p-4 text-left transition hover:-translate-y-0.5 hover:border-white/10 before:absolute before:left-0 before:top-0 before:h-0.5 before:w-full sm:p-5",
         tones[tone],
         clickable ? "cursor-pointer" : "cursor-default"
       )}
@@ -53,7 +53,7 @@ export function MetricCard({
         </>
       )}
       {clickable ? (
-        <div className="mt-3 text-xs text-blue opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="mt-3 hidden text-xs text-blue opacity-0 transition-opacity group-hover:opacity-100 sm:block">
           clique para detalhar
         </div>
       ) : null}

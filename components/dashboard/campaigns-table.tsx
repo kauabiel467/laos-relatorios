@@ -54,7 +54,54 @@ export function CampaignsTable({
         </div>
         <div className="font-mono text-xs text-muted">{campaigns.length} campanhas</div>
       </div>
-      <div className="overflow-x-auto">
+      <div className="grid gap-3 p-4 md:hidden">
+        {campaigns.length ? (
+          campaigns.map((campaign) => (
+            <button
+              key={campaign.id}
+              type="button"
+              onClick={() => onOpenCampaign(campaign)}
+              className="rounded-xl border border-border bg-card/70 p-4 text-left transition hover:border-blue hover:bg-blue/5"
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-text">{campaign.name}</div>
+                  <div className="mt-1 text-xs text-muted">{campaign.objective}</div>
+                </div>
+                <span className={clsx("shrink-0 rounded-md border px-2 py-1 font-mono text-[10px]", badgeStyles[campaign.status])}>
+                  {campaign.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-muted">Investimento</div>
+                  <div className="font-mono text-text">{formatCurrency(campaign.spend)}</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-muted">ROAS</div>
+                  <div className="font-mono text-text">{formatRoas(campaign.roas)}</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-muted">Alcance</div>
+                  <div className="font-mono text-text">{formatCompact(campaign.reach)}</div>
+                </div>
+                <div>
+                  <div className="mb-1 text-[11px] uppercase tracking-[0.14em] text-muted">CTR</div>
+                  <div className="font-mono text-text">{formatPercent(campaign.ctr)}</div>
+                </div>
+              </div>
+              <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
+                <div className="h-full rounded-full bg-blue" style={{ width: `${(campaign.spend / maxSpend) * 100}%` }} />
+              </div>
+            </button>
+          ))
+        ) : (
+          <div className="rounded-xl border border-border bg-bg px-4 py-8 text-center text-sm text-muted">
+            Nenhuma campanha com dados disponiveis para este filtro e periodo.
+          </div>
+        )}
+      </div>
+      <div className="hidden overflow-x-auto md:block">
         <table className="min-w-full text-left">
           <thead className="bg-border/40 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
             <tr>

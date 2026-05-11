@@ -76,13 +76,13 @@ export function HeaderBar({
   return (
     <header className="sticky top-0 z-50 border-b border-border/80 bg-bg/95 backdrop-blur">
       <div className="mx-auto flex max-w-[1600px] flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:px-6">
-        <div className="flex items-center gap-3 text-sm font-bold uppercase tracking-[0.18em] text-white/90">
+        <div className="flex items-center gap-3 text-xs font-bold uppercase tracking-[0.16em] text-white/90 sm:text-sm sm:tracking-[0.18em]">
           <span className="animate-pulse-dot inline-flex size-2.5 rounded-full bg-blue shadow-[0_0_0_6px_rgba(59,130,246,0.12)]" />
           LAOS | Meta Ads
         </div>
 
         <div className="flex flex-1 flex-col gap-3 lg:flex-row lg:items-center lg:justify-center">
-          <div ref={searchRef} className="panel-soft relative flex min-h-12 flex-1 items-center gap-3 px-3 py-2 lg:max-w-xl">
+          <div ref={searchRef} className="panel-soft relative flex min-h-12 flex-1 items-center gap-2 px-3 py-2 lg:max-w-xl">
             <div className="hidden text-xs font-medium text-muted sm:block">Buscar</div>
             <div className="relative flex-1">
               <input
@@ -134,13 +134,14 @@ export function HeaderBar({
               {selectedClient.name} <span className="text-muted">|</span>
             </div>
           </div>
+          <div className="min-w-0 truncate pl-1 text-sm font-semibold text-text lg:hidden">{selectedClient.name}</div>
           <span className={clsx("w-fit rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em]", statusStyles[selectedClient.status])}>
             {selectedClient.status === "ACTIVE" ? "ATIVO" : "PAUSADO"}
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div ref={periodRef} className="panel-soft relative flex items-center gap-1 p-1">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+          <div ref={periodRef} className="panel-soft relative flex min-w-0 items-center gap-1 overflow-x-auto p-1">
             {periodOptions.map((option) => (
               <button
                 key={option.key}
@@ -155,7 +156,7 @@ export function HeaderBar({
                   setIsCalendarOpen(false);
                 }}
                 className={clsx(
-                  "rounded-md px-3 py-1.5 font-mono text-[11px] transition",
+                  "shrink-0 rounded-md px-3 py-1.5 font-mono text-[11px] transition",
                   period === option.key ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
                 )}
               >
@@ -202,13 +203,13 @@ export function HeaderBar({
               </div>
             </div>
           </div>
-          <button type="button" onClick={onExport} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+          <button type="button" onClick={onExport} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:w-auto">
             Exportar
           </button>
-          <button type="button" onClick={onOpenTeam} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+          <button type="button" onClick={onOpenTeam} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:w-auto">
             Equipe
           </button>
-          <button type="button" onClick={onOpenConfig} className="panel-soft px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
+          <button type="button" onClick={onOpenConfig} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:col-span-3 sm:w-auto">
             Integracoes
           </button>
         </div>

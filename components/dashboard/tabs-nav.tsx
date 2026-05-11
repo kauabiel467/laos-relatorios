@@ -11,7 +11,7 @@ interface TabsNavProps {
 export function TabsNav({ activeTab, onChange }: TabsNavProps) {
   return (
     <div className="border-t border-border/60">
-      <div className="mx-auto flex max-w-[1600px] gap-2 px-4 py-2 lg:px-6">
+      <div className="mx-auto flex max-w-[1600px] gap-2 overflow-x-auto px-4 py-2 lg:px-6">
         {[
           { key: "meta", label: "Meta Ads" },
           { key: "cardapio", label: "Cardapio & Pedidos" }
@@ -21,7 +21,7 @@ export function TabsNav({ activeTab, onChange }: TabsNavProps) {
             type="button"
             onClick={() => onChange(tab.key as DashboardTab)}
             className={clsx(
-              "rounded-lg px-4 py-2 text-sm font-semibold transition",
+              "shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition",
               activeTab === tab.key ? "bg-blue/15 text-blue" : "text-muted hover:bg-white/5 hover:text-text"
             )}
           >

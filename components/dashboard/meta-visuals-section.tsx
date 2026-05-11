@@ -174,7 +174,7 @@ export function MetaVisualsSection({
           </div>
           {dailySeries.length ? (
             <div className="overflow-x-auto">
-              <svg viewBox={`0 0 ${width} ${height}`} className="h-72 min-w-[640px]">
+              <svg viewBox={`0 0 ${width} ${height}`} className="h-64 min-w-[640px] sm:h-72">
                 <defs>
                   <linearGradient id="line-spend-fill" x1="0" x2="0" y1="0" y2="1">
                     <stop offset="0%" stopColor="rgba(59,130,246,0.28)" />
@@ -250,7 +250,7 @@ export function MetaVisualsSection({
           {objectiveDistribution.length ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
               <div
-                className="relative mx-auto h-52 w-52 rounded-full"
+                className="relative mx-auto h-40 w-40 rounded-full sm:h-52 sm:w-52"
                 style={{ backgroundImage: buildConicGradient(objectiveDistribution) }}
                 onMouseEnter={(event) =>
                   showTooltip(
@@ -269,11 +269,11 @@ export function MetaVisualsSection({
                   )
                 }
               >
-                <div className="absolute inset-8 rounded-full bg-card" />
+                <div className="absolute inset-6 rounded-full bg-card sm:inset-8" />
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
                     <div className="font-mono text-xs text-muted">Total</div>
-                    <div className="text-xl font-bold">{formatNumber(totalObjectiveValue)}</div>
+                    <div className="text-lg font-bold sm:text-xl">{formatNumber(totalObjectiveValue)}</div>
                   </div>
                 </div>
               </div>
@@ -348,7 +348,7 @@ export function MetaVisualsSection({
           {genderAudience.some((item) => item.value > 0) ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
               <div
-                className="relative mx-auto h-48 w-48 rounded-full"
+                className="relative mx-auto h-40 w-40 rounded-full sm:h-48 sm:w-48"
                 style={{ backgroundImage: buildConicGradient(genderAudience) }}
                 onMouseEnter={(event) =>
                   showTooltip(
@@ -367,7 +367,7 @@ export function MetaVisualsSection({
                   )
                 }
               >
-                <div className="absolute inset-8 rounded-full bg-card" />
+                <div className="absolute inset-6 rounded-full bg-card sm:inset-8" />
               </div>
               <div className="flex-1 space-y-3">
                 {genderAudience.map((item, index) => (
@@ -406,7 +406,7 @@ export function MetaVisualsSection({
           <p className="text-xs leading-5 text-muted">Passe o mouse nas barras para ver o volume de {resultLabel.toLowerCase()} por horario.</p>
         </div>
         {hourlyPerformance.some((item) => item.value > 0) ? (
-          <div className="grid h-72 grid-cols-12 gap-2 sm:grid-cols-24">
+          <div className="grid h-56 grid-cols-12 gap-1.5 sm:h-72 sm:gap-2 sm:grid-cols-24">
             {hourlyPerformance.map((item) => (
               <div key={item.label} className="flex h-full flex-col items-center justify-end gap-2">
                 <div className="relative flex h-full w-full items-end">
@@ -417,7 +417,7 @@ export function MetaVisualsSection({
                     onMouseMove={(event) => showTooltip(event, "hourly", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                   />
                 </div>
-                <span className="font-mono text-[10px] text-muted">{item.label}</span>
+                <span className="font-mono text-[9px] text-muted sm:text-[10px]">{item.label}</span>
               </div>
             ))}
           </div>
