@@ -32,6 +32,13 @@ const statusStyles = {
   PAUSED: "border-orange/30 bg-orange/10 text-orange-200"
 };
 
+function formatDateLabel(value: string) {
+  if (!value) return "--/--";
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) return value;
+  return `${day}/${month}`;
+}
+
 export function HeaderBar({
   filteredClients,
   search,
@@ -49,10 +56,17 @@ export function HeaderBar({
 }: HeaderBarProps) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
+  const [isActionsOpen, setIsActionsOpen] = useState(false);
   const [draftStartDate, setDraftStartDate] = useState(customStartDate);
   const [draftEndDate, setDraftEndDate] = useState(customEndDate);
   const searchRef = useRef<HTMLDivElement | null>(null);
   const periodRef = useRef<HTMLDivElement | null>(null);
+  const actionsRef = useRef<HTMLDivElement | null>(null);
+
+  const currentPeriodLabel =
+    period === "custom"
+      ? `${formatDateLabel(customStartDate)} a ${formatDateLabel(customEndDate)}`
+      : periodOptions.find((option) => option.key === period)?.label ?? "30D";
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
@@ -61,6 +75,9 @@ export function HeaderBar({
       }
       if (!periodRef.current?.contains(event.target as Node)) {
         setIsCalendarOpen(false);
+      }
+      if (!actionsRef.current?.contains(event.target as Node)) {
+        setIsActionsOpen(false);
       }
     }
 
@@ -130,17 +147,19 @@ export function HeaderBar({
                 </div>
               )}
             </div>
-            <div className="hidden min-w-0 max-w-52 truncate text-sm font-semibold text-text lg:block">
-              {selectedClient.name} <span className="text-muted">|</span>
-            </div>
           </div>
-          <div className="min-w-0 truncate pl-1 text-sm font-semibold text-text lg:hidden">{selectedClient.name}</div>
-          <span className={clsx("w-fit rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em]", statusStyles[selectedClient.status])}>
-            {selectedClient.status === "ACTIVE" ? "ATIVO" : "PAUSADO"}
-          </span>
+          <div className="flex min-w-0 flex-wrap items-center justify-between gap-2 rounded-xl border border-border/70 bg-card/60 px-3 py-2">
+            <div className="min-w-0">
+              <div className="truncate text-sm font-semibold text-text">{selectedClient.name}</div>
+              <div className="mt-0.5 font-mono text-[11px] text-muted">{currentPeriodLabel}</div>
+            </div>
+            <span className={clsx("w-fit shrink-0 rounded-md border px-2 py-1 font-mono text-[10px] uppercase tracking-[0.16em]", statusStyles[selectedClient.status])}>
+              {selectedClient.status === "ACTIVE" ? "ATIVO" : "PAUSADO"}
+            </span>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_auto] sm:items-center">
+        <div className="grid grid-cols-[1fr_auto] items-start gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
           <div ref={periodRef} className="panel-soft relative flex min-w-0 items-center gap-1 overflow-x-auto p-1">
             {periodOptions.map((option) => (
               <button
@@ -203,15 +222,56 @@ export function HeaderBar({
               </div>
             </div>
           </div>
-          <button type="button" onClick={onExport} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:w-auto">
-            Exportar
-          </button>
-          <button type="button" onClick={onOpenTeam} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:w-auto">
-            Equipe
-          </button>
-          <button type="button" onClick={onOpenConfig} className="panel-soft w-full px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text sm:col-span-3 sm:w-auto">
-            Integracoes
-          </button>
+          <div ref={actionsRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setIsActionsOpen((value) => !value)}
+              className="panel-soft grid h-11 w-11 place-items-center px-0 text-muted transition hover:border-blue hover:text-text"
+              aria-label="Abrir configuracoes"
+            >
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3.25" />
+                <path d="M19.4 15a1 1 0 0 0 .2 1.1l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1 1 0 0 0-1.1-.2 1 1 0 0 0-.6.9V20a2 2 0 1 1-4 0v-.2a1 1 0 0 0-.7-.9 1 1 0 0 0-1.1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1 1 0 0 0 .2-1.1 1 1 0 0 0-.9-.6H4a2 2 0 1 1 0-4h.2a1 1 0 0 0 .9-.7 1 1 0 0 0-.2-1.1l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1 1 0 0 0 1.1.2h.1a1 1 0 0 0 .6-.9V4a2 2 0 1 1 4 0v.2a1 1 0 0 0 .6.9 1 1 0 0 0 1.1-.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1 1 0 0 0-.2 1.1v.1a1 1 0 0 0 .9.6H20a2 2 0 1 1 0 4h-.2a1 1 0 0 0-.9.6Z" />
+              </svg>
+            </button>
+            <div
+              className={clsx(
+                "panel absolute right-0 top-[calc(100%+10px)] z-[65] min-w-52 p-2 shadow-panel transition duration-200",
+                isActionsOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-1 scale-95 opacity-0"
+              )}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  onExport();
+                  setIsActionsOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-blue/10 hover:text-text"
+              >
+                Exportar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenTeam();
+                  setIsActionsOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-blue/10 hover:text-text"
+              >
+                Equipe
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenConfig();
+                  setIsActionsOpen(false);
+                }}
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-muted transition hover:bg-blue/10 hover:text-text"
+              >
+                Integracoes
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
