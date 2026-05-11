@@ -78,7 +78,7 @@ const emptyAgeAudience: DashboardDataBundle["ageAudience"] = [];
 const emptyGenderAudience: DashboardDataBundle["genderAudience"] = [];
 
 type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "cpa";
-type MetaView = "sales" | "followers" | "messages";
+type MetaView = "sales" | "awareness" | "messages";
 
 function formatDateInput(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -126,13 +126,19 @@ function isSalesCampaign(campaign: CampaignMetric) {
   return campaign.objective.toLowerCase().includes("venda");
 }
 
-function isFollowersCampaign(campaign: CampaignMetric) {
+function isAwarenessCampaign(campaign: CampaignMetric) {
   const objective = campaign.objective.toLowerCase();
-  return objective.includes("engajamento") || objective.includes("reconhecimento") || objective.includes("alcance") || objective.includes("seguidores");
+  return (
+    objective.includes("engajamento") ||
+    objective.includes("reconhecimento") ||
+    objective.includes("alcance") ||
+    objective.includes("trafego") ||
+    objective.includes("seguidores")
+  );
 }
 
 function isMessagesCampaign(campaign: CampaignMetric) {
-  return campaign.objective.toLowerCase().includes("mensagem");
+  return campaign.resultLabel.toLowerCase().includes("conversa") || campaign.objective.toLowerCase().includes("mensagem");
 }
 
 interface DashboardAppProps {
@@ -222,7 +228,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     () =>
       ({
         sales: isSalesCampaign,
-        followers: isFollowersCampaign,
+        awareness: isAwarenessCampaign,
         messages: isMessagesCampaign
       })[metaView],
     [metaView]
@@ -391,7 +397,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       };
     }
 
-    if (metaView === "followers") {
+    if (metaView === "awareness") {
       return {
         primary: [
           { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
@@ -764,7 +770,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
             <div className="flex gap-2 overflow-x-auto">
               {[
                 { key: "sales", label: "Vendas" },
-                { key: "followers", label: "Seguidores" },
+                { key: "awareness", label: "Reconhecimento" },
                 { key: "messages", label: "Mensagens" }
               ].map((item) => (
                 <button

@@ -722,19 +722,21 @@ export async function fetchMetaDashboardData(
       const campaignSpend = parseNumber(row.spend);
       const campaignRevenue = getRevenueValue(row);
       const campaignPurchases = getPurchaseCount(row);
+      const campaignMetric = getResultMetric(row);
 
       return {
         id: row.campaign_id,
         name: metaCampaign?.name || row.campaign_name || row.campaign_id,
         status: normalizeCampaignStatus(metaCampaign?.status) as CampaignMetric["status"],
         objective: formatObjective(metaCampaign?.objective),
+        resultLabel: campaignMetric.label,
         spend: campaignSpend,
         reach: parseNumber(row.reach),
         clicks: parseNumber(row.clicks),
         purchases: campaignPurchases,
         ctr: parseNumber(row.ctr),
         roas: getRoasValue(row, campaignSpend, campaignRevenue),
-        result: getResultMetric(row).value
+        result: campaignMetric.value
       };
     })
     .sort((first, second) => second.spend - first.spend);

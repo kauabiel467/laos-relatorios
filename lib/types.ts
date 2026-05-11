@@ -53,6 +53,7 @@ export interface CampaignMetric {
   name: string;
   status: AccountStatus;
   objective: string;
+  resultLabel: string;
   spend: number;
   reach: number;
   clicks?: number;

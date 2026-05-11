@@ -1,10 +1,10 @@
 import type { AdItem, CampaignMetric } from "@/lib/types";
 
 export const campaigns: CampaignMetric[] = [
-  { id: "cmp_1", name: "Combo Hot - Raio 4km", status: "ACTIVE", objective: "Vendas", spend: 980, reach: 18200, ctr: 4.7, roas: 4.18, result: 44 },
-  { id: "cmp_2", name: "Frio - Publico Aberto", status: "ACTIVE", objective: "Vendas", spend: 812, reach: 22500, ctr: 2.6, roas: 1.72, result: 12 },
-  { id: "cmp_3", name: "Remarketing Cardapio", status: "PAUSED", objective: "Trafego", spend: 520, reach: 9400, ctr: 5.3, roas: 2.94, result: 18 },
-  { id: "cmp_4", name: "Mensagens Centro", status: "ACTIVE", objective: "Mensagens", spend: 410, reach: 8700, ctr: 3.9, roas: 2.1, result: 23 }
+  { id: "cmp_1", name: "Combo Hot - Raio 4km", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", spend: 980, reach: 18200, ctr: 4.7, roas: 4.18, result: 44 },
+  { id: "cmp_2", name: "Frio - Publico Aberto", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", spend: 812, reach: 22500, ctr: 2.6, roas: 1.72, result: 12 },
+  { id: "cmp_3", name: "Remarketing Cardapio", status: "PAUSED", objective: "Trafego", resultLabel: "Cliques no link", spend: 520, reach: 9400, ctr: 5.3, roas: 2.94, result: 18 },
+  { id: "cmp_4", name: "Mensagens Centro", status: "ACTIVE", objective: "Mensagens", resultLabel: "Conversas", spend: 410, reach: 8700, ctr: 3.9, roas: 2.1, result: 23 }
 ];
 
 export const adsByCampaign: Record<string, AdItem[]> = {
