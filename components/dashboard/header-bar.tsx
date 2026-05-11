@@ -160,30 +160,32 @@ export function HeaderBar({
         </div>
 
         <div className="grid grid-cols-[1fr_auto] items-start gap-2 sm:grid-cols-[1fr_auto] sm:items-center">
-          <div ref={periodRef} className="panel-soft relative flex min-w-0 items-center gap-1 overflow-x-auto p-1">
-            {periodOptions.map((option) => (
-              <button
-                key={option.key}
-                type="button"
-                onClick={() => {
-                  if (option.key === "custom") {
-                    setDraftStartDate(customStartDate);
-                    setDraftEndDate(customEndDate);
-                    setIsCalendarOpen((value) => !value);
-                    return;
-                  }
+          <div ref={periodRef} className="panel-soft relative min-w-0 p-1">
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto">
+              {periodOptions.map((option) => (
+                <button
+                  key={option.key}
+                  type="button"
+                  onClick={() => {
+                    if (option.key === "custom") {
+                      setDraftStartDate(customStartDate);
+                      setDraftEndDate(customEndDate);
+                      setIsCalendarOpen((value) => !value);
+                      return;
+                    }
 
-                  onPeriodChange(option.key);
-                  setIsCalendarOpen(false);
-                }}
-                className={clsx(
-                  "shrink-0 rounded-md px-3 py-1.5 font-mono text-[11px] transition",
-                  period === option.key || (option.key === "custom" && isCalendarOpen) ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
-                )}
-              >
-                {option.label}
-              </button>
-            ))}
+                    onPeriodChange(option.key);
+                    setIsCalendarOpen(false);
+                  }}
+                  className={clsx(
+                    "shrink-0 rounded-md px-3 py-1.5 font-mono text-[11px] transition",
+                    period === option.key || (option.key === "custom" && isCalendarOpen) ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
+                  )}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
             <div
               className={clsx(
                 "panel absolute left-0 top-[calc(100%+10px)] z-[70] w-[min(20rem,calc(100vw-2rem))] p-4 shadow-panel transition duration-200 sm:left-auto sm:right-0",
