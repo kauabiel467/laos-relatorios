@@ -402,7 +402,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     const startDate = new Date(`${range.start}T12:00:00`);
     const endDate = new Date(`${range.end}T12:00:00`);
     const exportCampaigns = (dashboardData?.campaigns ?? visibleCampaigns).filter(
-      (campaign) => isSalesCampaign(campaign) && campaign.status === "ACTIVE" && campaign.spend > 0 && campaign.result > 1
+      (campaign) => isSalesCampaign(campaign) && campaign.status === "ACTIVE" && campaign.spend > 0
     );
     const filteredSpend = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
     const filteredReach = exportCampaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
