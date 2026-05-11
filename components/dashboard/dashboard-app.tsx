@@ -93,6 +93,34 @@ function getDefaultCustomRange() {
   };
 }
 
+function formatDateLabel(date: Date) {
+  return date.toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit"
+  });
+}
+
+function getPeriodRange(period: PeriodKey, customRange: { start: string; end: string }) {
+  if (period === "custom") {
+    return customRange;
+  }
+
+  const end = new Date();
+  const start = new Date(end);
+  const daysMap: Record<Exclude<PeriodKey, "custom">, number> = {
+    last_7d: 6,
+    last_30d: 29,
+    last_90d: 89
+  };
+
+  start.setDate(end.getDate() - daysMap[period]);
+
+  return {
+    start: formatDateInput(start),
+    end: formatDateInput(end)
+  };
+}
+
 interface DashboardAppProps {
   requiresWorkspaceSetup?: boolean;
 }
@@ -366,13 +394,28 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   }
 
   function exportReport() {
+    const range = getPeriodRange(period, customRange);
+    const startDate = new Date(`${range.start}T12:00:00`);
+    const endDate = new Date(`${range.end}T12:00:00`);
+    const salesCount = Math.max(resolvedSnapshot.resultValue, 0);
+    const averageTicket = salesCount > 0 ? resolvedSnapshot.revenue / salesCount : 0;
+    const reachMetric = resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("alcance"));
+
     const report = [
-      `Cliente: ${selectedClient.name}`,
-      `Periodo: ${period}`,
-      `Investimento: ${formatCurrency(resolvedSnapshot.spend)}`,
-      `${resolvedSnapshot.resultLabel}: ${formatNumber(resolvedSnapshot.resultValue)}`,
-      `Faturamento: ${formatCurrency(resolvedSnapshot.revenue)}`,
-      `ROAS: ${formatRoas(resolvedSnapshot.roas)}`
+      `Segue o relatório do período: ${selectedClient.name}`,
+      "",
+      `📆 (${formatDateLabel(startDate)} a ${formatDateLabel(endDate)})`,
+      "",
+      "CAMPANHA DE VENDA",
+      "",
+      `✅ Investimento total: *${formatCurrency(resolvedSnapshot.spend)}*`,
+      "",
+      `👥 Alcançamos *${formatNumber(reachMetric?.value ?? 0)}* pessoas`,
+      `🔥 Número de venda: *${formatNumber(salesCount)}*`,
+      `💵 Ticket médio: *${formatCurrency(averageTicket)}*`,
+      `🚀 Custo por venda: *${formatCurrency(resolvedSnapshot.cpa)}*`,
+      `💸 Valor total das vendas: *${formatCurrency(resolvedSnapshot.revenue)}*`,
+      `📈 ROAS (Retorno sobre investimento): *${formatRoas(resolvedSnapshot.roas)}*`
     ].join("\n");
 
     navigator.clipboard.writeText(report).catch(() => undefined);
