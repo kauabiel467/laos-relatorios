@@ -197,6 +197,16 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? emptyHourlyPerformance;
   const resolvedAgeAudience = dashboardData?.ageAudience ?? emptyAgeAudience;
   const resolvedGenderAudience = dashboardData?.genderAudience ?? emptyGenderAudience;
+  const linkClicks = useMemo(() => {
+    const clicksMetric = resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("cliques no link"))?.value;
+    if (typeof clicksMetric === "number" && clicksMetric > 0) {
+      return clicksMetric;
+    }
+
+    return (dashboardData?.campaigns ?? []).reduce((sum, campaign) => sum + (campaign.clicks ?? 0), 0);
+  }, [dashboardData?.campaigns, resolvedMediaMetrics]);
+  const clientTicket = resolvedSnapshot.resultValue > 0 ? resolvedSnapshot.revenue / resolvedSnapshot.resultValue : 0;
+  const clientConversionRate = linkClicks > 0 ? (resolvedSnapshot.resultValue / linkClicks) * 100 : 0;
 
   const drilldownContent = useMemo(() => {
     if (!metricDrilldown) return null;
@@ -751,8 +761,8 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
                   clickable={!dashboardLoading}
                   onClick={() => setMetricDrilldown("cpa")}
                 />
-                <MetricCard label="Ticket medio" value={formatCurrency(cardapio.ticket)} delta="+16,0%" tone="cyan" />
-                <MetricCard label="Taxa clique para pedido" value={formatPercent(cardapio.conversao, 2)} delta="-0,8%" tone="green" />
+                <MetricCard label="Ticket medio" value={formatCurrency(clientTicket)} tone="cyan" loading={dashboardLoading} />
+                <MetricCard label="Taxa de conversao" value={formatPercent(clientConversionRate, 2)} tone="green" loading={dashboardLoading} />
               </div>
             </section>
 

@@ -167,7 +167,9 @@ export function HeaderBar({
                 type="button"
                 onClick={() => {
                   if (option.key === "custom") {
-                    setIsCalendarOpen(true);
+                    setDraftStartDate(customStartDate);
+                    setDraftEndDate(customEndDate);
+                    setIsCalendarOpen((value) => !value);
                     return;
                   }
 
@@ -176,7 +178,7 @@ export function HeaderBar({
                 }}
                 className={clsx(
                   "shrink-0 rounded-md px-3 py-1.5 font-mono text-[11px] transition",
-                  period === option.key ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
+                  period === option.key || (option.key === "custom" && isCalendarOpen) ? "bg-blue text-white" : "text-muted hover:bg-white/5 hover:text-text"
                 )}
               >
                 {option.label}
@@ -184,7 +186,7 @@ export function HeaderBar({
             ))}
             <div
               className={clsx(
-                "panel absolute right-0 top-[calc(100%+10px)] z-[65] w-[min(20rem,calc(100vw-2rem))] p-4 shadow-panel transition duration-200",
+                "panel absolute left-0 top-[calc(100%+10px)] z-[70] w-[min(20rem,calc(100vw-2rem))] p-4 shadow-panel transition duration-200 sm:left-auto sm:right-0",
                 isCalendarOpen ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none translate-y-1 scale-95 opacity-0"
               )}
             >
