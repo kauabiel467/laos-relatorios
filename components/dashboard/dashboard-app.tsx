@@ -758,25 +758,28 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       />
       <TabsNav activeTab={activeTab} onChange={setActiveTab} />
       {activeTab === "meta" ? (
-        <div className="border-t border-border/60">
-          <div className="mx-auto flex max-w-[1600px] gap-2 overflow-x-auto px-4 py-2 lg:px-6">
-            {[
-              { key: "sales", label: "Vendas" },
-              { key: "followers", label: "Seguidores" },
-              { key: "messages", label: "Mensagens" }
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setMetaView(item.key as MetaView)}
-                className={clsx(
-                  "shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition",
-                  metaView === item.key ? "bg-blue/15 text-blue" : "text-muted hover:bg-white/5 hover:text-text"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
+        <div className="border-t border-border/60 bg-card/20">
+          <div className="mx-auto flex max-w-[1600px] flex-col gap-2 px-4 py-3 lg:px-6">
+            <div className="text-xs font-medium uppercase tracking-[0.16em] text-muted">Tipo de campanha</div>
+            <div className="flex gap-2 overflow-x-auto">
+              {[
+                { key: "sales", label: "Vendas" },
+                { key: "followers", label: "Seguidores" },
+                { key: "messages", label: "Mensagens" }
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setMetaView(item.key as MetaView)}
+                  className={clsx(
+                    "shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                    metaView === item.key ? "bg-blue text-white" : "border border-border bg-bg text-muted hover:border-blue hover:text-text"
+                  )}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       ) : null}
