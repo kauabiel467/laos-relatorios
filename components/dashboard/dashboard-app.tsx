@@ -129,6 +129,7 @@ function isSalesCampaign(campaign: CampaignMetric) {
 function isAwarenessCampaign(campaign: CampaignMetric) {
   const objective = campaign.objective.toLowerCase();
   return (
+    campaign.resultLabel.toLowerCase().includes("visitas ao perfil") ||
     objective.includes("engajamento") ||
     objective.includes("reconhecimento") ||
     objective.includes("alcance") ||
@@ -373,6 +374,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     const spend = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
     const reach = campaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
     const clicks = campaigns.reduce((sum, campaign) => sum + (campaign.clicks ?? 0), 0);
+    const followers = campaigns.reduce((sum, campaign) => sum + (campaign.followers ?? 0), 0);
     const results = campaigns.reduce((sum, campaign) => sum + (metaView === "sales" ? campaign.purchases ?? campaign.result : campaign.result), 0);
     const revenue = campaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0);
     const roas = spend > 0 ? revenue / spend : 0;
@@ -401,14 +403,14 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       return {
         primary: [
           { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
-          { label: "Resultados", value: formatNumber(results), tone: "green" as const },
-          { label: "Alcance", value: formatNumber(reach), tone: "yellow" as const },
-          { label: "CTR", value: formatPercent(ctrWeighted, 2), tone: "purple" as const }
+          { label: "Visitas ao perfil", value: formatNumber(results), tone: "green" as const },
+          { label: "Seguidores", value: formatNumber(followers), tone: "yellow" as const },
+          { label: "Alcance", value: formatNumber(reach), tone: "purple" as const }
         ],
         secondary: [
-          { label: "Custo por resultado", value: formatCurrency(costPerResult), tone: "orange" as const },
+          { label: "Custo por visita ao perfil", value: formatCurrency(costPerResult), tone: "orange" as const },
           { label: "Cliques no link", value: formatNumber(clicks), tone: "cyan" as const },
-          { label: "Taxa de conversao", value: formatPercent(conversionRate, 2), tone: "green" as const }
+          { label: "CTR", value: formatPercent(ctrWeighted, 2), tone: "green" as const }
         ]
       };
     }

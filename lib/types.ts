@@ -58,6 +58,7 @@ export interface CampaignMetric {
   reach: number;
   clicks?: number;
   purchases?: number;
+  followers?: number;
   ctr: number;
   roas: number;
   result: number;

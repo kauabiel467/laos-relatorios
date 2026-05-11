@@ -181,6 +181,27 @@ function getPurchaseCount(row: MetaInsightRow | undefined) {
   ]);
 }
 
+function getProfileVisits(row: MetaInsightRow | undefined) {
+  return getActionValue(row?.actions, [
+    "profile_visit",
+    "profile_visits",
+    "instagram_profile_visit",
+    "ig_profile_visit",
+    "ig_profile_visits"
+  ]);
+}
+
+function getFollowersCount(row: MetaInsightRow | undefined) {
+  return getActionValue(row?.actions, [
+    "follow",
+    "follows",
+    "instagram_follow",
+    "ig_follow",
+    "page_like",
+    "like"
+  ]);
+}
+
 function getResultMetric(row: MetaInsightRow | undefined) {
   const purchaseCount = getPurchaseCount(row);
   if (purchaseCount > 0) {
@@ -198,6 +219,11 @@ function getResultMetric(row: MetaInsightRow | undefined) {
   const leadCount = getActionValue(row?.actions, ["lead", "onsite_conversion.lead_grouped"]);
   if (leadCount > 0) {
     return { label: "Leads", value: leadCount };
+  }
+
+  const profileVisits = getProfileVisits(row);
+  if (profileVisits > 0) {
+    return { label: "Visitas ao perfil", value: profileVisits };
   }
 
   const linkClicks = getLinkClicks(row);
@@ -734,6 +760,7 @@ export async function fetchMetaDashboardData(
         reach: parseNumber(row.reach),
         clicks: parseNumber(row.clicks),
         purchases: campaignPurchases,
+        followers: getFollowersCount(row),
         ctr: parseNumber(row.ctr),
         roas: getRoasValue(row, campaignSpend, campaignRevenue),
         result: campaignMetric.value
