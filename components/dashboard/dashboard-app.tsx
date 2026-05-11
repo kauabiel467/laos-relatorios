@@ -78,6 +78,7 @@ const emptyAgeAudience: DashboardDataBundle["ageAudience"] = [];
 const emptyGenderAudience: DashboardDataBundle["genderAudience"] = [];
 
 type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "cpa";
+type MetaView = "sales" | "followers" | "messages";
 
 function formatDateInput(date: Date) {
   return date.toISOString().slice(0, 10);
@@ -125,6 +126,15 @@ function isSalesCampaign(campaign: CampaignMetric) {
   return campaign.objective.toLowerCase().includes("venda");
 }
 
+function isFollowersCampaign(campaign: CampaignMetric) {
+  const objective = campaign.objective.toLowerCase();
+  return objective.includes("engajamento") || objective.includes("reconhecimento") || objective.includes("alcance") || objective.includes("seguidores");
+}
+
+function isMessagesCampaign(campaign: CampaignMetric) {
+  return campaign.objective.toLowerCase().includes("mensagem");
+}
+
 interface DashboardAppProps {
   requiresWorkspaceSetup?: boolean;
 }
@@ -134,6 +144,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const router = useRouter();
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<DashboardTab>("meta");
+  const [metaView, setMetaView] = useState<MetaView>("sales");
   const [period, setPeriod] = useState<PeriodKey>("last_30d");
   const [customRange, setCustomRange] = useState(getDefaultCustomRange);
   const [search, setSearch] = useState("");
@@ -207,6 +218,15 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   }, [dashboardData?.campaigns, resolvedMediaMetrics]);
   const clientTicket = resolvedSnapshot.resultValue > 0 ? resolvedSnapshot.revenue / resolvedSnapshot.resultValue : 0;
   const clientConversionRate = linkClicks > 0 ? (resolvedSnapshot.resultValue / linkClicks) * 100 : 0;
+  const objectiveMatcher = useMemo(
+    () =>
+      ({
+        sales: isSalesCampaign,
+        followers: isFollowersCampaign,
+        messages: isMessagesCampaign
+      })[metaView],
+    [metaView]
+  );
 
   const drilldownContent = useMemo(() => {
     if (!metricDrilldown) return null;
@@ -327,6 +347,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
 
   const visibleCampaigns = useMemo(() => {
     const filtered = (dashboardData?.campaigns ?? []).filter((campaign) => {
+      if (!objectiveMatcher(campaign)) return false;
       if (campaignFilter === "all") return true;
       return campaign.status === campaignFilter;
     });
@@ -339,7 +360,67 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       }
       return ((Number(first) || 0) - (Number(second) || 0)) * sortDirection;
     });
-  }, [campaignFilter, dashboardData?.campaigns, sortColumn, sortDirection]);
+  }, [campaignFilter, dashboardData?.campaigns, objectiveMatcher, sortColumn, sortDirection]);
+
+  const metaViewSummary = useMemo(() => {
+    const campaigns = (dashboardData?.campaigns ?? []).filter(objectiveMatcher);
+    const spend = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
+    const reach = campaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
+    const clicks = campaigns.reduce((sum, campaign) => sum + (campaign.clicks ?? 0), 0);
+    const results = campaigns.reduce((sum, campaign) => sum + (metaView === "sales" ? campaign.purchases ?? campaign.result : campaign.result), 0);
+    const revenue = campaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0);
+    const roas = spend > 0 ? revenue / spend : 0;
+    const costPerResult = results > 0 ? spend / results : 0;
+    const ticket = results > 0 ? revenue / results : 0;
+    const ctrWeighted = reach > 0 ? campaigns.reduce((sum, campaign) => sum + campaign.ctr * campaign.reach, 0) / reach : 0;
+    const conversionRate = clicks > 0 ? (results / clicks) * 100 : 0;
+
+    if (metaView === "messages") {
+      return {
+        primary: [
+          { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
+          { label: "Conversas", value: formatNumber(results), tone: "green" as const },
+          { label: "Alcance", value: formatNumber(reach), tone: "yellow" as const },
+          { label: "CTR", value: formatPercent(ctrWeighted, 2), tone: "purple" as const }
+        ],
+        secondary: [
+          { label: "Custo por conversa", value: formatCurrency(costPerResult), tone: "orange" as const },
+          { label: "Cliques no link", value: formatNumber(clicks), tone: "cyan" as const },
+          { label: "Taxa de conversao", value: formatPercent(conversionRate, 2), tone: "green" as const }
+        ]
+      };
+    }
+
+    if (metaView === "followers") {
+      return {
+        primary: [
+          { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
+          { label: "Resultados", value: formatNumber(results), tone: "green" as const },
+          { label: "Alcance", value: formatNumber(reach), tone: "yellow" as const },
+          { label: "CTR", value: formatPercent(ctrWeighted, 2), tone: "purple" as const }
+        ],
+        secondary: [
+          { label: "Custo por resultado", value: formatCurrency(costPerResult), tone: "orange" as const },
+          { label: "Cliques no link", value: formatNumber(clicks), tone: "cyan" as const },
+          { label: "Taxa de conversao", value: formatPercent(conversionRate, 2), tone: "green" as const }
+        ]
+      };
+    }
+
+    return {
+      primary: [
+        { label: "Investimento Total", value: formatCurrency(spend || resolvedSnapshot.spend), tone: "blue" as const },
+        { label: "Vendas", value: formatNumber(results || resolvedSnapshot.resultValue), tone: "green" as const },
+        { label: "Faturamento Gerado", value: formatCurrency(revenue || resolvedSnapshot.revenue), tone: "yellow" as const },
+        { label: "ROAS", value: formatRoas(roas || resolvedSnapshot.roas), tone: "purple" as const }
+      ],
+      secondary: [
+        { label: "CPA real", value: formatCurrency(costPerResult || resolvedSnapshot.cpa), tone: "orange" as const },
+        { label: "Ticket medio", value: formatCurrency(ticket || clientTicket), tone: "cyan" as const },
+        { label: "Taxa de conversao", value: formatPercent(conversionRate || clientConversionRate, 2), tone: "green" as const }
+      ]
+    };
+  }, [clientConversionRate, clientTicket, dashboardData?.campaigns, metaView, objectiveMatcher, resolvedSnapshot]);
 
   function handleSelectClient(client: Client) {
     setSelectedClient(client);
@@ -676,6 +757,29 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
         onExport={exportReport}
       />
       <TabsNav activeTab={activeTab} onChange={setActiveTab} />
+      {activeTab === "meta" ? (
+        <div className="border-t border-border/60">
+          <div className="mx-auto flex max-w-[1600px] gap-2 overflow-x-auto px-4 py-2 lg:px-6">
+            {[
+              { key: "sales", label: "Vendas" },
+              { key: "followers", label: "Seguidores" },
+              { key: "messages", label: "Mensagens" }
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setMetaView(item.key as MetaView)}
+                className={clsx(
+                  "shrink-0 rounded-lg px-4 py-2 text-sm font-semibold transition",
+                  metaView === item.key ? "bg-blue/15 text-blue" : "text-muted hover:bg-white/5 hover:text-text"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       <main className="mx-auto max-w-[1600px] px-4 py-6 lg:px-6">
         {requiresWorkspaceSetup ? (
@@ -710,59 +814,46 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
             <section>
               <SectionTitle>Visao Geral</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard
-                  label="Investimento Total"
-                  value={formatCurrency(resolvedSnapshot.spend)}
-                  delta={formatPercent(resolvedSnapshot.spendDelta)}
-                  tone="blue"
-                  loading={dashboardLoading}
-                  clickable={!dashboardLoading}
-                  onClick={() => setMetricDrilldown("spend")}
-                />
-                <MetricCard
-                  label={resolvedSnapshot.resultLabel}
-                  value={formatNumber(resolvedSnapshot.resultValue)}
-                  delta={formatPercent(resolvedSnapshot.resultDelta)}
-                  tone="green"
-                  loading={dashboardLoading}
-                  clickable={!dashboardLoading}
-                  onClick={() => setMetricDrilldown("result")}
-                />
-                <MetricCard
-                  label="Faturamento Gerado"
-                  value={formatCurrency(resolvedSnapshot.revenue)}
-                  delta={formatPercent(resolvedSnapshot.revenueDelta)}
-                  tone="yellow"
-                  loading={dashboardLoading}
-                  clickable={!dashboardLoading}
-                  onClick={() => setMetricDrilldown("revenue")}
-                />
-                <MetricCard
-                  label="ROAS"
-                  value={formatRoas(resolvedSnapshot.roas)}
-                  delta={formatPercent(resolvedSnapshot.roasDelta)}
-                  tone="purple"
-                  loading={dashboardLoading}
-                  clickable={!dashboardLoading}
-                  onClick={() => setMetricDrilldown("roas")}
-                />
+                {metaViewSummary.primary.map((card) => (
+                  <MetricCard
+                    key={card.label}
+                    label={card.label}
+                    value={card.value}
+                    tone={card.tone}
+                    loading={dashboardLoading}
+                    clickable={!dashboardLoading && metaView === "sales" && (card.label === "Investimento Total" || card.label === "Vendas" || card.label === "Faturamento Gerado" || card.label === "ROAS")}
+                    onClick={
+                      metaView !== "sales"
+                        ? undefined
+                        : card.label === "Investimento Total"
+                          ? () => setMetricDrilldown("spend")
+                          : card.label === "Vendas"
+                            ? () => setMetricDrilldown("result")
+                            : card.label === "Faturamento Gerado"
+                              ? () => setMetricDrilldown("revenue")
+                              : card.label === "ROAS"
+                                ? () => setMetricDrilldown("roas")
+                                : undefined
+                    }
+                  />
+                ))}
               </div>
             </section>
 
             <section>
               <SectionTitle>Resultados de Conversao</SectionTitle>
               <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <MetricCard
-                  label="CPA real"
-                  value={formatCurrency(resolvedSnapshot.cpa)}
-                  delta={formatPercent(resolvedSnapshot.cpaDelta)}
-                  tone="orange"
-                  loading={dashboardLoading}
-                  clickable={!dashboardLoading}
-                  onClick={() => setMetricDrilldown("cpa")}
-                />
-                <MetricCard label="Ticket medio" value={formatCurrency(clientTicket)} tone="cyan" loading={dashboardLoading} />
-                <MetricCard label="Taxa de conversao" value={formatPercent(clientConversionRate, 2)} tone="green" loading={dashboardLoading} />
+                {metaViewSummary.secondary.map((card) => (
+                  <MetricCard
+                    key={card.label}
+                    label={card.label}
+                    value={card.value}
+                    tone={card.tone}
+                    loading={dashboardLoading}
+                    clickable={!dashboardLoading && metaView === "sales" && card.label === "CPA real"}
+                    onClick={metaView === "sales" && card.label === "CPA real" ? () => setMetricDrilldown("cpa") : undefined}
+                  />
+                ))}
               </div>
             </section>
 
