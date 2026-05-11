@@ -121,6 +121,10 @@ function getPeriodRange(period: PeriodKey, customRange: { start: string; end: st
   };
 }
 
+function isSalesCampaign(campaign: CampaignMetric) {
+  return campaign.objective.toLowerCase().includes("venda");
+}
+
 interface DashboardAppProps {
   requiresWorkspaceSetup?: boolean;
 }
@@ -397,9 +401,24 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     const range = getPeriodRange(period, customRange);
     const startDate = new Date(`${range.start}T12:00:00`);
     const endDate = new Date(`${range.end}T12:00:00`);
-    const salesCount = Math.max(resolvedSnapshot.resultValue, 0);
-    const averageTicket = salesCount > 0 ? resolvedSnapshot.revenue / salesCount : 0;
-    const reachMetric = resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("alcance"));
+    const exportCampaigns = (dashboardData?.campaigns ?? visibleCampaigns).filter(
+      (campaign) => isSalesCampaign(campaign) && campaign.status === "ACTIVE" && campaign.spend > 0 && campaign.result > 1
+    );
+    const filteredSpend = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
+    const filteredReach = exportCampaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
+    const filteredSales = exportCampaigns.reduce((sum, campaign) => sum + (campaign.purchases ?? campaign.result), 0);
+    const filteredRevenue = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0);
+    const averageTicket = filteredSales > 0 ? filteredRevenue / filteredSales : 0;
+    const filteredCpa = filteredSales > 0 ? filteredSpend / filteredSales : 0;
+    const filteredRoas = filteredSpend > 0 ? filteredRevenue / filteredSpend : 0;
+
+    const reportSpend = exportCampaigns.length ? filteredSpend : resolvedSnapshot.spend;
+    const reportReach = exportCampaigns.length ? filteredReach : (resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("alcance"))?.value ?? 0);
+    const reportSales = exportCampaigns.length ? filteredSales : Math.max(resolvedSnapshot.resultValue, 0);
+    const reportRevenue = exportCampaigns.length ? filteredRevenue : resolvedSnapshot.revenue;
+    const reportAverageTicket = exportCampaigns.length ? averageTicket : reportSales > 0 ? resolvedSnapshot.revenue / reportSales : 0;
+    const reportCpa = exportCampaigns.length ? filteredCpa : resolvedSnapshot.cpa;
+    const reportRoas = exportCampaigns.length ? filteredRoas : resolvedSnapshot.roas;
 
     const report = [
       `Segue o relatório do período: ${selectedClient.name}`,
@@ -408,14 +427,14 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       "",
       "CAMPANHA DE VENDA",
       "",
-      `✅ Investimento total: *${formatCurrency(resolvedSnapshot.spend)}*`,
+      `✅ Investimento total: *${formatCurrency(reportSpend)}*`,
       "",
-      `👥 Alcançamos *${formatNumber(reachMetric?.value ?? 0)}* pessoas`,
-      `🔥 Número de venda: *${formatNumber(salesCount)}*`,
-      `💵 Ticket médio: *${formatCurrency(averageTicket)}*`,
-      `🚀 Custo por venda: *${formatCurrency(resolvedSnapshot.cpa)}*`,
-      `💸 Valor total das vendas: *${formatCurrency(resolvedSnapshot.revenue)}*`,
-      `📈 ROAS (Retorno sobre investimento): *${formatRoas(resolvedSnapshot.roas)}*`
+      `👥 Alcançamos *${formatNumber(reportReach)}* pessoas`,
+      `🔥 Número de venda: *${formatNumber(reportSales)}*`,
+      `💵 Ticket médio: *${formatCurrency(reportAverageTicket)}*`,
+      `🚀 Custo por venda: *${formatCurrency(reportCpa)}*`,
+      `💸 Valor total das vendas: *${formatCurrency(reportRevenue)}*`,
+      `📈 ROAS (Retorno sobre investimento): *${formatRoas(reportRoas)}*`
     ].join("\n");
 
     navigator.clipboard.writeText(report).catch(() => undefined);
