@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
 
   if (errorReason || errorDescription) {
     const response = NextResponse.redirect(
-      new URL(`${returnTo}?meta=error&reason=${encodeURIComponent(errorDescription || errorReason || "oauth_cancelled")}`, request.url)
+      new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=${encodeURIComponent(errorDescription || errorReason || "oauth_cancelled")}`, request.url)
     );
     response.cookies.delete(META_OAUTH_STATE_COOKIE);
     response.cookies.delete(META_RETURN_COOKIE);
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
   const expectedState = await readMetaOAuthState();
   if (!code || !state || !expectedState || state !== expectedState) {
-    const response = NextResponse.redirect(new URL(`${returnTo}?meta=error&reason=invalid_state`, request.url));
+    const response = NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=invalid_state`, request.url));
     response.cookies.delete(META_OAUTH_STATE_COOKIE);
     response.cookies.delete(META_RETURN_COOKIE);
     return response;
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
   try {
     const sessionToken = await readMetaSessionToken();
     if (!sessionToken) {
-      const response = NextResponse.redirect(new URL(`${returnTo}?meta=error&reason=session_missing`, request.url));
+      const response = NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=session_missing`, request.url));
       response.cookies.delete(META_OAUTH_STATE_COOKIE);
       response.cookies.delete(META_RETURN_COOKIE);
       return response;
@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     const accessToken = await exchangeCodeForToken(code);
     const accounts = await fetchMetaAdAccounts(accessToken);
 
-    const response = NextResponse.redirect(new URL(`${returnTo}?meta=select`, request.url));
+    const response = NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=select`, request.url));
     response.cookies.delete(META_OAUTH_STATE_COOKIE);
     response.cookies.delete(META_RETURN_COOKIE);
     await saveMetaDraft(sessionToken, {
@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     return response;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Falha ao concluir a autenticacao da Meta.";
-    const response = NextResponse.redirect(new URL(`${returnTo}?meta=error&reason=${encodeURIComponent(message)}`, request.url));
+    const response = NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=${encodeURIComponent(message)}`, request.url));
     response.cookies.delete(META_OAUTH_STATE_COOKIE);
     response.cookies.delete(META_RETURN_COOKIE);
     return response;

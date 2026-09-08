@@ -1,3 +1,4 @@
+import { requireMetaUser } from "./meta-oauth";
 import type {
   AdItem,
   AgeAudiencePoint,
@@ -334,8 +335,8 @@ function buildFunnel(row: MetaInsightRow | undefined): FunnelStep[] {
 
   return ([
     { label: "Cliques", value: clicks, color: "indigo" },
-    { label: "Page views", value: landingPageViews || Math.round(clicks * 0.78), color: "purple" },
-    { label: "Checkout iniciado", value: initiatedCheckouts || Math.max(purchases, Math.round(clicks * 0.2)), color: "orange" },
+    { label: "Page views", value: landingPageViews, color: "purple" },
+    { label: "Checkout iniciado", value: initiatedCheckouts, color: "orange" },
     { label: "Vendas", value: purchases, color: "green" }
   ] satisfies FunnelStep[]).filter((step) => step.value > 0);
 }
@@ -575,20 +576,23 @@ async function fetchGraph<T>(path: string, params: Record<string, string>, acces
     access_token: accessToken
   });
 
-  const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${path}?${searchParams.toString()}`, {
-    cache: "no-store",
-    headers: {
-      Accept: "application/json"
-    }
-  });
-
-  const payload = await response.json();
-  if (!response.ok) {
-    const message = typeof payload?.error?.message === "string" ? payload.error.message : "Falha ao buscar dados da Meta.";
-    throw new Error(message);
+  const started = Date.now();
+  let result: Record<string, unknown> | undefined;
+  for(let page=0;page<50;page++) {
+    const remaining=25000-(Date.now()-started);
+    if(remaining<=0) throw new Error("A consulta excedeu o tempo disponível. Nenhum resultado parcial foi salvo.");
+    const response = await fetch(`https://graph.facebook.com/${META_GRAPH_VERSION}/${path}?${searchParams.toString()}`, {
+      cache:"no-store", signal:AbortSignal.timeout(Math.min(15000,remaining)), headers:{Accept:"application/json"}
+    });
+    const payload=await response.json();
+    if(!response.ok) throw new Error(typeof payload?.error?.message==="string" ? payload.error.message : "Falha ao buscar dados da Meta.");
+    if(!result) result=payload;
+    else if(Array.isArray(result.data)&&Array.isArray(payload.data)) result.data.push(...payload.data);
+    if(!payload.paging?.next) return result as T;
+    if(!payload.paging?.cursors?.after) throw new Error("A Meta não forneceu o cursor da próxima página. Nenhum resultado parcial foi salvo.");
+    searchParams.set("after",payload.paging.cursors.after);
   }
-
-  return payload as T;
+  throw new Error("Volume acima do limite desta consulta. Selecione um período menor.");
 }
 
 async function getMetaSession(): Promise<MetaSessionInfo> {
@@ -605,7 +609,7 @@ async function getMetaSession(): Promise<MetaSessionInfo> {
   const { data, error } = await admin
     .from("meta_integration_sessions")
     .select("access_token, selected_account_ids")
-    .eq("session_token", sessionToken)
+    .eq("session_token", sessionToken).eq("user_id", await requireMetaUser())
     .maybeSingle();
 
   if (error || !data?.access_token) {
@@ -758,6 +762,7 @@ export async function fetchMetaDashboardData(
         resultLabel: campaignMetric.label,
         spend: campaignSpend,
         reach: parseNumber(row.reach),
+        impressions: parseNumber(row.impressions),
         clicks: parseNumber(row.clicks),
         purchases: campaignPurchases,
         followers: getFollowersCount(row),
@@ -827,6 +832,8 @@ export async function fetchMetaCampaignAds(
   const accessToken = session.accessToken;
   const normalizedCampaignId = campaignId.replace(/^cmp_/, "");
 
+  const campaign = await fetchGraph<{account_id:string}>(normalizedCampaignId, {fields:"account_id"}, accessToken);
+  if (!ensureAccountAllowed(campaign.account_id, session.selectedAccountIds)) throw new Error("Campanha não autorizada.");
   const [insightsPayload, creativesPayload] = await Promise.all([
     fetchGraph<{ data: MetaAdInsightRow[] }>(
       `${normalizedCampaignId}/insights`,

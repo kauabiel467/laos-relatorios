@@ -4,9 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AdItem, CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
-import { adsByCampaign, cardapio, clients, snapshot as snapshotFallback } from "@/lib/mocks";
+const clients: Client[] = [{id:"",name:"Conecte uma conta Meta",status:"PAUSED",objective:"SALES"}];
 import { formatCurrency, formatNumber, formatPercent, formatRoas } from "@/lib/utils/format";
-import { AiPanel } from "./ai-panel";
+
 import { CampaignDrawer } from "./campaign-drawer";
 import { CampaignsTable } from "./campaigns-table";
 import { CardapioModal } from "./cardapio-modal";
@@ -163,7 +163,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const [teamOpen, setTeamOpen] = useState(false);
   const [cardapioOpen, setCardapioOpen] = useState(false);
   const [drawerCampaign, setDrawerCampaign] = useState<CampaignMetric | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
+
   const [metaOpen, setMetaOpen] = useState(false);
   const [metaStatus, setMetaStatus] = useState<MetaIntegrationStatus | null>(null);
   const [metaPending, setMetaPending] = useState(false);
@@ -174,13 +174,11 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const [campaignAds, setCampaignAds] = useState<AdItem[]>([]);
   const [campaignAdsLoading, setCampaignAdsLoading] = useState(false);
   const [campaignAdsError, setCampaignAdsError] = useState<string | null>(null);
-  const [aiText, setAiText] = useState("");
-  const [aiLoading, setAiLoading] = useState(false);
+
+
   const [toastVisible, setToastVisible] = useState(false);
   const [metricDrilldown, setMetricDrilldown] = useState<MetricDrillType | null>(null);
-  const [aiMessages, setAiMessages] = useState<string[]>([
-    "Ola! Sou sua analista de Meta Ads da Laos Assessoria. Conecte sua conta e pergunte sobre metricas, criativos ou otimizacoes."
-  ]);
+
 
   useEffect(() => {
     if (requiresWorkspaceSetup) {
@@ -208,23 +206,13 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   }, [availableClients, search]);
 
   const shouldUseMockMeta = metaStatus?.stage !== "connected";
-  const resolvedSnapshot = dashboardData?.snapshot ?? (shouldUseMockMeta ? snapshotFallback : emptyMetaSnapshot);
+  const resolvedSnapshot = dashboardData?.snapshot ?? emptyMetaSnapshot;
   const resolvedDailySeries = dashboardData?.dailySeries ?? emptyDailySeries;
   const resolvedMediaMetrics = dashboardData?.mediaMetrics ?? emptyMediaMetrics;
   const resolvedObjectiveDistribution = dashboardData?.objectiveDistribution ?? emptyObjectiveDistribution;
   const resolvedHourlyPerformance = dashboardData?.hourlyPerformance ?? emptyHourlyPerformance;
   const resolvedAgeAudience = dashboardData?.ageAudience ?? emptyAgeAudience;
   const resolvedGenderAudience = dashboardData?.genderAudience ?? emptyGenderAudience;
-  const linkClicks = useMemo(() => {
-    const clicksMetric = resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("cliques no link"))?.value;
-    if (typeof clicksMetric === "number" && clicksMetric > 0) {
-      return clicksMetric;
-    }
-
-    return (dashboardData?.campaigns ?? []).reduce((sum, campaign) => sum + (campaign.clicks ?? 0), 0);
-  }, [dashboardData?.campaigns, resolvedMediaMetrics]);
-  const clientTicket = resolvedSnapshot.resultValue > 0 ? resolvedSnapshot.revenue / resolvedSnapshot.resultValue : 0;
-  const clientConversionRate = linkClicks > 0 ? (resolvedSnapshot.resultValue / linkClicks) * 100 : 0;
   const objectiveMatcher = useMemo(
     () =>
       ({
@@ -380,7 +368,8 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     const roas = spend > 0 ? revenue / spend : 0;
     const costPerResult = results > 0 ? spend / results : 0;
     const ticket = results > 0 ? revenue / results : 0;
-    const ctrWeighted = reach > 0 ? campaigns.reduce((sum, campaign) => sum + campaign.ctr * campaign.reach, 0) / reach : 0;
+    const impressions = campaigns.reduce((sum,campaign)=>sum+(campaign.impressions??0),0);
+    const ctrWeighted = impressions > 0 ? clicks / impressions * 100 : 0;
     const conversionRate = clicks > 0 ? (results / clicks) * 100 : 0;
 
     if (metaView === "messages") {
@@ -417,18 +406,18 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
 
     return {
       primary: [
-        { label: "Investimento Total", value: formatCurrency(spend || resolvedSnapshot.spend), tone: "blue" as const },
-        { label: "Vendas", value: formatNumber(results || resolvedSnapshot.resultValue), tone: "green" as const },
-        { label: "Faturamento Gerado", value: formatCurrency(revenue || resolvedSnapshot.revenue), tone: "yellow" as const },
-        { label: "ROAS", value: formatRoas(roas || resolvedSnapshot.roas), tone: "purple" as const }
+        { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
+        { label: "Vendas", value: formatNumber(results), tone: "green" as const },
+        { label: "Faturamento Gerado", value: formatCurrency(revenue), tone: "yellow" as const },
+        { label: "ROAS", value: formatRoas(roas), tone: "purple" as const }
       ],
       secondary: [
-        { label: "CPA real", value: formatCurrency(costPerResult || resolvedSnapshot.cpa), tone: "orange" as const },
-        { label: "Ticket medio", value: formatCurrency(ticket || clientTicket), tone: "cyan" as const },
-        { label: "Taxa de conversao", value: formatPercent(conversionRate || clientConversionRate, 2), tone: "green" as const }
+        { label: "CPA real", value: formatCurrency(costPerResult), tone: "orange" as const },
+        { label: "Ticket medio", value: formatCurrency(ticket), tone: "cyan" as const },
+        { label: "Taxa de conversao", value: formatPercent(conversionRate, 2), tone: "green" as const }
       ]
     };
-  }, [clientConversionRate, clientTicket, dashboardData?.campaigns, metaView, objectiveMatcher, resolvedSnapshot]);
+  }, [dashboardData?.campaigns, metaView, objectiveMatcher]);
 
   function handleSelectClient(client: Client) {
     setSelectedClient(client);
@@ -445,63 +434,12 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     setSortDirection(-1);
   }
 
-  async function handleSendAi() {
-    const value = aiText.trim();
-    if (!value || aiLoading) return;
-
-    setAiMessages((current) => [...current, `Voce: ${value}`]);
-    setAiText("");
-    setAiLoading(true);
-
-    try {
-      const response = await fetch("/api/ai/insights", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          question: value,
-          context: {
-            client: selectedClient,
-            period,
-            customRange: period === "custom" ? customRange : null,
-            snapshot: resolvedSnapshot,
-            quickInsights: resolvedSnapshot.quickInsights,
-            alerts: resolvedSnapshot.alerts,
-            funnel: resolvedSnapshot.funnel,
-            campaigns: visibleCampaigns.slice(0, 12),
-            dailySeries: resolvedDailySeries,
-            mediaMetrics: resolvedMediaMetrics,
-            objectiveDistribution: resolvedObjectiveDistribution,
-            hourlyPerformance: resolvedHourlyPerformance,
-            ageAudience: resolvedAgeAudience,
-            genderAudience: resolvedGenderAudience
-          }
-        })
-      });
-
-      const payload = (await response.json()) as { answer?: string; error?: string };
-      if (!response.ok) {
-        throw new Error(payload.error || "Nao foi possivel consultar a IA agora.");
-      }
-
-      setAiMessages((current) => [...current, `IA: ${payload.answer || "Nao consegui gerar uma resposta com os dados atuais."}`]);
-    } catch (error) {
-      setAiMessages((current) => [
-        ...current,
-        `IA: ${error instanceof Error ? error.message : "Nao foi possivel consultar a IA agora."}`
-      ]);
-    } finally {
-      setAiLoading(false);
-    }
-  }
-
   function exportReport() {
     const range = getPeriodRange(period, customRange);
     const startDate = new Date(`${range.start}T12:00:00`);
     const endDate = new Date(`${range.end}T12:00:00`);
     const exportCampaigns = (dashboardData?.campaigns ?? visibleCampaigns).filter(
-      (campaign) => isSalesCampaign(campaign) && campaign.status === "ACTIVE" && campaign.spend > 0
+      (campaign) => isSalesCampaign(campaign) && campaign.spend > 0
     );
     const filteredSpend = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
     const filteredReach = exportCampaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
@@ -640,7 +578,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     }
 
     if (shouldUseMockMeta) {
-      setCampaignAds(adsByCampaign[drawerCampaign.id] || []);
+      setCampaignAds([]);
       setCampaignAdsError(null);
       setCampaignAdsLoading(false);
       return;
@@ -718,11 +656,13 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   }
 
   function startMetaOAuth() {
-    const returnTo = pathname || "/";
+    const returnTo = (pathname || "/traffic") + (searchParams.get("client") ? "?client=" + encodeURIComponent(searchParams.get("client")!) : "");
     window.location.href = `/api/integrations/meta/start?returnTo=${encodeURIComponent(returnTo)}`;
   }
 
   useEffect(() => {
+    if (searchParams.get("settings") === "team") setTeamOpen(true);
+    if (searchParams.get("connect") === "meta") setMetaOpen(true);
     const metaStep = searchParams.get("meta");
     const reason = searchParams.get("reason");
 
@@ -743,12 +683,13 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       })
       .finally(() => {
         setMetaPending(false);
-        router.replace(pathname || "/");
+        router.replace((pathname || "/traffic") + (searchParams.get("client") ? "?client="+encodeURIComponent(searchParams.get("client")!) : ""));
       });
   }, [pathname, router, searchParams, refreshMetaStatus]);
 
   return (
     <div className="min-h-screen">
+      <div className="p-4 border-b border-border"><a href={"/?"+new URLSearchParams({view:"integrations",...(searchParams.get("client")?{client:searchParams.get("client")!}:{})})} className="text-blue">← Voltar à central LAOS</a></div>
       <HeaderBar
         filteredClients={filteredClients}
         search={search}
@@ -906,7 +847,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
                             className={`flex h-full items-center rounded-lg bg-gradient-to-r px-3 text-xs font-semibold text-white ${colors[step.color]}`}
                             style={{ width: `${width}%` }}
                           >
-                            {index === 0 ? "100%" : formatPercent((step.value / resolvedSnapshot.funnel[index - 1].value) * 100, 1)}
+                            {index === 0 ? "100%" : formatPercent((resolvedSnapshot.funnel[index - 1].value > 0 ? step.value / resolvedSnapshot.funnel[index - 1].value : 0) * 100, 1)}
                           </div>
                         </div>
                       </div>
@@ -941,42 +882,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
           </div>
         ) : (
           <div className="space-y-6">
-            <section>
-              <SectionTitle>Pedidos & Faturamento</SectionTitle>
-              <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <MetricCard label="Faturamento total" value={formatCurrency(cardapio.faturamento)} tone="green" />
-                <MetricCard label="Numero de pedidos" value={formatNumber(cardapio.pedidos)} tone="blue" />
-                <MetricCard label="Ticket medio" value={formatCurrency(cardapio.ticket)} tone="orange" />
-                <MetricCard label="Taxa de conversao" value={formatPercent(cardapio.conversao, 2)} tone="purple" />
-              </div>
-            </section>
-
-            <section className="panel p-5">
-              <SectionTitle>Integracao futura</SectionTitle>
-              <div className="mt-5 grid gap-4 lg:grid-cols-2">
-                <div className="rounded-xl border border-border bg-bg p-4">
-                  <div className="mb-2 text-sm font-semibold">Cardapios digitais</div>
-                  <p className="text-sm leading-6 text-muted">
-                    A estrutura ja esta pronta para conectar APIs de pedidos por cliente e cruzar faturamento com investimento em Meta Ads.
-                  </p>
-                </div>
-                <div className="rounded-xl border border-border bg-bg p-4">
-                  <div className="mb-2 text-sm font-semibold">Supabase + historico</div>
-                  <p className="text-sm leading-6 text-muted">
-                    A proxima camada ideal e salvar clientes, credenciais seguras, snapshots e alertas historicos no backend.
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => setCardapioOpen(true)}
-                  className="rounded-lg bg-blue px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue/90"
-                >
-                  Conectar cardapio
-                </button>
-              </div>
-            </section>
+            <section className="panel p-6"><SectionTitle>Cardápio digital</SectionTitle><p className="mt-4 text-muted">Integração em planejamento. O fornecedor e o acesso à API precisam ser definidos para importar pedidos e faturamento.</p></section>
           </div>
         )}
       </main>
@@ -1122,16 +1028,6 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
         onStart={startMetaOAuth}
         onDisconnect={disconnectMeta}
         onConfirmSelection={confirmMetaSelection}
-      />
-      <AiPanel
-        open={aiOpen}
-        text={aiText}
-        messages={aiMessages}
-        loading={aiLoading}
-        onClose={() => setAiOpen(false)}
-        onOpen={() => setAiOpen((value) => !value)}
-        onTextChange={setAiText}
-        onSend={handleSendAi}
       />
       <div
         className={clsx(

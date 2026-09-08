@@ -11,10 +11,11 @@ import {
 } from "@/lib/integrations/meta-oauth";
 
 export async function GET(request: NextRequest) {
-  const returnTo = request.nextUrl.searchParams.get("returnTo") || "/";
+  const candidate = request.nextUrl.searchParams.get("returnTo") || "/traffic";
+  const returnTo = candidate.startsWith("/") && !candidate.startsWith("//") && !candidate.includes("\\") ? candidate : "/traffic";
 
   if (!hasMetaOAuthConfig()) {
-    return NextResponse.redirect(new URL(`${returnTo}?meta=error&reason=missing_config`, request.url));
+    return NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=missing_config`, request.url));
   }
 
   const { state, sessionToken, returnTo: normalizedReturnTo } = await createMetaOAuthState(returnTo);

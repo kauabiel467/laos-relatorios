@@ -56,6 +56,7 @@ export interface CampaignMetric {
   resultLabel: string;
   spend: number;
   reach: number;
+  impressions?: number;
   clicks?: number;
   purchases?: number;
   followers?: number;

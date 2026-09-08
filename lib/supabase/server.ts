@@ -31,7 +31,7 @@ export async function getSupabaseServerClient() {
       },
       setAll(cookieList: CookieUpdate[]) {
         cookieList.forEach(({ name, value, options }) => {
-          cookieStore.set(name, value, options);
+          try { cookieStore.set(name, value, options); } catch { /* Server Components refresh through middleware. */ }
         });
       }
     }

@@ -97,7 +97,7 @@ async function acceptPendingInvitations() {
   const user = await getCurrentUser();
   const email = user?.email?.trim().toLowerCase();
 
-  if (!admin || !user || !email) {
+  if (!admin || !user || !email || !user.email_confirmed_at) {
     return;
   }
 
@@ -179,53 +179,11 @@ export async function getTeamContext(): Promise<TeamContext> {
 
 export async function createTeam(name: string) {
   const supabase = await getSupabaseServerClient();
-  const admin = getSupabaseAdminClient();
   const user = await getCurrentUser();
-
-  if (!supabase || !user) {
-    throw new Error("Voce precisa estar logado para criar uma equipe.");
-  }
-
-  const currentUser = user;
-
-  async function insertWithClient(client: NonNullable<Awaited<ReturnType<typeof getSupabaseServerClient>>> | NonNullable<ReturnType<typeof getSupabaseAdminClient>>) {
-    const { data: team, error: teamError } = await client
-      .from("teams")
-      .insert({ name, created_by: currentUser.id })
-      .select("id")
-      .single();
-
-    if (teamError) {
-      throw teamError;
-    }
-
-    const { error: memberError } = await client.from("team_members").insert({
-      team_id: team.id,
-      user_id: currentUser.id,
-      email: currentUser.email,
-      role: "owner"
-    });
-
-    if (memberError) {
-      throw memberError;
-    }
-
-    return team.id as string;
-  }
-
-  try {
-    return await insertWithClient(supabase);
-  } catch (error) {
-    if (admin) {
-      try {
-        return await insertWithClient(admin);
-      } catch (adminError) {
-        throw new Error(normalizeTeamError(adminError));
-      }
-    }
-
-    throw new Error(normalizeTeamError(error));
-  }
+  if (!supabase || !user) throw new Error("Entre na sua conta para criar uma equipe.");
+  const {data,error} = await supabase.rpc("agency_create_team",{team_name:name});
+  if(error) throw new Error(normalizeTeamError(error));
+  return data as string;
 }
 
 export async function inviteTeamMember(email: string, role: TeamRole) {
@@ -238,6 +196,7 @@ export async function inviteTeamMember(email: string, role: TeamRole) {
     throw new Error("Voce nao tem permissao para convidar membros.");
   }
 
+  if(context.currentRole === "manager" && role !== "operator") throw new Error("Gerentes podem convidar apenas operadores.");
   const normalizedEmail = email.trim().toLowerCase();
   const { error } = await supabase.from("team_invitations").upsert({
     team_id: context.team.id,

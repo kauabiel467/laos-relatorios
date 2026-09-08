@@ -27,6 +27,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL!, getSupabaseBrowserKey()!, {
+    global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, {...options, signal: AbortSignal.timeout(8000)}) },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -38,6 +39,6 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  await supabase.auth.getUser();
+  try { await supabase.auth.getUser(); } catch { /* Protected pages and APIs still verify authentication. */ }
   return response;
 }

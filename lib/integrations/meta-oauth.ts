@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { env } from "@/lib/env";
-import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { MetaAdAccount, MetaIntegrationStatus } from "@/lib/types";
 
 const META_GRAPH_VERSION = "v22.0";
@@ -45,7 +45,7 @@ export function getMetaCookieOptions(maxAge: number) {
 }
 
 function sanitizeReturnTo(returnTo?: string) {
-  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//")) {
+  if (!returnTo || !returnTo.startsWith("/") || returnTo.startsWith("//") || returnTo.includes("\\")) {
     return "/";
   }
 
@@ -71,6 +71,15 @@ function getMetaAdminClient() {
   return getSupabaseAdminClient();
 }
 
+export async function requireMetaUser() {
+  const db = await getSupabaseServerClient();
+  const { data } = db ? await db.auth.getUser() : { data: { user: null } };
+  if (!data.user) throw new Error("Entre na sua conta para conectar a Meta.");
+  const { data: member } = await db!.from("team_members").select("id").eq("user_id", data.user.id).limit(1).maybeSingle();
+  if (!member) throw new Error("A integração Meta é exclusiva da equipe da agência.");
+  return data.user.id;
+}
+
 async function getMetaSessionToken() {
   const cookieStore = await cookies();
   return cookieStore.get(META_SESSION_COOKIE)?.value || null;
@@ -85,7 +94,7 @@ async function getMetaSessionRow(sessionToken: string) {
   const { data, error } = await admin
     .from("meta_integration_sessions")
     .select("session_token, stage, access_token, accounts, selected_account_ids, connected_at")
-    .eq("session_token", sessionToken)
+    .eq("session_token", sessionToken).eq("user_id", await requireMetaUser())
     .maybeSingle();
 
   if (error) {
@@ -104,9 +113,13 @@ async function upsertMetaSession(
     throw new Error("Supabase server nao configurado para persistir a integracao da Meta.");
   }
 
+  const userId = await requireMetaUser();
+  const {data: existing, error: lookupError} = await admin.from("meta_integration_sessions").select("user_id").eq("session_token",sessionToken).maybeSingle();
+  if(lookupError || (existing && existing.user_id !== userId)) throw new Error("Sessão inválida. Reconecte a Meta.");
   const { error } = await admin.from("meta_integration_sessions").upsert(
     {
       session_token: sessionToken,
+      user_id: userId,
       stage: payload.stage,
       access_token: payload.access_token ?? null,
       accounts: payload.accounts ?? [],
@@ -129,7 +142,7 @@ async function deleteMetaSession(sessionToken: string) {
     return;
   }
 
-  await admin.from("meta_integration_sessions").delete().eq("session_token", sessionToken);
+  await admin.from("meta_integration_sessions").delete().eq("session_token", sessionToken).eq("user_id", await requireMetaUser());
 }
 
 export function hasMetaOAuthConfig() {
@@ -284,6 +297,7 @@ export async function getMetaStatus(): Promise<MetaIntegrationStatus> {
 
 export async function createMetaOAuthState(returnTo?: string) {
   const state = crypto.randomUUID();
+  await requireMetaUser();
   const sessionToken = crypto.randomUUID();
 
   return {
@@ -300,7 +314,7 @@ export async function readMetaOAuthState() {
 
 export async function readMetaReturnTo() {
   const cookieStore = await cookies();
-  return cookieStore.get(META_RETURN_COOKIE)?.value || "/";
+  return sanitizeReturnTo(cookieStore.get(META_RETURN_COOKIE)?.value);
 }
 
 export async function readMetaSessionToken() {

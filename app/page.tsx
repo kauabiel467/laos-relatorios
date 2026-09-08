@@ -1,32 +1,24 @@
+export const dynamic = "force-dynamic";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { DashboardApp } from "@/components/dashboard/dashboard-app";
-import { hasSupabaseEnv } from "@/lib/env";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import { getTeamContext } from "@/lib/team/server";
-
+import { AgencyWorkspace } from "@/components/agency/workspace";
 export default async function HomePage() {
-  let requiresWorkspaceSetup = false;
-
-  if (hasSupabaseEnv()) {
-    const supabase = await getSupabaseServerClient();
+  const db = await getSupabaseServerClient();
+  if (!db) redirect("/login");
+  if (db) {
     const {
-      data: { user }
-    } = await supabase!.auth.getUser();
-
-    if (!user) {
-      redirect("/login");
-    }
-
-    const teamContext = await getTeamContext();
-    if (!teamContext.team) {
-      requiresWorkspaceSetup = true;
-    }
+      data: { user },
+    } = await db.auth.getUser();
+    if (!user) redirect("/login");
   }
-
   return (
-    <Suspense fallback={<div className="min-h-screen bg-bg" />}>
-      <DashboardApp requiresWorkspaceSetup={requiresWorkspaceSetup} />
+    <Suspense
+      fallback={
+        <main className="agency-loading">Carregando sua área de trabalho…</main>
+      }
+    >
+      <AgencyWorkspace />
     </Suspense>
   );
 }
