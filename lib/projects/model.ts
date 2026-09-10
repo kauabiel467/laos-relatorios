@@ -21,6 +21,7 @@ export type MetricKey =
 export type SectionKey =
   | "metrics"
   | "daily"
+  | "results"
   | "funnel"
   | "campaigns"
   | "adsets"
@@ -28,6 +29,20 @@ export type SectionKey =
   | "platforms"
   | "audience"
   | "analysis";
+export type MetricSize = "compact" | "wide" | "full";
+export type CustomMetricFormat = "money" | "number" | "percent" | "ratio";
+export interface CustomMetricDefinition {
+  id: string;
+  kind: "manual" | "calculated";
+  label: string;
+  description: string;
+  format: CustomMetricFormat;
+  lower?: boolean;
+  value?: number;
+  left?: MetricKey;
+  right?: MetricKey;
+  operation?: "add" | "subtract" | "divide" | "percentage";
+}
 export interface AnalysisConfig {
   preset: "last_7d" | "last_30d" | "last_month" | "custom";
   since: string;
@@ -41,6 +56,11 @@ export interface AnalysisConfig {
   subtitle: string;
   analysis: string;
   template: string;
+  custom_metrics?: CustomMetricDefinition[];
+  metric_order?: string[];
+  metric_sizes?: Record<string, MetricSize>;
+  chart_metric?: MetricKey;
+  funnel_metrics?: MetricKey[];
 }
 export interface MetricDefinition {
   label: string;
@@ -157,6 +177,7 @@ export const METRICS: Record<MetricKey, MetricDefinition> = {
 export const SECTIONS: Record<SectionKey, string> = {
   metrics: "Indicadores principais",
   daily: "Evolução diária",
+  results: "Evolução de resultados",
   funnel: "Funil de resultados",
   campaigns: "Campanhas em destaque",
   adsets: "Conjuntos de anúncios",
@@ -191,6 +212,7 @@ export const TEMPLATES: {
     sections: [
       "metrics",
       "daily",
+      "results",
       "funnel",
       "campaigns",
       "adsets",
@@ -213,7 +235,15 @@ export const TEMPLATES: {
       "ctr",
       "cpm",
     ],
-    sections: ["metrics", "daily", "campaigns", "adsets", "ads", "analysis"],
+    sections: [
+      "metrics",
+      "daily",
+      "results",
+      "campaigns",
+      "adsets",
+      "ads",
+      "analysis",
+    ],
   },
   {
     id: "leads",
@@ -230,7 +260,15 @@ export const TEMPLATES: {
       "ctr",
       "cpc",
     ],
-    sections: ["metrics", "daily", "campaigns", "adsets", "ads", "analysis"],
+    sections: [
+      "metrics",
+      "daily",
+      "results",
+      "campaigns",
+      "adsets",
+      "ads",
+      "analysis",
+    ],
   },
   {
     id: "custom",
@@ -247,7 +285,7 @@ export const TEMPLATES: {
       "cpa",
       "cost_message",
     ],
-    sections: ["metrics", "daily", "campaigns", "analysis"],
+    sections: ["metrics", "daily", "results", "campaigns", "analysis"],
   },
 ];
 export type MetricValues = Record<MetricKey, number | null>;
@@ -321,6 +359,13 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
     subtitle: "Análise de desempenho",
     analysis: "",
     template: t.id,
+    custom_metrics: [],
+    metric_order: [...t.metrics],
+    metric_sizes: {},
+    chart_metric:
+      t.metrics.find((metric) =>
+        ["purchases", "messages", "leads", "revenue"].includes(metric),
+      ) ?? "link_clicks",
   };
 }
 export function formatMetric(
@@ -345,6 +390,46 @@ export function metricChange(
   return current == null || previous == null || previous === 0
     ? null
     : ((current - previous) / Math.abs(previous)) * 100;
+}
+
+export function customMetricValue(
+  metric: CustomMetricDefinition,
+  values: MetricValues | null | undefined,
+) {
+  if (metric.kind === "manual") return metric.value ?? null;
+  if (!values || !metric.left || !metric.right || !metric.operation)
+    return null;
+  const left = values[metric.left],
+    right = values[metric.right];
+  if (left == null || right == null) return null;
+  if (
+    (metric.operation === "divide" || metric.operation === "percentage") &&
+    right === 0
+  )
+    return null;
+  if (metric.operation === "add") return left + right;
+  if (metric.operation === "subtract") return left - right;
+  if (metric.operation === "percentage") return (left / right) * 100;
+  return left / right;
+}
+
+export function formatCustomMetric(
+  metric: CustomMetricDefinition,
+  value: number | null | undefined,
+  currency = "BRL",
+) {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return (
+    new Intl.NumberFormat("pt-BR", {
+      maximumFractionDigits: metric.format === "number" ? 0 : 2,
+      ...(metric.format === "money" ? { style: "currency", currency } : {}),
+    }).format(value) +
+    (metric.format === "percent"
+      ? "%"
+      : metric.format === "ratio"
+        ? "×"
+        : "")
+  );
 }
 
 export function comparisonDates(config: Pick<AnalysisConfig,'preset'|'since'|'until'>) {
