@@ -34,7 +34,11 @@ do $$ begin
  if not exists(select 1 from public.team_members where user_id=auth.uid() and role='owner') then raise exception 'Atomic creation failed';end if;
 end $$;
 select set_config('request.jwt.claim.sub','aeaa0000-0000-4000-8000-000000000001',true);
-do $$ begin
+do $ declare created_client_id uuid; begin
+ insert into public.agency_clients(team_id,name)
+ values('aebb0000-0000-4000-8000-000000000001','Created through returning')
+ returning id into created_client_id;
+ if created_client_id is null then raise exception 'Project insert returning failed';end if;
  if (select count(*) from public.agency_records where client_id='aecc0000-0000-4000-8000-000000000001')<>4 then raise exception 'Staff visibility failed';end if;
  update public.agency_records set title='Edited draft' where client_id='aecc0000-0000-4000-8000-000000000001' and status='draft';
  if not found then raise exception 'Draft update failed';end if;
@@ -48,4 +52,4 @@ do $$ begin
  begin perform 1 from public.agency_records; raise exception 'Anonymous read permitted';exception when insufficient_privilege then null;end;
 end $$;
 rollback;
-select 'PASS: client visibility, no client writes, outsider isolation, no ownership takeover, atomic teams, staff drafts, immutable publication, anonymous isolation; fixtures rolled back' as result;
+select 'PASS: project insert returning, client visibility, no client writes, outsider isolation, no ownership takeover, atomic teams, staff drafts, immutable publication, anonymous isolation; fixtures rolled back' as result;
