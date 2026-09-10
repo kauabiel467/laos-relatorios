@@ -4,6 +4,8 @@ import { useEffect, useState, useRef } from "react";
 import {
   METRICS,
   SECTIONS,
+  customMetricValue,
+  formatCustomMetric,
   formatMetric,
   metricChange,
   periodDates,
@@ -13,8 +15,24 @@ import {
   type InsightItem,
   type SectionKey,
   type MetricKey,
+  type CustomMetricDefinition,
+  type MetricSize,
 } from "@/lib/projects/model";
 import { Dialog, MetaMark, shortDate } from "./ui";
+import { LineChart } from "./line-chart";
+
+const defaultCustomMetric = (): CustomMetricDefinition => ({
+  id: "",
+  kind: "manual",
+  label: "",
+  description: "",
+  format: "number",
+  value: 0,
+  left: "revenue",
+  right: "spend",
+  operation: "divide",
+});
+
 export function AnalysisView({
   document: doc,
   clientName,
@@ -43,7 +61,11 @@ export function AnalysisView({
     [share, setShare] = useState(false),
     [menu, setMenu] = useState(false),
     [copied, setCopied] = useState(false),
-    [link, setLink] = useState("");
+    [link, setLink] = useState(""),
+    [draggedMetric, setDraggedMetric] = useState(""),
+    [customMetricOpen, setCustomMetricOpen] = useState(false),
+    [editingCustomId, setEditingCustomId] = useState(""),
+    [customMetric, setCustomMetric] = useState(defaultCustomMetric());
   useEffect(() => {
     setConfig(doc.config);
     setTitle(doc.title);
@@ -69,6 +91,97 @@ export function AnalysisView({
     title !== doc.title;
   const patch = (value: Partial<AnalysisConfig>) =>
     setConfig((c) => ({ ...c, ...value }));
+  const customMetrics = config.custom_metrics ?? [];
+  const availableMetricIds = [
+    ...config.metrics,
+    ...customMetrics.map((metric) => metric.id),
+  ];
+  const metricOrder = [
+    ...(config.metric_order ?? []).filter((id) =>
+      availableMetricIds.includes(id),
+    ),
+    ...availableMetricIds.filter(
+      (id) => !(config.metric_order ?? []).includes(id),
+    ),
+  ];
+  const funnelMetrics: MetricKey[] = config.funnel_metrics?.length
+    ? config.funnel_metrics
+    : config.metrics.includes("purchases")
+      ? ["link_clicks", "landing_views", "checkouts", "purchases"]
+      : config.metrics.includes("messages")
+        ? ["impressions", "link_clicks", "messages"]
+        : ["impressions", "link_clicks", "leads"];
+  const replaceMetric = (current: MetricKey, next: MetricKey) => {
+    if (current === next || config.metrics.includes(next)) return;
+    const sizes = { ...(config.metric_sizes ?? {}) };
+    if (sizes[current]) {
+      sizes[next] = sizes[current];
+      delete sizes[current];
+    }
+    patch({
+      metrics: config.metrics.map((metric) =>
+        metric === current ? next : metric,
+      ),
+      metric_order: metricOrder.map((metric) =>
+        metric === current ? next : metric,
+      ),
+      metric_sizes: sizes,
+      chart_metric: config.chart_metric === current ? next : config.chart_metric,
+      funnel_metrics: config.funnel_metrics
+        ? Array.from(
+            new Set(
+              config.funnel_metrics.map((metric) =>
+                metric === current ? next : metric,
+              ),
+            ),
+          )
+        : undefined,
+    });
+  };
+  const removeMetric = (id: string) => {
+    const builtIn = id in METRICS;
+    if (builtIn && config.metrics.length <= 1) return;
+    patch({
+      metrics: builtIn
+        ? config.metrics.filter((metric) => metric !== id)
+        : config.metrics,
+      custom_metrics: builtIn
+        ? customMetrics
+        : customMetrics.filter((metric) => metric.id !== id),
+      metric_order: metricOrder.filter((metric) => metric !== id),
+      metric_sizes: Object.fromEntries(
+        Object.entries(config.metric_sizes ?? {}).filter(([metric]) => metric !== id),
+      ),
+    });
+  };
+  const reorderMetric = (target: string) => {
+    if (!draggedMetric || draggedMetric === target) return;
+    const next = metricOrder.filter((metric) => metric !== draggedMetric);
+    next.splice(next.indexOf(target), 0, draggedMetric);
+    patch({ metric_order: next });
+    setDraggedMetric("");
+  };
+  const resizeMetric = (id: string) => {
+    const current = config.metric_sizes?.[id] ?? "compact";
+    const next: MetricSize =
+      current === "compact" ? "wide" : current === "wide" ? "full" : "compact";
+    patch({
+      metric_sizes: { ...(config.metric_sizes ?? {}), [id]: next },
+    });
+  };
+  const saveCustomMetric = () => {
+    const id = editingCustomId || `custom_${Date.now().toString(36)}`;
+    const next = { ...customMetric, id };
+    patch({
+      custom_metrics: editingCustomId
+        ? customMetrics.map((metric) => (metric.id === id ? next : metric))
+        : [...customMetrics, next],
+      metric_order: editingCustomId ? metricOrder : [...metricOrder, id],
+    });
+    setEditingCustomId("");
+    setCustomMetric(defaultCustomMetric());
+    setCustomMetricOpen(false);
+  };
   const action = async (a: string) => {
     setMenu(false);
     await onAction(
@@ -104,9 +217,7 @@ export function AnalysisView({
     patch({ sections });
   };
   const compare =
-    doc.config.comparison === "previous"
-      ? comparisonDates(doc.config)
-      : doc.config;
+    config.comparison === "previous" ? comparisonDates(config) : config;
   const row = (items: InsightItem[], name: string) => (
     <div className="pj-table-scroll">
       <table>
@@ -114,7 +225,7 @@ export function AnalysisView({
           <tr>
             <th>{name}</th>
             <th>Investimento</th>
-            {doc.config.metrics
+            {config.metrics
               .filter((k) => !["spend", "reach", "impressions"].includes(k))
               .slice(0, 4)
               .map((k) => (
@@ -141,7 +252,7 @@ export function AnalysisView({
                 )}
               </td>
               <td>{formatMetric("spend", item.metrics.spend, currency)}</td>
-              {doc.config.metrics
+              {config.metrics
                 .filter((k) => !["spend", "reach", "impressions"].includes(k))
                 .slice(0, 4)
                 .map((k) => (
@@ -171,22 +282,97 @@ export function AnalysisView({
       case "metrics":
         return (
           <div className="pj-metric-grid">
-            {doc.config.metrics.map((k) => {
-              const m = METRICS[k],
-                v = data.current[k],
-                p = data.previous?.[k],
-                delta = metricChange(v, p);
+            {metricOrder.map((id) => {
+              const custom = customMetrics.find((metric) => metric.id === id);
+              const builtIn = id in METRICS ? (id as MetricKey) : null;
+              if (!custom && !builtIn) return null;
+              const definition = builtIn ? METRICS[builtIn] : custom!;
+              const value = builtIn
+                ? data.current[builtIn]
+                : customMetricValue(custom!, data.current);
+              const previous = builtIn
+                ? data.previous?.[builtIn]
+                : custom?.kind === "calculated"
+                  ? customMetricValue(custom, data.previous)
+                  : null;
+              const delta = metricChange(value, previous);
+              const size = config.metric_sizes?.[id] ?? "compact";
+              const formatted = builtIn
+                ? formatMetric(builtIn, value, currency)
+                : formatCustomMetric(custom!, value, currency);
+              const formattedPrevious = builtIn
+                ? formatMetric(builtIn, previous, currency)
+                : formatCustomMetric(custom!, previous, currency);
               return (
-                <article className="pj-metric" key={k}>
+                <article
+                  className={`pj-metric size-${size} ${editor && !preview ? "editable" : ""}`}
+                  key={id}
+                  onDragOver={(event) => {
+                    if (editor && !preview) event.preventDefault();
+                  }}
+                  onDrop={() => reorderMetric(id)}
+                >
+                  {editor && !preview && (
+                    <div className="pj-metric-controls">
+                      <button
+                        className="pj-drag-handle"
+                        draggable
+                        aria-label={`Arrastar ${definition.label}`}
+                        title="Segure e arraste para reordenar"
+                        onDragStart={() => setDraggedMetric(id)}
+                        onDragEnd={() => setDraggedMetric("")}
+                      >
+                        ⠿
+                      </button>
+                      {builtIn && (
+                        <select
+                          aria-label={`Trocar ${definition.label}`}
+                          value={builtIn}
+                          onChange={(event) =>
+                            replaceMetric(builtIn, event.target.value as MetricKey)
+                          }
+                        >
+                          {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
+                            <option
+                              key={metric}
+                              value={metric}
+                              disabled={
+                                metric !== builtIn && config.metrics.includes(metric)
+                              }
+                            >
+                              {METRICS[metric].label}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        aria-label={`Alterar tamanho de ${definition.label}`}
+                        title="Alternar entre compacto, largo e largura total"
+                        onClick={() => resizeMetric(id)}
+                      >
+                        {size === "compact" ? "1×" : size === "wide" ? "2×" : "4×"}
+                      </button>
+                      <button
+                        aria-label={`Remover ${definition.label}`}
+                        disabled={builtIn != null && config.metrics.length <= 1}
+                        onClick={() => removeMetric(id)}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                   <span>
-                    {m.label} <abbr title={m.description}>ⓘ</abbr>
+                    {definition.label}{" "}
+                    <abbr title={definition.description || "Métrica personalizada"}>
+                      ⓘ
+                    </abbr>
                   </span>
                   <div>
-                    <strong>{formatMetric(k, v, currency)}</strong>
+                    <strong>{formatted}</strong>
                     {delta != null && (
                       <small
                         className={
-                          (m.lower ? delta < 0 : delta > 0)
+                          (definition.lower ? delta < 0 : delta > 0)
                             ? "positive"
                             : delta === 0
                               ? "neutral"
@@ -198,8 +384,8 @@ export function AnalysisView({
                       </small>
                     )}
                   </div>
-                  {data.previous && (
-                    <p>{formatMetric(k, p, currency)} no período anterior</p>
+                  {data.previous && previous != null && (
+                    <p>{formattedPrevious} no período anterior</p>
                   )}
                 </article>
               );
@@ -207,51 +393,17 @@ export function AnalysisView({
           </div>
         );
       case "daily": {
-        const vals = data.daily.map((d) => d.metrics.spend ?? 0),
-          max = Math.max(...vals, 1);
         return (
           <section className="pj-block">
             <h3>Investimento ao longo do período</h3>
-            {vals.length ? (
+            {data.daily.length ? (
               <>
-                <svg
-                  viewBox="0 0 900 200"
-                  role="img"
-                  aria-label="Gráfico do investimento diário"
-                >
-                  <line x1="20" y1="175" x2="880" y2="175" stroke="#d9e1e9" />
-                  <line x1="20" y1="90" x2="880" y2="90" stroke="#edf1f6" />
-                  <polyline
-                    points={vals
-                      .map(
-                        (v, i) =>
-                          `${20 + (i * 860) / Math.max(vals.length - 1, 1)},${175 - (v / max) * 150}`,
-                      )
-                      .join(" ")}
-                    fill="none"
-                    stroke="#1fb06d"
-                    strokeWidth="3"
-                    strokeLinejoin="round"
-                  />
-                  {vals.map((v, i) => (
-                    <circle
-                      key={i}
-                      cx={20 + (i * 860) / Math.max(vals.length - 1, 1)}
-                      cy={175 - (v / max) * 150}
-                      r="4"
-                      fill="#1fb06d"
-                    >
-                      <title>
-                        {shortDate(data!.daily[i].date)}:{" "}
-                        {formatMetric("spend", v, currency)}
-                      </title>
-                    </circle>
-                  ))}
-                </svg>
-                <div className="pj-chart-axis">
-                  <span>{shortDate(data.daily[0].date)}</span>
-                  <span>{shortDate(data.daily.at(-1)!.date)}</span>
-                </div>
+                <LineChart
+                  daily={data.daily}
+                  metric="spend"
+                  currency={currency}
+                  color="#22c55e"
+                />
                 <details>
                   <summary>Ver valores por dia</summary>
                   {row(
@@ -270,17 +422,28 @@ export function AnalysisView({
           </section>
         );
       }
+      case "results": {
+        const metric = config.chart_metric ??
+          config.metrics.find((key) => key !== "spend") ??
+          "link_clicks";
+        return (
+          <section className="pj-block">
+            <h3>{METRICS[metric].label} ao longo do período</h3>
+            <LineChart
+              daily={data.daily}
+              metric={metric}
+              currency={currency}
+              color="#3b82f6"
+            />
+          </section>
+        );
+      }
       case "funnel": {
-        const keys: MetricKey[] = doc.config.metrics.includes("purchases")
-          ? ["link_clicks", "landing_views", "checkouts", "purchases"]
-          : doc.config.metrics.includes("messages")
-            ? ["impressions", "link_clicks", "messages"]
-            : ["impressions", "link_clicks", "leads"];
         return (
           <section className="pj-block">
             <h3>Etapas de resultado</h3>
             <div className="pj-funnel">
-              {keys.map((k, i) => (
+              {funnelMetrics.map((k, i) => (
                 <div
                   key={k}
                   style={{
@@ -345,7 +508,7 @@ export function AnalysisView({
           <section className="pj-block">
             <h3>Análise e próximos passos</h3>
             <p className="pj-prose">
-              {doc.config.analysis || "Nenhuma análise adicionada pelo gestor."}
+              {config.analysis || "Nenhuma análise adicionada pelo gestor."}
             </p>
           </section>
         );
@@ -363,71 +526,83 @@ export function AnalysisView({
         <button onClick={onBack}>
           ← {preview ? clientName : "Voltar ao projeto"}
         </button>
-        <strong>{doc.title}</strong>
+        <strong>{title}</strong>
         <span className="pj-badge">
           {doc.status === "published" ? "Publicado" : "Rascunho"}
         </span>
         <div className="pj-toolbar-right">
-          {staff && (
+          {staff && preview && (
             <button onClick={() => setPreview(!preview)}>
-              {preview ? "Voltar à edição" : "Ver como cliente"}
+              Voltar à edição
             </button>
+          )}
+          {staff && !preview && (
+            <a
+              className="pj-button"
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Ver como cliente ↗
+            </a>
           )}
           <button onClick={() => setShare(true)}>Compartilhar ↗</button>
           {staff && !preview && (
-            <button aria-label="Mais ações" onClick={() => setMenu(!menu)}>
-              •••
-            </button>
+            <div className="pj-more-actions">
+              <button aria-label="Mais ações" onClick={() => setMenu(!menu)}>
+                •••
+              </button>
+              {menu && (
+                <div className="pj-menu">
+                  {editable && (
+                    <button
+                      onClick={() => {
+                        setEditor(true);
+                        setMenu(false);
+                      }}
+                    >
+                      Configurações e blocos
+                    </button>
+                  )}
+                  <button disabled={busy} onClick={() => void action("template")}>
+                    Salvar como template
+                  </button>
+                  <button disabled={busy} onClick={() => void action("duplicate")}>
+                    Duplicar {doc.kind === "dashboard" ? "dashboard" : "relatório"}
+                  </button>
+                  {doc.kind === "dashboard" && (
+                    <button disabled={busy} onClick={() => void action("convert")}>
+                      Converter em relatório
+                    </button>
+                  )}
+                  <button disabled={busy} onClick={() => void action("timeline")}>
+                    Adicionar à linha do tempo
+                  </button>
+                  {doc.kind === "dashboard" && doc.status === "published" && (
+                    <button disabled={busy} onClick={() => void action("unpublish")}>
+                      Restringir ao gestor
+                    </button>
+                  )}
+                  {doc.status === "draft" && (
+                    <button
+                      disabled={busy}
+                      onClick={() => {
+                        if (window.confirm("Excluir este rascunho?"))
+                          void action("delete");
+                      }}
+                    >
+                      Excluir rascunho
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           )}
         </div>
-        {menu && (
-          <div className="pj-menu">
-            {editable && (
-              <button
-                onClick={() => {
-                  setEditor(true);
-                  setMenu(false);
-                }}
-              >
-                Configurações e blocos
-              </button>
-            )}
-            <button disabled={busy} onClick={() => void action("template")}>
-              Salvar como template
-            </button>
-            <button disabled={busy} onClick={() => void action("duplicate")}>
-              Duplicar {doc.kind === "dashboard" ? "dashboard" : "relatório"}
-            </button>
-            {doc.kind === "dashboard" && (
-              <button disabled={busy} onClick={() => void action("convert")}>
-                Converter em relatório
-              </button>
-            )}
-            <button disabled={busy} onClick={() => void action("timeline")}>
-              Adicionar à linha do tempo
-            </button>
-            {doc.kind === "dashboard" && doc.status === "published" && (
-              <button disabled={busy} onClick={() => void action("unpublish")}>
-                Restringir ao gestor
-              </button>
-            )}
-            {doc.status === "draft" && (
-              <button
-                disabled={busy}
-                onClick={() => {
-                  if (window.confirm("Excluir este rascunho?"))
-                    void action("delete");
-                }}
-              >
-                Excluir rascunho
-              </button>
-            )}
-          </div>
-        )}
       </div>
       <div className="pj-analysis-subbar">
         <button disabled={!editable || preview} onClick={() => setDates(true)}>
-          ▣ {shortDate(doc.config.since)} — {shortDate(doc.config.until)}
+          ▣ {shortDate(config.since)} — {shortDate(config.until)}
           <small>
             {data?.previous
               ? `Comparação: ${shortDate(compare.compare_since!)} a ${shortDate(compare.compare_until!)}`
@@ -519,17 +694,57 @@ export function AnalysisView({
                 <input
                   type="checkbox"
                   checked={config.metrics.includes(k)}
-                  onChange={(e) =>
-                    patch({
-                      metrics: e.target.checked
-                        ? [...config.metrics, k]
-                        : config.metrics.filter((x) => x !== k),
-                    })
-                  }
+                  onChange={(e) => {
+                    if (e.target.checked)
+                      patch({
+                        metrics: [...config.metrics, k],
+                        metric_order: [...metricOrder, k],
+                      });
+                    else removeMetric(k);
+                  }}
                 />
                 {METRICS[k].label}
               </label>
             ))}
+            <button
+              onClick={() => {
+                setEditingCustomId("");
+                setCustomMetric(defaultCustomMetric());
+                setCustomMetricOpen(true);
+              }}
+            >
+              ＋ Métrica manual ou calculada
+            </button>
+            {!!customMetrics.length && (
+              <div className="pj-custom-metric-list">
+                {customMetrics.map((metric) => (
+                  <div key={metric.id}>
+                    <span>
+                      {metric.label}
+                      <small>
+                        {metric.kind === "manual" ? "Manual" : "Calculada"}
+                      </small>
+                    </span>
+                    <button
+                      aria-label={`Editar ${metric.label}`}
+                      onClick={() => {
+                        setEditingCustomId(metric.id);
+                        setCustomMetric(metric);
+                        setCustomMetricOpen(true);
+                      }}
+                    >
+                      ✎
+                    </button>
+                    <button
+                      aria-label={`Remover ${metric.label}`}
+                      onClick={() => removeMetric(metric.id)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
             <h4>Blocos e ordem</h4>
             {config.sections.map((k, i) => (
               <div className="pj-block-order" key={k}>
@@ -576,6 +791,44 @@ export function AnalysisView({
                   </option>
                 ))}
             </select>
+            {config.sections.includes("results") && (
+              <label>
+                Métrica do gráfico
+                <select
+                  value={config.chart_metric ?? config.metrics[0]}
+                  onChange={(event) =>
+                    patch({ chart_metric: event.target.value as MetricKey })
+                  }
+                >
+                  {config.metrics.map((metric) => (
+                    <option key={metric} value={metric}>
+                      {METRICS[metric].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {config.sections.includes("funnel") && (
+              <fieldset className="pj-funnel-settings">
+                <legend>Etapas do funil</legend>
+                <p>Selecione de 2 a 6 métricas na ordem desejada.</p>
+                {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
+                  <label key={metric} className="pj-check">
+                    <input
+                      type="checkbox"
+                      checked={funnelMetrics.includes(metric)}
+                      onChange={(event) => {
+                        const next = event.target.checked
+                          ? [...funnelMetrics, metric].slice(0, 6)
+                          : funnelMetrics.filter((item) => item !== metric);
+                        if (next.length >= 2) patch({ funnel_metrics: next });
+                      }}
+                    />
+                    {METRICS[metric].label}
+                  </label>
+                ))}
+              </fieldset>
+            )}
             <label>
               Análise do gestor
               <textarea
@@ -603,12 +856,12 @@ export function AnalysisView({
                   {clientName.slice(0, 1)}
                 </span>
               )}
-              <h1>{doc.title}</h1>
-              <h2>{doc.config.subtitle}</h2>
+              <h1>{title}</h1>
+              <h2>{config.subtitle}</h2>
               <p>
                 Relatório de {clientName}
                 <br />
-                {shortDate(doc.config.since)} a {shortDate(doc.config.until)}
+                {shortDate(config.since)} a {shortDate(config.until)}
               </p>
               <span>LAOS · Resultados com contexto</span>
             </header>
@@ -616,11 +869,11 @@ export function AnalysisView({
           <div className="pj-document-heading">
             <MetaMark />
             <div>
-              <h2>{doc.kind === "report" ? "Meta Ads" : doc.title}</h2>
+              <h2>{doc.kind === "report" ? "Meta Ads" : title}</h2>
               <p>
                 {clientName} ·{" "}
-                {doc.config.campaign_ids.length
-                  ? doc.config.campaign_ids.length + " campanhas selecionadas"
+                {config.campaign_ids.length
+                  ? config.campaign_ids.length + " campanhas selecionadas"
                   : "Toda a conta"}
               </p>
             </div>
@@ -631,7 +884,7 @@ export function AnalysisView({
             </p>
           ))}
           {data ? (
-            doc.config.sections.map((s) => (
+            config.sections.map((s) => (
               <div className={"pj-section pj-section-" + s} key={s}>
                 {renderSection(s)}
               </div>
@@ -741,6 +994,192 @@ export function AnalysisView({
               Aplicar e atualizar
             </button>
           </div>
+        </Dialog>
+      )}
+      {customMetricOpen && (
+        <Dialog
+          title={
+            editingCustomId
+              ? "Editar métrica personalizada"
+              : "Adicionar métrica personalizada"
+          }
+          close={() => {
+            setEditingCustomId("");
+            setCustomMetricOpen(false);
+          }}
+        >
+          <div className="pj-custom-kind">
+            <button
+              className={customMetric.kind === "manual" ? "primary" : ""}
+              onClick={() =>
+                setCustomMetric((metric) => ({ ...metric, kind: "manual" }))
+              }
+            >
+              Métrica manual
+            </button>
+            <button
+              className={customMetric.kind === "calculated" ? "primary" : ""}
+              onClick={() =>
+                setCustomMetric((metric) => ({ ...metric, kind: "calculated" }))
+              }
+            >
+              Métrica calculada
+            </button>
+          </div>
+          <label>
+            Nome da métrica
+            <input
+              value={customMetric.label}
+              maxLength={80}
+              placeholder="Ex.: Taxa de conversão"
+              onChange={(event) =>
+                setCustomMetric((metric) => ({
+                  ...metric,
+                  label: event.target.value,
+                }))
+              }
+            />
+          </label>
+          <label>
+            Descrição
+            <input
+              value={customMetric.description}
+              maxLength={240}
+              placeholder="Explique o que este indicador representa"
+              onChange={(event) =>
+                setCustomMetric((metric) => ({
+                  ...metric,
+                  description: event.target.value,
+                }))
+              }
+            />
+          </label>
+          <label>
+            Formato
+            <select
+              value={customMetric.format}
+              onChange={(event) =>
+                setCustomMetric((metric) => ({
+                  ...metric,
+                  format: event.target.value as CustomMetricDefinition["format"],
+                }))
+              }
+            >
+              <option value="number">Número</option>
+              <option value="money">Moeda</option>
+              <option value="percent">Percentual</option>
+              <option value="ratio">Índice</option>
+            </select>
+          </label>
+          {customMetric.kind === "manual" ? (
+            <label>
+              Valor manual
+              <input
+                type="number"
+                step="any"
+                value={customMetric.value ?? 0}
+                onChange={(event) =>
+                  setCustomMetric((metric) => ({
+                    ...metric,
+                    value: Number(event.target.value),
+                  }))
+                }
+              />
+            </label>
+          ) : (
+            <>
+              <div className="pj-form-row">
+                <label>
+                  Primeira métrica
+                  <select
+                    value={customMetric.left}
+                    onChange={(event) =>
+                      setCustomMetric((metric) => ({
+                        ...metric,
+                        left: event.target.value as MetricKey,
+                      }))
+                    }
+                  >
+                    {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
+                      <option key={metric} value={metric}>
+                        {METRICS[metric].label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Operação
+                  <select
+                    value={customMetric.operation}
+                    onChange={(event) =>
+                      setCustomMetric((metric) => ({
+                        ...metric,
+                        operation: event.target
+                          .value as CustomMetricDefinition["operation"],
+                      }))
+                    }
+                  >
+                    <option value="divide">Dividir por</option>
+                    <option value="percentage">Percentual de</option>
+                    <option value="add">Somar com</option>
+                    <option value="subtract">Subtrair</option>
+                  </select>
+                </label>
+              </div>
+              <label>
+                Segunda métrica
+                <select
+                  value={customMetric.right}
+                  onChange={(event) =>
+                    setCustomMetric((metric) => ({
+                      ...metric,
+                      right: event.target.value as MetricKey,
+                    }))
+                  }
+                >
+                  {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
+                    <option key={metric} value={metric}>
+                      {METRICS[metric].label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </>
+          )}
+          <label className="pj-check">
+            <input
+              type="checkbox"
+              checked={customMetric.lower ?? false}
+              onChange={(event) =>
+                setCustomMetric((metric) => ({
+                  ...metric,
+                  lower: event.target.checked,
+                }))
+              }
+            />
+            Menor valor representa melhora
+          </label>
+          <div className="pj-actions">
+            <button
+              onClick={() => {
+                setEditingCustomId("");
+                setCustomMetricOpen(false);
+              }}
+            >
+              Cancelar
+            </button>
+            <button
+              className="primary"
+              disabled={!customMetric.label.trim()}
+              onClick={saveCustomMetric}
+            >
+              {editingCustomId ? "Salvar métrica" : "Adicionar métrica"}
+            </button>
+          </div>
+          <p className="pj-muted">
+            Métricas manuais são identificadas como manuais. As calculadas usam
+            apenas os dados já coletados para este documento.
+          </p>
         </Dialog>
       )}
       {share && (
