@@ -100,10 +100,19 @@ export async function POST(req: NextRequest) {
         .insert({ ...value, contact_email: value.contact_email || null })
         .select()
         .single();
-      if (error)
+      if (error) {
+        console.error("[agency:create-client] Supabase rejected the insert", {
+          code: error.code,
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          userId: user.id,
+          teamId: value.team_id,
+        });
         throw new Error(
           "Não foi possível cadastrar o cliente. Confira sua equipe e tente novamente.",
         );
+      }
       return NextResponse.json(data);
     }
     const cid = uuid.parse(body.client_id ?? body.value?.client_id);
