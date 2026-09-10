@@ -97,7 +97,19 @@ export function ProjectsWorkspace() {
     [meta, setMeta] = useState<MetaIntegrationStatus | null>(null),
     [accountSearch, setAccountSearch] = useState(""),
     [account, setAccount] = useState(""),
-    [goalId, setGoalId] = useState("");
+    [goalId, setGoalId] = useState(""),
+    [theme, setTheme] = useState<"dark" | "light">("dark");
+  useEffect(() => {
+    const saved = window.localStorage.getItem("laos-theme");
+    if (saved === "light" || saved === "dark") setTheme(saved);
+  }, []);
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      window.localStorage.setItem("laos-theme", next);
+      return next;
+    });
+  };
   const project = data.clients.find((c) => c.id === cid) as
     | (AgencyClient & { logo_url?: string; meta_connected_at?: string })
     | undefined;
@@ -279,7 +291,7 @@ export function ProjectsWorkspace() {
     );
   }
   return (
-    <div className="projects">
+    <div className={`projects theme-${theme}`}>
       <header className="pj-topnav">
         <button className="pj-brand" onClick={() => navigate({})}>
           <span>◧</span> laos<span className="pj-brand-sub">relatórios</span>
@@ -307,6 +319,14 @@ export function ProjectsWorkspace() {
           )}
         </nav>
         <div className="pj-account">
+          <button
+            className="pj-theme-toggle"
+            aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            title={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? "☀ Claro" : "☾ Escuro"}
+          </button>
           <span className="pj-small-avatar">
             {data.userName.slice(0, 1).toUpperCase() || "L"}
           </span>
