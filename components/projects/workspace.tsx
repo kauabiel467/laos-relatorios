@@ -322,7 +322,7 @@ export function ProjectsWorkspace() {
           </button>
         </div>
       </header>
-      {notice && (
+      {notice && creating !== "project" && (
         <div className="pj-notice" role="status">
           {notice}
           <button aria-label="Fechar aviso" onClick={() => setNotice("")}>
@@ -477,6 +477,11 @@ export function ProjectsWorkspace() {
                       value="Português do Brasil · DD/MM/AAAA · 1.000,00"
                     />
                   </label>
+                  {notice && (
+                    <div className="pj-warning" role="alert">
+                      {notice}
+                    </div>
+                  )}
                   <div className="pj-actions">
                     <button type="button" onClick={() => navigate({})}>
                       Cancelar
