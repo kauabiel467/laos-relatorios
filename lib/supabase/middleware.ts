@@ -2,6 +2,7 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { env, getSupabaseBrowserKey, hasSupabaseEnv } from "@/lib/env";
+import { createBoundedSupabaseFetch } from "@/lib/supabase/fetch";
 
 type CookieUpdate = {
   name: string;
@@ -27,7 +28,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   const supabase = createServerClient(env.NEXT_PUBLIC_SUPABASE_URL!, getSupabaseBrowserKey()!, {
-    global: { fetch: (url: RequestInfo | URL, options?: RequestInit) => fetch(url, {...options, signal: AbortSignal.timeout(8000)}) },
+    global: { fetch: createBoundedSupabaseFetch(4_000) },
     cookies: {
       getAll() {
         return request.cookies.getAll();
@@ -39,6 +40,12 @@ export async function updateSession(request: NextRequest) {
     }
   });
 
-  try { await supabase.auth.getUser(); } catch { /* Protected pages and APIs still verify authentication. */ }
+  try {
+    // getClaims can validate asymmetric JWTs against cached signing keys and is
+    // cheaper than a remote getUser call on every matched request.
+    await supabase.auth.getClaims();
+  } catch {
+    // Protected pages and APIs still verify authentication and fail closed.
+  }
   return response;
 }

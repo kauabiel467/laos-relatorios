@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { env, getSupabaseBrowserKey, getSupabaseServerKey, hasServerSupabaseEnv, hasSupabaseEnv } from "@/lib/env";
+import { createBoundedSupabaseFetch } from "@/lib/supabase/fetch";
 
 type CookieUpdate = {
   name: string;
@@ -25,6 +26,7 @@ export async function getSupabaseServerClient() {
   const cookieStore = await cookies();
 
   return createServerClient(env.NEXT_PUBLIC_SUPABASE_URL!, getSupabaseBrowserKey()!, {
+    global: { fetch: createBoundedSupabaseFetch() },
     cookies: {
       getAll() {
         return cookieStore.getAll();
