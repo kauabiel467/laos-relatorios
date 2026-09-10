@@ -570,7 +570,7 @@ function normalizeAdType(objectType?: string, adName?: string): AdItem["type"] {
   return "image";
 }
 
-async function fetchGraph<T>(path: string, params: Record<string, string>, accessToken: string) {
+export async function fetchGraph<T>(path: string, params: Record<string, string>, accessToken: string) {
   const searchParams = new URLSearchParams({
     ...params,
     access_token: accessToken

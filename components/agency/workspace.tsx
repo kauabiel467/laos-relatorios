@@ -191,7 +191,7 @@ export function AgencyWorkspace() {
   );
   function navigate(v: string, id = clientId) {
     router.push(
-      "/?" +
+      "/operations?" +
         new URLSearchParams({
           view: v,
           ...(id ? { client: id } : {}),

@@ -7,9 +7,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 interface LoginFormProps {
   supabaseReady: boolean;
+  returnTo?: string;
 }
 
-export function LoginForm({ supabaseReady }: LoginFormProps) {
+export function LoginForm({ supabaseReady, returnTo="/" }: LoginFormProps) {
   const router = useRouter();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
@@ -48,7 +49,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
             email,
             password,
             options: {
-              emailRedirectTo: `${window.location.origin}/auth/callback`
+              emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`
             }
           });
 
@@ -64,7 +65,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
       return;
     }
 
-    router.replace("/");
+    router.replace(returnTo);
     router.refresh();
   }
 
@@ -81,7 +82,7 @@ export function LoginForm({ supabaseReady }: LoginFormProps) {
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(returnTo)}`
       }
     });
 

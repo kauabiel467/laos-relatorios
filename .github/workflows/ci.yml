@@ -24,6 +24,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Project metric and period tests
+        run: node tests/projects-model.cjs
+
       - name: Typecheck
         run: npm run typecheck
 

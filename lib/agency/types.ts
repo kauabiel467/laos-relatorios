@@ -6,6 +6,8 @@ export interface AgencyClient {
   segment: string;
   unit: string;
   contact_email: string | null;
+  logo_url?: string;
+  meta_connected_at?: string;
   meta_account_id: string | null;
   status: "active" | "paused";
   created_at: string;
