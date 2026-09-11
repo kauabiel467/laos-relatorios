@@ -1,23 +1,24 @@
-export type MetricKey =
-  | "spend"
-  | "impressions"
-  | "reach"
-  | "clicks"
-  | "link_clicks"
-  | "ctr"
-  | "cpc"
-  | "cpm"
-  | "frequency"
-  | "purchases"
-  | "revenue"
-  | "roas"
-  | "cpa"
-  | "messages"
-  | "cost_message"
-  | "leads"
-  | "cpl"
-  | "landing_views"
-  | "checkouts";
+import {
+  METRICS,
+  PRIMARY_KPI_IDS,
+  isPrimaryKpiId,
+  type MetricFormat,
+  type MetricId,
+  type MetricUnit,
+  type MetricValues,
+  type PrimaryKpiId,
+} from "@/lib/metrics/catalog";
+import { calculatedMetricValue, metricChange } from "@/lib/metrics/engine";
+import {
+  lastMonthDateRange,
+  previousCalendarMonth,
+  previousDateRange,
+  rollingDateRange,
+} from "@/lib/metrics/dates";
+
+export { METRICS, metricChange };
+export type MetricKey = MetricId;
+export type { MetricValues };
 export type SectionKey =
   | "metrics"
   | "daily"
@@ -30,7 +31,7 @@ export type SectionKey =
   | "audience"
   | "analysis";
 export type MetricSize = "compact" | "wide" | "full";
-export type CustomMetricFormat = "money" | "number" | "percent" | "ratio";
+export type CustomMetricFormat = MetricFormat;
 export interface CustomMetricDefinition {
   id: string;
   kind: "manual" | "calculated";
@@ -42,6 +43,10 @@ export interface CustomMetricDefinition {
   left?: MetricKey;
   right?: MetricKey;
   operation?: "add" | "subtract" | "divide" | "percentage";
+  unit?: MetricUnit;
+  origin?: "manual" | "calculated";
+  aggregation?: "manual" | "derived";
+  formula?: string;
 }
 export interface AnalysisConfig {
   preset: "last_7d" | "last_30d" | "last_month" | "custom";
@@ -56,124 +61,13 @@ export interface AnalysisConfig {
   subtitle: string;
   analysis: string;
   template: string;
+  primary_metric: PrimaryKpiId;
   custom_metrics?: CustomMetricDefinition[];
   metric_order?: string[];
   metric_sizes?: Record<string, MetricSize>;
   chart_metric?: MetricKey;
   funnel_metrics?: MetricKey[];
 }
-export interface MetricDefinition {
-  label: string;
-  format: "money" | "number" | "percent" | "ratio";
-  lower?: boolean;
-  description: string;
-}
-export const METRICS: Record<MetricKey, MetricDefinition> = {
-  spend: {
-    label: "Valor investido",
-    format: "money",
-    description: "Investimento registrado pela Meta no período.",
-  },
-  impressions: {
-    label: "Impressões",
-    format: "number",
-    description: "Quantidade de exibições dos anúncios.",
-  },
-  reach: {
-    label: "Alcance",
-    format: "number",
-    description:
-      "Pessoas alcançadas, segundo a Meta. Não somar entre campanhas ou períodos.",
-  },
-  clicks: {
-    label: "Cliques totais",
-    format: "number",
-    description: "Todos os cliques nos anúncios.",
-  },
-  link_clicks: {
-    label: "Cliques no link",
-    format: "number",
-    description: "Cliques que a Meta classifica como link_click.",
-  },
-  ctr: {
-    label: "CTR de link",
-    format: "percent",
-    description: "Cliques no link ÷ impressões × 100.",
-  },
-  cpc: {
-    label: "Custo por clique no link",
-    format: "money",
-    lower: true,
-    description: "Investimento ÷ cliques no link.",
-  },
-  cpm: {
-    label: "CPM",
-    format: "money",
-    lower: true,
-    description: "Investimento por mil impressões.",
-  },
-  frequency: {
-    label: "Frequência",
-    format: "ratio",
-    description: "Impressões ÷ alcance.",
-  },
-  purchases: {
-    label: "Compras no site",
-    format: "number",
-    description: "Compras atribuídas pela Meta ao pixel do site.",
-  },
-  revenue: {
-    label: "Receita atribuída",
-    format: "money",
-    description:
-      "Valor das compras no site atribuído pela Meta. Não representa a receita total do negócio.",
-  },
-  roas: {
-    label: "ROAS de compras",
-    format: "ratio",
-    description: "Receita atribuída ÷ investimento.",
-  },
-  cpa: {
-    label: "Custo por compra",
-    format: "money",
-    lower: true,
-    description: "Investimento ÷ compras no site.",
-  },
-  messages: {
-    label: "Conversas iniciadas",
-    format: "number",
-    description:
-      "Conversas iniciadas em anúncios, conforme o evento retornado pela Meta.",
-  },
-  cost_message: {
-    label: "Custo por conversa",
-    format: "money",
-    lower: true,
-    description: "Investimento ÷ conversas iniciadas.",
-  },
-  leads: {
-    label: "Leads",
-    format: "number",
-    description:
-      "Cadastros atribuídos pela Meta, sem somar variantes do mesmo evento.",
-  },
-  cpl: {
-    label: "Custo por lead",
-    format: "money",
-    lower: true,
-    description: "Investimento ÷ leads.",
-  },
-  landing_views: {
-    label: "Visualizações de página",
-    format: "number",
-    description: "Landing page views reportadas pela Meta.",
-  },
-  checkouts: {
-    label: "Checkouts iniciados",
-    format: "number",
-    description: "Inícios de checkout no site reportados pela Meta.",
-  },
-};
 export const SECTIONS: Record<SectionKey, string> = {
   metrics: "Indicadores principais",
   daily: "Evolução diária",
@@ -193,12 +87,14 @@ export const TEMPLATES: {
   icon: string;
   metrics: MetricKey[];
   sections: SectionKey[];
+  primaryMetric: PrimaryKpiId;
 }[] = [
   {
     id: "sales",
     name: "Vendas e delivery",
     description: "Compras, receita atribuída e retorno sobre o investimento.",
     icon: "↗",
+    primaryMetric: "purchases",
     metrics: [
       "spend",
       "purchases",
@@ -225,6 +121,7 @@ export const TEMPLATES: {
     name: "Mensagens",
     description: "Conversas iniciadas e custo para gerar oportunidades.",
     icon: "◎",
+    primaryMetric: "messages",
     metrics: [
       "spend",
       "messages",
@@ -250,6 +147,7 @@ export const TEMPLATES: {
     name: "Geração de leads",
     description: "Cadastros e eficiência na aquisição de contatos.",
     icon: "⊕",
+    primaryMetric: "leads",
     metrics: [
       "spend",
       "leads",
@@ -275,6 +173,7 @@ export const TEMPLATES: {
     name: "Personalizado",
     description: "Combine indicadores de vendas, mensagens e leads.",
     icon: "▦",
+    primaryMetric: "purchases",
     metrics: [
       "spend",
       "purchases",
@@ -288,7 +187,6 @@ export const TEMPLATES: {
     sections: ["metrics", "daily", "results", "campaigns", "analysis"],
   },
 ];
-export type MetricValues = Record<MetricKey, number | null>;
 export interface InsightItem {
   id: string;
   name: string;
@@ -307,6 +205,13 @@ export interface AnalysisData {
   warnings: string[];
   currency: string;
   timezone: string;
+  primary_metric?: PrimaryKpiId;
+  effective_period?: {
+    since: string;
+    until: string;
+    compare_since?: string;
+    compare_until?: string;
+  };
   updated_at: string;
 }
 export interface ProjectDocument {
@@ -320,32 +225,17 @@ export interface ProjectDocument {
   created_at: string;
   updated_at: string;
 }
-const iso = (d: Date) => d.toISOString().slice(0, 10);
 export function periodDates(
   preset: AnalysisConfig["preset"],
   today = new Date(),
+  timezone = "UTC",
 ) {
-  const end = new Date(
-    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-  );
-  const start = new Date(end);
-  if (preset === "last_month") {
-    end.setUTCDate(0);
-    start.setUTCMonth(start.getUTCMonth() - 1, 1);
-  } else start.setUTCDate(start.getUTCDate() - (preset === "last_7d" ? 6 : 29));
-  return { since: iso(start), until: iso(end) };
+  if (preset === "last_month") return lastMonthDateRange(timezone, today);
+  return rollingDateRange(preset === "last_7d" ? 7 : 30, timezone, today);
 }
 export function previousDates(since: string, until: string) {
-  const start = new Date(since + "T00:00:00Z"),
-    end = new Date(until + "T00:00:00Z");
-  const length = Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
-  const previousEnd = new Date(start.getTime() - 86400000);
-  return {
-    compare_since: iso(
-      new Date(previousEnd.getTime() - (length - 1) * 86400000),
-    ),
-    compare_until: iso(previousEnd),
-  };
+  const previous = previousDateRange(since, until);
+  return { compare_since: previous.since, compare_until: previous.until };
 }
 export function defaultConfig(template = "sales"): AnalysisConfig {
   const t = TEMPLATES.find((t) => t.id === template) ?? TEMPLATES[0];
@@ -359,14 +249,27 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
     subtitle: "Análise de desempenho",
     analysis: "",
     template: t.id,
+    primary_metric: t.primaryMetric,
     custom_metrics: [],
     metric_order: [...t.metrics],
     metric_sizes: {},
-    chart_metric:
-      t.metrics.find((metric) =>
-        ["purchases", "messages", "leads", "revenue"].includes(metric),
-      ) ?? "link_clicks",
+    chart_metric: t.primaryMetric,
   };
+}
+
+export function normalizeAnalysisConfig(
+  value: AnalysisConfig | (Partial<AnalysisConfig> & Record<string, unknown>),
+): AnalysisConfig {
+  if (isPrimaryKpiId(value.primary_metric) && value.metrics?.includes(value.primary_metric)) {
+    return value as AnalysisConfig;
+  }
+  const template = TEMPLATES.find((item) => item.id === value.template);
+  const configured = template?.primaryMetric;
+  const available = value.metrics ?? [];
+  const primary = configured && available.includes(configured)
+    ? configured
+    : PRIMARY_KPI_IDS.find((id) => available.includes(id)) ?? "purchases";
+  return { ...value, primary_metric: primary } as AnalysisConfig;
 }
 export function formatMetric(
   key: MetricKey,
@@ -383,34 +286,13 @@ export function formatMetric(
     (m.format === "percent" ? "%" : m.format === "ratio" ? "×" : "")
   );
 }
-export function metricChange(
-  current: number | null | undefined,
-  previous: number | null | undefined,
-) {
-  return current == null || previous == null || previous === 0
-    ? null
-    : ((current - previous) / Math.abs(previous)) * 100;
-}
-
 export function customMetricValue(
   metric: CustomMetricDefinition,
   values: MetricValues | null | undefined,
 ) {
   if (metric.kind === "manual") return metric.value ?? null;
-  if (!values || !metric.left || !metric.right || !metric.operation)
-    return null;
-  const left = values[metric.left],
-    right = values[metric.right];
-  if (left == null || right == null) return null;
-  if (
-    (metric.operation === "divide" || metric.operation === "percentage") &&
-    right === 0
-  )
-    return null;
-  if (metric.operation === "add") return left + right;
-  if (metric.operation === "subtract") return left - right;
-  if (metric.operation === "percentage") return (left / right) * 100;
-  return left / right;
+  if (!metric.left || !metric.right || !metric.operation) return null;
+  return calculatedMetricValue(values, metric.left, metric.right, metric.operation);
 }
 
 export function formatCustomMetric(
@@ -433,6 +315,8 @@ export function formatCustomMetric(
 }
 
 export function comparisonDates(config: Pick<AnalysisConfig,'preset'|'since'|'until'>) {
- if(config.preset==='last_month') {const end=new Date(config.since+'T00:00:00Z');end.setUTCDate(0);const start=new Date(end);start.setUTCDate(1);return {compare_since:iso(start),compare_until:iso(end)};}
- return previousDates(config.since,config.until);
+ const previous = config.preset === "last_month"
+   ? previousCalendarMonth(config.since)
+   : previousDateRange(config.since, config.until);
+ return { compare_since: previous.since, compare_until: previous.until };
 }

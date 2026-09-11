@@ -235,7 +235,7 @@ export async function POST(req: NextRequest) {
         .string()
         .regex(/^act_\d+$/)
         .parse(body.account_id);
-      const bundle = await fetchMetaDashboardData(account, "last_30d");
+      const bundle = await fetchMetaDashboardData(account, "last_30d", "purchases");
       const { error } = await db
         .from("agency_clients")
         .update({ meta_account_id: account })

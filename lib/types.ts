@@ -1,3 +1,5 @@
+import type { MetricValues, PrimaryKpiId } from "@/lib/metrics/catalog";
+
 export type AccountStatus = "ACTIVE" | "PAUSED";
 export type PeriodKey = "last_7d" | "last_30d" | "last_90d" | "custom";
 export type DashboardTab = "meta" | "cardapio";
@@ -12,7 +14,8 @@ export interface Client {
 export interface DailyPoint {
   label: string;
   spend: number;
-  result: number;
+  result: number | null;
+  metricId: PrimaryKpiId;
   revenue?: number;
 }
 
@@ -29,22 +32,26 @@ export interface ObjectiveDistributionItem {
   value: number;
   valueLabel: string;
   percentage: number;
+  metricId: "spend";
 }
 
 export interface HourlyPerformancePoint {
   label: string;
-  value: number;
+  value: number | null;
+  metricId: PrimaryKpiId;
   highlight: "base" | "medium" | "high";
 }
 
 export interface AgeAudiencePoint {
   label: string;
-  value: number;
+  value: number | null;
+  metricId: PrimaryKpiId;
 }
 
 export interface GenderAudiencePoint {
   label: string;
-  value: number;
+  value: number | null;
+  metricId: PrimaryKpiId;
   percentage: number;
 }
 
@@ -54,15 +61,17 @@ export interface CampaignMetric {
   status: AccountStatus;
   objective: string;
   resultLabel: string;
+  metricId: PrimaryKpiId;
+  metrics: MetricValues;
   spend: number;
-  reach: number;
+  reach: number | null;
   impressions?: number;
   clicks?: number;
   purchases?: number;
   followers?: number;
   ctr: number;
   roas: number;
-  result: number;
+  result: number | null;
 }
 
 export interface AdItem {
@@ -106,17 +115,19 @@ export interface CardapioMetrics {
 }
 
 export interface DashboardSnapshot {
+  primaryMetricId: PrimaryKpiId;
   spend: number;
-  spendDelta: number;
+  spendDelta: number | null;
   resultLabel: string;
-  resultValue: number;
-  resultDelta: number;
+  resultValue: number | null;
+  resultDelta: number | null;
   revenue: number;
-  revenueDelta: number;
+  revenueDelta: number | null;
   roas: number;
-  roasDelta: number;
-  cpa: number;
-  cpaDelta: number;
+  roasDelta: number | null;
+  primaryCostLabel: string;
+  primaryCost: number | null;
+  primaryCostDelta: number | null;
   quickInsights: QuickInsight[];
   alerts: AlertItem[];
   healthScore: number;
@@ -128,6 +139,15 @@ export interface DashboardSnapshot {
 }
 
 export interface DashboardDataBundle {
+  primaryMetricId: PrimaryKpiId;
+  timezone: string;
+  currency: string;
+  effectivePeriod: {
+    since: string;
+    until: string;
+    compareSince: string;
+    compareUntil: string;
+  };
   snapshot: DashboardSnapshot;
   dailySeries: DailyPoint[];
   campaigns: CampaignMetric[];

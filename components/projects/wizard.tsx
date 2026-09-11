@@ -5,9 +5,12 @@ import {
   defaultConfig,
   periodDates,
   comparisonDates,
+  METRICS,
+  normalizeAnalysisConfig,
   type AnalysisConfig,
   type ProjectDocument,
 } from "@/lib/projects/model";
+import { PRIMARY_KPI_IDS, type PrimaryKpiId } from "@/lib/metrics/catalog";
 import { MetaMark, shortDate } from "./ui";
 export function AnalysisWizard({
   cid,
@@ -132,14 +135,14 @@ export function AnalysisWizard({
                       }
                       key={t.id}
                       onClick={() =>
-                        setConfig({
+                        setConfig(normalizeAnalysisConfig({
                           ...t.config,
                           ...periodDates("last_month"),
                           preset: "last_month",
                           campaign_ids: [],
                           analysis: "",
                           template: t.id,
-                        })
+                        }))
                       }
                     >
                       <span>▦</span>
@@ -180,6 +183,23 @@ export function AnalysisWizard({
                 required
                 onChange={(e) => setTitle(e.target.value)}
               />
+            </label>
+            <label>
+              KPI principal
+              <select
+                value={config.primary_metric}
+                onChange={(event) => {
+                  const primary = event.target.value as PrimaryKpiId;
+                  change({ primary_metric: primary, chart_metric: primary });
+                }}
+              >
+                {PRIMARY_KPI_IDS.filter((id) => config.metrics.includes(id)).map((id) => (
+                  <option key={id} value={id}>{METRICS[id].label}</option>
+                ))}
+              </select>
+              <small>
+                O mesmo KPI será usado no período atual, comparação, campanhas, série diária e segmentos.
+              </small>
             </label>
             <h2>Período de análise</h2>
             <label>
@@ -256,8 +276,8 @@ export function AnalysisWizard({
               Comparar com um período personalizado
             </label>
             {config.comparison === "custom" ? (
-              <div className="pj-form-row">
-                <label>
+              <div>
+                <div className="pj-form-row"><label>
                   Comparar de
                   <input
                     type="date"
@@ -275,7 +295,8 @@ export function AnalysisWizard({
                     value={config.compare_until ?? ""}
                     onChange={(e) => change({ compare_until: e.target.value })}
                   />
-                </label>
+                </label></div>
+                <p className="pj-muted">Use um período anterior, sem sobreposição, sem datas futuras e com a mesma duração do período atual.</p>
               </div>
             ) : (
               config.comparison === "previous" && (

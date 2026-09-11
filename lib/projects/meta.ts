@@ -8,12 +8,15 @@ import {
 } from "@/lib/integrations/meta-oauth";
 import { fetchGraph } from "@/lib/integrations/meta-dashboard";
 import {
-  comparisonDates,
   type AnalysisConfig,
   type AnalysisData,
   type InsightItem,
 } from "./model";
-import { metrics, type Row } from "./metrics";
+import { metaMetrics, type MetaMetricRow as Row } from "@/lib/metrics/engine";
+import { resolvePeriod } from "@/lib/metrics/dates";
+import { METRICS } from "@/lib/metrics/catalog";
+import { adaptModernMeta } from "@/lib/metrics/meta-adapters";
+import type { MetaAdAccount } from "@/lib/types";
 export async function authorizeProject(cid: string) {
   const db = await getSupabaseServerClient();
   if (!db) throw Error("Serviço indisponível.");
@@ -84,7 +87,7 @@ async function credentials(cid: string) {
     throw Error("Vincule novamente a Meta nas integrações deste projeto.");
   const { data: s } = await admin
     .from("meta_integration_sessions")
-    .select("access_token,stage,selected_account_ids")
+    .select("access_token,stage,selected_account_ids,accounts")
     .eq("id", c.session_id)
     .single();
   if (
@@ -95,7 +98,15 @@ async function credentials(cid: string) {
     throw Error(
       "A conexão expirou ou foi revogada. Reconecte a Meta nas integrações.",
     );
-  return { token: s.access_token as string, account: c.account_id as string };
+  const metadata = (s.accounts as MetaAdAccount[] | null)?.find(
+    (item) => item.id === c.account_id || `act_${item.accountId}` === c.account_id,
+  );
+  return {
+    token: s.access_token as string,
+    account: c.account_id as string,
+    timezone: metadata?.timezoneName,
+    currency: metadata?.currency,
+  };
 }
 export async function projectCampaigns(cid: string) {
   const { token, account } = await credentials(cid);
@@ -108,7 +119,26 @@ export async function collectAnalysis(
   cid: string,
   config: AnalysisConfig,
 ): Promise<AnalysisData> {
-  const { token, account } = await credentials(cid);
+  const credentialsResult = await credentials(cid);
+  const { token, account } = credentialsResult;
+  let timezone = credentialsResult.timezone;
+  let currency = credentialsResult.currency;
+  if (!timezone || !currency) {
+    const accountInfo = await fetchGraph<{ currency?: string; timezone_name?: string }>(
+      account,
+      { fields: "currency,timezone_name" },
+      token,
+    );
+    timezone = accountInfo.timezone_name || "UTC";
+    currency = accountInfo.currency || "BRL";
+  }
+  const effective = resolvePeriod(
+    config.preset,
+    timezone,
+    { since: config.since, until: config.until },
+    config.comparison,
+    { since: config.compare_since, until: config.compare_until },
+  );
   const fields = "spend,impressions,reach,clicks,actions,action_values";
   const filters = config.campaign_ids.length
     ? {
@@ -142,10 +172,6 @@ export async function collectAnalysis(
       } as Record<string, string>,
       token,
     );
-  const compare =
-    config.comparison === "previous"
-      ? comparisonDates(config)
-      : config;
   const optional = async (label: string, p: Promise<{ data: Row[] }>) => {
     try {
       return (await p).data;
@@ -162,46 +188,40 @@ export async function collectAnalysis(
     ads,
     platforms,
     audience,
-    accountInfo,
   ] = await Promise.all([
-    query(config.since, config.until),
+    query(effective.since, effective.until),
     config.comparison === "none"
       ? null
-      : query(compare.compare_since!, compare.compare_until!),
-    query(config.since, config.until, {
+      : query(effective.compare_since!, effective.compare_until!),
+    query(effective.since, effective.until, {
       time_increment: "1",
       fields: "date_start," + fields,
     }),
-    query(config.since, config.until, {
+    query(effective.since, effective.until, {
       level: "campaign",
       fields: "campaign_id,campaign_name," + fields,
     }),
     optional(
       "Conjuntos",
-      query(config.since, config.until, {
+      query(effective.since, effective.until, {
         level: "adset",
         fields: "adset_id,adset_name," + fields,
       }),
     ),
     optional(
       "Anúncios",
-      query(config.since, config.until, {
+      query(effective.since, effective.until, {
         level: "ad",
         fields: "ad_id,ad_name," + fields,
       }),
     ),
     optional(
       "Plataformas",
-      query(config.since, config.until, { breakdowns: "publisher_platform" }),
+      query(effective.since, effective.until, { breakdowns: "publisher_platform" }),
     ),
     optional(
       "Público",
-      query(config.since, config.until, { breakdowns: "age,gender" }),
-    ),
-    fetchGraph<{ currency: string; timezone_name: string }>(
-      account,
-      { fields: "currency,timezone_name" },
-      token,
+      query(effective.since, effective.until, { breakdowns: "age,gender" }),
     ),
   ]);
   const warnings: string[] = [];
@@ -217,7 +237,7 @@ export async function collectAnalysis(
       .map((x) => ({
         id: String(x[key + "_id"] ?? x[key] ?? ""),
         name: String(x[key + "_name"] ?? x[key] ?? ""),
-        metrics: metrics(x),
+        metrics: metaMetrics(x),
       }))
       .sort((a, b) => (b.metrics.spend ?? 0) - (a.metrics.spend ?? 0));
   const adItems = items(rows(ads), "ad");
@@ -233,18 +253,30 @@ export async function collectAnalysis(
       }
     }),
   );
+  const platformRows = rows(platforms);
+  const audienceRows = rows(audience);
+  const projection = adaptModernMeta({
+    current: current.data[0],
+    previous: previous?.data[0],
+    daily: daily.data,
+    campaigns: campaigns.data,
+  }, config.primary_metric);
+  const primaryLabel = METRICS[config.primary_metric].label;
+  if (platformRows.length && platformRows.every((row) => metaMetrics(row)[config.primary_metric] == null))
+    warnings.push(`Plataformas sem suporte ao KPI ${primaryLabel} nesta consulta.`);
+  if (audienceRows.length && audienceRows.every((row) => metaMetrics(row)[config.primary_metric] == null))
+    warnings.push(`Segmentos de público sem suporte ao KPI ${primaryLabel} nesta consulta.`);
   return {
-    current: metrics(current.data[0]),
-    previous: previous ? metrics(previous.data[0]) : null,
-    daily: daily.data.map((r) => ({
-      date: String(r.date_start),
-      metrics: metrics(r),
-    })),
-    campaigns: items(campaigns.data, "campaign"),
+    current: projection.current,
+    previous: previous ? projection.previous : null,
+    daily: projection.series.map((row) => ({ date: row.date, metrics: row.metrics })),
+    campaigns: projection.campaigns
+      .map((row) => ({ id: row.id, name: row.name, metrics: row.metrics }))
+      .sort((a, b) => (b.metrics.spend ?? 0) - (a.metrics.spend ?? 0)),
     adsets: items(rows(adsets), "adset"),
     ads: adItems,
-    platforms: items(rows(platforms), "publisher_platform"),
-    audience: rows(audience).map((r) => ({
+    platforms: items(platformRows, "publisher_platform"),
+    audience: audienceRows.map((r) => ({
       id: String(r.age) + "-" + String(r.gender),
       name:
         String(r.age) +
@@ -252,11 +284,18 @@ export async function collectAnalysis(
         ({ male: "Masculino", female: "Feminino", unknown: "Não informado" }[
           String(r.gender)
         ] ?? String(r.gender)),
-      metrics: metrics(r),
+      metrics: metaMetrics(r),
     })),
     warnings,
-    currency: accountInfo.currency || "BRL",
-    timezone: accountInfo.timezone_name || "Fuso da conta Meta",
+    currency,
+    timezone,
+    primary_metric: config.primary_metric,
+    effective_period: {
+      since: effective.since,
+      until: effective.until,
+      compare_since: effective.compare_since,
+      compare_until: effective.compare_until,
+    },
     updated_at: new Date().toISOString(),
   };
 }

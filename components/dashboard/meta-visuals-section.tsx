@@ -13,6 +13,7 @@ interface MetaVisualsSectionProps {
   ageAudience: AgeAudiencePoint[];
   genderAudience: GenderAudiencePoint[];
   resultLabel: string;
+  currency: string;
 }
 
 function buildPolyline(values: number[], width: number, height: number, padding: number) {
@@ -79,7 +80,8 @@ export function MetaVisualsSection({
   hourlyPerformance,
   ageAudience,
   genderAudience,
-  resultLabel
+  resultLabel,
+  currency,
 }: MetaVisualsSectionProps) {
   const [showSpend, setShowSpend] = useState(true);
   const [showResult, setShowResult] = useState(true);
@@ -101,7 +103,7 @@ export function MetaVisualsSection({
   const resultPoints = useMemo(
     () =>
       buildPolyline(
-        dailySeries.map((item) => item.result),
+        dailySeries.map((item) => item.result ?? 0),
         width,
         height,
         padding
@@ -110,8 +112,8 @@ export function MetaVisualsSection({
   );
   const spendArea = useMemo(() => buildArea(spendPoints, width, height, padding), [spendPoints]);
   const totalObjectiveValue = objectiveDistribution.reduce((sum, item) => sum + item.value, 0);
-  const hourlyMax = Math.max(...hourlyPerformance.map((item) => item.value), 1);
-  const ageMax = Math.max(...ageAudience.map((item) => item.value), 1);
+  const hourlyMax = Math.max(...hourlyPerformance.map((item) => item.value ?? 0), 1);
+  const ageMax = Math.max(...ageAudience.map((item) => item.value ?? 0), 1);
   const objectiveColors = ["#3b82f6", "#22c55e", "#a855f7", "#f97316", "#eab308", "#06b6d4"];
   const genderColors = ["#3b82f6", "#a855f7", "#64748b"];
 
@@ -191,7 +193,7 @@ export function MetaVisualsSection({
                 {dailySeries.map((item, index) => {
                   const x = padding + (index / Math.max(dailySeries.length - 1, 1)) * (width - padding * 2);
                   const spendY = height - padding - (item.spend / Math.max(...dailySeries.map((entry) => entry.spend), 1)) * (height - padding * 2);
-                  const resultY = height - padding - (item.result / Math.max(...dailySeries.map((entry) => entry.result), 1)) * (height - padding * 2);
+                  const resultY = height - padding - ((item.result ?? 0) / Math.max(...dailySeries.map((entry) => entry.result ?? 0), 1)) * (height - padding * 2);
 
                   return (
                     <g key={`${item.label}-${index}`}>
@@ -244,28 +246,31 @@ export function MetaVisualsSection({
 
         <div className="panel relative p-5" data-chart-panel onMouseLeave={() => setTooltip(null)}>
           <div className="mb-4">
-            <div className="text-lg font-bold">Distribuicao por Objetivo</div>
-            <p className="text-xs leading-5 text-muted">Resultados por objetivo de campanha.</p>
+            <div className="text-lg font-bold">Distribuição do investimento por objetivo</div>
+            <p className="text-xs leading-5 text-muted">Participação do investimento das campanhas em cada objetivo. Todos os valores usam a moeda da conta.</p>
           </div>
           {objectiveDistribution.length ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
               <div
                 className="relative mx-auto h-40 w-40 rounded-full sm:h-52 sm:w-52"
                 style={{ backgroundImage: buildConicGradient(objectiveDistribution) }}
+                role="img"
+                tabIndex={0}
+                aria-label={`Distribuição do investimento por objetivo. Total ${formatCurrency(totalObjectiveValue, currency)}. ${objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.value, currency)}`).join("; ")}`}
                 onMouseEnter={(event) =>
                   showTooltip(
                     event,
                     "objective",
-                    "Distribuicao por objetivo",
-                    objectiveDistribution.map((item) => `${item.label}: ${formatNumber(item.value)} ${item.valueLabel.toLowerCase()} (${formatPercent(item.percentage)})`)
+                    "Distribuição do investimento por objetivo",
+                    objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.value, currency)} (${formatPercent(item.percentage)})`)
                   )
                 }
                 onMouseMove={(event) =>
                   showTooltip(
                     event,
                     "objective",
-                    "Distribuicao por objetivo",
-                    objectiveDistribution.map((item) => `${item.label}: ${formatNumber(item.value)} ${item.valueLabel.toLowerCase()} (${formatPercent(item.percentage)})`)
+                    "Distribuição do investimento por objetivo",
+                    objectiveDistribution.map((item) => `${item.label}: ${formatCurrency(item.value, currency)} (${formatPercent(item.percentage)})`)
                   )
                 }
               >
@@ -273,7 +278,7 @@ export function MetaVisualsSection({
                 <div className="absolute inset-0 grid place-items-center text-center">
                   <div>
                     <div className="font-mono text-xs text-muted">Total</div>
-                    <div className="text-lg font-bold sm:text-xl">{formatNumber(totalObjectiveValue)}</div>
+                    <div className="text-lg font-bold sm:text-xl">{formatCurrency(totalObjectiveValue, currency)}</div>
                   </div>
                 </div>
               </div>
@@ -282,8 +287,8 @@ export function MetaVisualsSection({
                   <div
                     key={item.label}
                     className="flex items-start gap-3 rounded-lg p-1 transition hover:bg-white/5"
-                    onMouseEnter={(event) => showTooltip(event, "objective", item.label, [`${formatNumber(item.value)} ${item.valueLabel.toLowerCase()}`, formatPercent(item.percentage)])}
-                    onMouseMove={(event) => showTooltip(event, "objective", item.label, [`${formatNumber(item.value)} ${item.valueLabel.toLowerCase()}`, formatPercent(item.percentage)])}
+                    onMouseEnter={(event) => showTooltip(event, "objective", item.label, [`Investimento: ${formatCurrency(item.value, currency)}`, formatPercent(item.percentage)])}
+                    onMouseMove={(event) => showTooltip(event, "objective", item.label, [`Investimento: ${formatCurrency(item.value, currency)}`, formatPercent(item.percentage)])}
                   >
                     <span
                       className="mt-1 inline-flex h-3 w-3 rounded-sm"
@@ -292,7 +297,7 @@ export function MetaVisualsSection({
                     <div>
                       <div className="text-sm font-semibold">{item.label}</div>
                       <div className="font-mono text-[11px] text-muted">
-                        {formatNumber(item.value)} {item.valueLabel.toLowerCase()} · {formatPercent(item.percentage)}
+                        {formatCurrency(item.value, currency)} · {formatPercent(item.percentage)}
                       </div>
                     </div>
                   </div>
@@ -327,7 +332,7 @@ export function MetaVisualsSection({
                     onMouseEnter={(event) => showTooltip(event, "age", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                     onMouseMove={(event) => showTooltip(event, "age", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                   >
-                    <div className="h-full rounded-lg bg-indigo-500/80" style={{ width: `${Math.max(6, (item.value / ageMax) * 100)}%` }} />
+                    <div className="h-full rounded-lg bg-indigo-500/80" style={{ width: `${Math.max(6, ((item.value ?? 0) / ageMax) * 100)}%` }} />
                   </div>
                 </div>
               ))}
@@ -345,7 +350,7 @@ export function MetaVisualsSection({
             <div className="text-lg font-bold">Audiencia por Genero</div>
             <p className="text-xs leading-5 text-muted">{resultLabel} distribuido por genero retornado pela Meta.</p>
           </div>
-          {genderAudience.some((item) => item.value > 0) ? (
+          {genderAudience.some((item) => (item.value ?? 0) > 0) ? (
             <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
               <div
                 className="relative mx-auto h-40 w-40 rounded-full sm:h-48 sm:w-48"
@@ -405,14 +410,14 @@ export function MetaVisualsSection({
           <div className="text-lg font-bold">Pico por Horario</div>
           <p className="text-xs leading-5 text-muted">Passe o mouse nas barras para ver o volume de {resultLabel.toLowerCase()} por horario.</p>
         </div>
-        {hourlyPerformance.some((item) => item.value > 0) ? (
+        {hourlyPerformance.some((item) => (item.value ?? 0) > 0) ? (
           <div className="grid h-56 grid-cols-12 gap-1.5 sm:h-72 sm:gap-2 sm:grid-cols-24">
             {hourlyPerformance.map((item) => (
               <div key={item.label} className="flex h-full flex-col items-center justify-end gap-2">
                 <div className="relative flex h-full w-full items-end">
                   <div
                     className={`w-full rounded-t-md transition hover:opacity-90 ${highlightClass(item.highlight)}`}
-                    style={{ height: `${Math.max(4, (item.value / hourlyMax) * 100)}%` }}
+                    style={{ height: `${Math.max(4, ((item.value ?? 0) / hourlyMax) * 100)}%` }}
                     onMouseEnter={(event) => showTooltip(event, "hourly", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                     onMouseMove={(event) => showTooltip(event, "hourly", item.label, [`${resultLabel}: ${formatNumber(item.value)}`])}
                   />

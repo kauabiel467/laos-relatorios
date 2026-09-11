@@ -11,7 +11,11 @@ import {
   collectAnalysis,
 } from "@/lib/projects/meta";
 import { configSchema } from "@/lib/projects/schema";
-import type { AnalysisConfig, ProjectDocument } from "@/lib/projects/model";
+import {
+  normalizeAnalysisConfig,
+  type AnalysisConfig,
+  type ProjectDocument,
+} from "@/lib/projects/model";
 export const maxDuration = 60;
 const uuid = z.string().uuid();
 const fail = (e: unknown) =>
@@ -208,7 +212,7 @@ export async function POST(req: NextRequest) {
     if (existing?.kind === "report" && existing.status === "published")
       throw Error("Duplique o relatório publicado para criar uma nova versão.");
     const config = configSchema.parse(
-      b.config ?? existing?.config,
+      normalizeAnalysisConfig(b.config ?? existing?.config),
     ) as AnalysisConfig;
     const title = z
       .string()
@@ -228,6 +232,7 @@ export async function POST(req: NextRequest) {
         config.compare_since,
         config.compare_until,
         config.campaign_ids,
+        config.primary_metric,
       ]) !==
         JSON.stringify([
           existing.config.since,
@@ -236,6 +241,7 @@ export async function POST(req: NextRequest) {
           existing.config.compare_since,
           existing.config.compare_until,
           existing.config.campaign_ids,
+          normalizeAnalysisConfig(existing.config).primary_metric,
         ]);
     const data =
       kind === "template"

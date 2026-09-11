@@ -1368,7 +1368,7 @@ function Metrics({ record }: { record: AgencyRecord }) {
     <div className="ag-metrics">
       {[
         ["Investimento", currency(s.spend)],
-        [s.resultLabel, number(s.resultValue)],
+        [s.resultLabel, s.resultValue == null ? "—" : number(s.resultValue)],
         ["Receita atribuída", currency(s.revenue)],
         ["ROAS", number(s.roas) + "x"],
       ].map(([l, v]) => (

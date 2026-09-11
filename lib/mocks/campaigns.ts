@@ -1,10 +1,16 @@
 import type { AdItem, CampaignMetric } from "@/lib/types";
+import { emptyMetricValues } from "@/lib/metrics/engine";
+
+const metrics = (id: "purchases" | "messages" | "profile_visits", value: number) => ({
+  ...emptyMetricValues(),
+  [id]: value,
+});
 
 export const campaigns: CampaignMetric[] = [
-  { id: "cmp_1", name: "Combo Hot - Raio 4km", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", spend: 980, reach: 18200, ctr: 4.7, roas: 4.18, result: 44 },
-  { id: "cmp_2", name: "Frio - Publico Aberto", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", spend: 812, reach: 22500, ctr: 2.6, roas: 1.72, result: 12 },
-  { id: "cmp_3", name: "Visitas Perfil Instagram", status: "PAUSED", objective: "Trafego", resultLabel: "Visitas ao perfil", spend: 520, reach: 9400, clicks: 142, followers: 31, ctr: 5.3, roas: 2.94, result: 18 },
-  { id: "cmp_4", name: "Mensagens Centro", status: "ACTIVE", objective: "Mensagens", resultLabel: "Conversas", spend: 410, reach: 8700, ctr: 3.9, roas: 2.1, result: 23 }
+  { id: "cmp_1", name: "Combo Hot - Raio 4km", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", metricId: "purchases", metrics: metrics("purchases", 44), spend: 980, reach: 18200, ctr: 4.7, roas: 4.18, result: 44 },
+  { id: "cmp_2", name: "Frio - Publico Aberto", status: "ACTIVE", objective: "Vendas", resultLabel: "Vendas", metricId: "purchases", metrics: metrics("purchases", 12), spend: 812, reach: 22500, ctr: 2.6, roas: 1.72, result: 12 },
+  { id: "cmp_3", name: "Visitas Perfil Instagram", status: "PAUSED", objective: "Trafego", resultLabel: "Visitas ao perfil", metricId: "profile_visits", metrics: metrics("profile_visits", 18), spend: 520, reach: 9400, clicks: 142, followers: 31, ctr: 5.3, roas: 2.94, result: 18 },
+  { id: "cmp_4", name: "Mensagens Centro", status: "ACTIVE", objective: "Mensagens", resultLabel: "Conversas", metricId: "messages", metrics: metrics("messages", 23), spend: 410, reach: 8700, ctr: 3.9, roas: 2.1, result: 23 }
 ];
 
 export const adsByCampaign: Record<string, AdItem[]> = {

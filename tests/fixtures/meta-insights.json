@@ -1,0 +1,43 @@
+{
+  "current": {
+    "spend": "320.45",
+    "impressions": "18420",
+    "reach": "11208",
+    "clicks": "811",
+    "actions": [
+      { "action_type": "link_click", "value": "604" },
+      { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "27" },
+      { "action_type": "purchase", "value": "27" },
+      { "action_type": "lead", "value": "41" },
+      { "action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "58" }
+    ],
+    "action_values": [
+      { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "2388.90" },
+      { "action_type": "purchase", "value": "2388.90" }
+    ]
+  },
+  "previous": {
+    "spend": "280.10",
+    "impressions": "16990",
+    "reach": "10550",
+    "clicks": "702",
+    "actions": [
+      { "action_type": "link_click", "value": "510" },
+      { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "21" },
+      { "action_type": "lead", "value": "39" },
+      { "action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "44" }
+    ],
+    "action_values": [
+      { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "1810.20" }
+    ]
+  },
+  "daily": [
+    { "date_start": "2026-08-01", "spend": "150.20", "impressions": "9000", "reach": "6200", "clicks": "390", "actions": [{ "action_type": "link_click", "value": "292" }, { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "12" }] },
+    { "date_start": "2026-08-02", "spend": "170.25", "impressions": "9420", "reach": "6500", "clicks": "421", "actions": [{ "action_type": "link_click", "value": "312" }, { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "15" }] }
+  ],
+  "campaigns": [
+    { "campaign_id": "12001", "campaign_name": "Conversão - Sul", "objective": "Vendas", "spend": "190.25", "impressions": "10400", "reach": "7100", "clicks": "470", "actions": [{ "action_type": "link_click", "value": "350" }, { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "19" }] },
+    { "campaign_id": "12002", "campaign_name": "Remarketing", "objective": "Vendas", "spend": "80.20", "impressions": "5020", "reach": "3600", "clicks": "251", "actions": [{ "action_type": "link_click", "value": "194" }, { "action_type": "offsite_conversion.fb_pixel_purchase", "value": "8" }] },
+    { "campaign_id": "12003", "campaign_name": "Mensagens - Centro", "objective": "Mensagens", "spend": "50.00", "impressions": "3000", "reach": "2400", "clicks": "90", "actions": [{ "action_type": "link_click", "value": "60" }, { "action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "58" }] }
+  ]
+}

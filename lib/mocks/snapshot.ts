@@ -1,6 +1,7 @@
 import type { CardapioMetrics, DashboardSnapshot } from "@/lib/types";
 
 export const snapshot: DashboardSnapshot = {
+  primaryMetricId: "purchases",
   spend: 2940,
   spendDelta: 18.2,
   resultLabel: "Pedidos reais",
@@ -10,8 +11,9 @@ export const snapshot: DashboardSnapshot = {
   revenueDelta: 4.3,
   roas: 2.97,
   roasDelta: -11.4,
-  cpa: 36.8,
-  cpaDelta: 31.2,
+  primaryCostLabel: "Custo por compra",
+  primaryCost: 36.8,
+  primaryCostDelta: 31.2,
   quickInsights: [
     {
       label: "O que aconteceu",

@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import type { AlertItem, DashboardSnapshot } from "@/lib/types";
+import { formatCurrency } from "@/lib/utils/format";
 
 const dotStyle: Record<AlertItem["tone"], string> = {
   good: "bg-green",
@@ -10,9 +11,10 @@ const dotStyle: Record<AlertItem["tone"], string> = {
 
 interface QuickInsightsSectionProps {
   snapshot: DashboardSnapshot;
+  currency: string;
 }
 
-export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
+export function QuickInsightsSection({ snapshot, currency }: QuickInsightsSectionProps) {
   const toneColor: Record<string, string> = {
     green: "#22c55e",
     yellow: "#eab308",
@@ -46,14 +48,14 @@ export function QuickInsightsSection({ snapshot }: QuickInsightsSectionProps) {
           <div className="min-w-0">
             <div className="text-lg font-bold">{snapshot.healthLabel}</div>
             <p className="max-w-xs text-sm leading-6 text-muted">
-              Nota calculada por eficiencia, tendencia, CPA, ROAS e gargalos do funil.
+              Nota calculada por tendência, resultado, {snapshot.primaryCostLabel.toLowerCase()}{snapshot.primaryMetricId === "purchases" ? ", ROAS" : ""} e consistência da entrega.
             </p>
           </div>
         </div>
         <div className="space-y-3 font-mono text-[11px] text-muted">
-          <div className="flex items-center justify-between border-t border-border pt-3"><span>Eficiencia</span><strong className="font-medium text-text">{snapshot.roas.toFixed(2)}x</strong></div>
-          <div className="flex items-center justify-between border-t border-border pt-3"><span>Tendencia</span><strong className="font-medium text-text">{snapshot.resultDelta.toFixed(1)}%</strong></div>
-          <div className="flex items-center justify-between border-t border-border pt-3"><span>CPA</span><strong className="font-medium text-text">R$ {snapshot.cpa.toFixed(2)}</strong></div>
+          <div className="flex items-center justify-between border-t border-border pt-3"><span>{snapshot.primaryMetricId === "purchases" ? "ROAS" : "Variação do custo"}</span><strong className="font-medium text-text">{snapshot.primaryMetricId === "purchases" ? `${snapshot.roas.toFixed(2)}x` : snapshot.primaryCostDelta == null ? "Sem base comparável" : `${snapshot.primaryCostDelta.toFixed(1)}%`}</strong></div>
+          <div className="flex items-center justify-between border-t border-border pt-3"><span>Tendência</span><strong className="font-medium text-text">{snapshot.resultDelta == null ? "Sem base comparável" : `${snapshot.resultDelta.toFixed(1)}%`}</strong></div>
+          <div className="flex items-center justify-between border-t border-border pt-3"><span>{snapshot.primaryCostLabel}</span><strong className="font-medium text-text">{formatCurrency(snapshot.primaryCost, currency)}</strong></div>
         </div>
       </div>
 

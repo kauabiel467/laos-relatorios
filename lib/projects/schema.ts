@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { METRICS, SECTIONS } from "./model";
-const metricKey = z.string().refine((value) => value in METRICS);
+import { isPrimaryKpiId, type MetricId } from "@/lib/metrics/catalog";
+import { inferCalculationFormat } from "@/lib/metrics/engine";
+import { validateComparisonRanges, validateDateRange } from "@/lib/metrics/dates";
+const metricKey = z.custom<MetricId>((value) => typeof value === "string" && value in METRICS);
 const customMetric = z
   .object({
     id: z.string().regex(/^custom_[a-z0-9_-]{4,70}$/i),
@@ -13,6 +16,10 @@ const customMetric = z
     left: metricKey.optional(),
     right: metricKey.optional(),
     operation: z.enum(["add", "subtract", "divide", "percentage"]).optional(),
+    unit: z.enum(["currency", "count", "percent", "ratio"]).optional(),
+    origin: z.enum(["manual", "calculated"]).optional(),
+    aggregation: z.enum(["manual", "derived"]).optional(),
+    formula: z.string().max(180).optional(),
   })
   .superRefine((metric, ctx) => {
     if (metric.kind === "manual" && metric.value == null)
@@ -25,6 +32,16 @@ const customMetric = z
         code: "custom",
         message: "Configure os componentes da métrica calculada.",
       });
+    if (metric.kind === "calculated" && metric.left && metric.right && metric.operation) {
+      const dimensional = inferCalculationFormat(metric.left, metric.right, metric.operation);
+      if (!dimensional.valid)
+        ctx.addIssue({ code: "custom", message: dimensional.reason });
+      else if (metric.format !== dimensional.format)
+        ctx.addIssue({
+          code: "custom",
+          message: `O formato correto para esta fórmula é ${dimensional.format}.`,
+        });
+    }
   });
 export const configSchema = z
   .object({
@@ -43,6 +60,7 @@ export const configSchema = z
     subtitle: z.string().max(240),
     analysis: z.string().max(20000),
     template: z.string().max(100),
+    primary_metric: z.string().refine(isPrimaryKpiId, "Selecione um KPI principal válido."),
     custom_metrics: z.array(customMetric).max(12).optional(),
     metric_order: z.array(z.string().max(80)).max(42).optional(),
     metric_sizes: z
@@ -52,28 +70,42 @@ export const configSchema = z
     funnel_metrics: z.array(metricKey).min(2).max(6).optional(),
   })
   .superRefine((c, ctx) => {
-    function check(a: string, b: string) {
-      const d = (Date.parse(b) - Date.parse(a)) / 86400000;
-      if (d < 0 || d > 366)
-        ctx.addIssue({
-          code: "custom",
-          message: "Selecione um período de até 366 dias.",
-        });
+    // Future-date validation is repeated by resolvePeriod with the Meta account
+    // timezone. This schema validates the timezone-independent constraints.
+    const latestSupportedDate = "9999-12-31";
+    try {
+      validateDateRange({ since: c.since, until: c.until }, latestSupportedDate, "Período atual");
+    } catch (error) {
+      ctx.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Período atual inválido." });
     }
-    check(c.since, c.until);
     if (c.comparison === "custom") {
       if (!c.compare_since || !c.compare_until)
         ctx.addIssue({
           code: "custom",
           message: "Informe as datas de comparação.",
         });
-      else check(c.compare_since, c.compare_until);
+      else {
+        try {
+          validateComparisonRanges(
+            { since: c.since, until: c.until },
+            { since: c.compare_since, until: c.compare_until },
+            latestSupportedDate,
+          );
+        } catch (error) {
+          ctx.addIssue({ code: "custom", message: error instanceof Error ? error.message : "Período de comparação inválido." });
+        }
+      }
     }
     if (
       new Set(c.metrics).size !== c.metrics.length ||
       new Set(c.sections).size !== c.sections.length
     )
       ctx.addIssue({ code: "custom", message: "Remova blocos repetidos." });
+    if (!c.metrics.includes(c.primary_metric))
+      ctx.addIssue({
+        code: "custom",
+        message: "O KPI principal deve estar entre os indicadores da análise.",
+      });
     const customIds = (c.custom_metrics ?? []).map((metric) => metric.id);
     if (new Set(customIds).size !== customIds.length)
       ctx.addIssue({ code: "custom", message: "Há métricas personalizadas repetidas." });

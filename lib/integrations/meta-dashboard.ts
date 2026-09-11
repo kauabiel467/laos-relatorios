@@ -15,15 +15,24 @@ import type {
 } from "@/lib/types";
 import { readMetaSessionToken } from "@/lib/integrations/meta-oauth";
 import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import {
+  METRICS,
+  primaryCostDefinition,
+  type PrimaryKpiId,
+} from "@/lib/metrics/catalog";
+import {
+  metaMetrics,
+  metricChange,
+  primaryMetricSnapshot,
+  type MetaMetricRow,
+} from "@/lib/metrics/engine";
+import { resolvePeriod } from "@/lib/metrics/dates";
+import { adaptLegacyMeta } from "@/lib/metrics/meta-adapters";
+import type { MetaAdAccount } from "@/lib/types";
 
 type PeriodKey = "last_7d" | "last_30d" | "last_90d" | "custom";
 
-type MetaInsightAction = {
-  action_type: string;
-  value: string;
-};
-
-type MetaInsightRow = {
+type MetaInsightRow = MetaMetricRow & {
   spend?: string;
   impressions?: string;
   reach?: string;
@@ -31,8 +40,6 @@ type MetaInsightRow = {
   cpc?: string;
   cpm?: string;
   ctr?: string;
-  actions?: MetaInsightAction[];
-  action_values?: MetaInsightAction[];
   purchase_roas?: Array<{
     action_type: string;
     value: string;
@@ -76,11 +83,13 @@ type MetaAdCreativeRow = {
 type MetaSessionRow = {
   access_token: string | null;
   selected_account_ids: string[];
+  accounts: MetaAdAccount[];
 };
 
 interface MetaSessionInfo {
   accessToken: string;
   selectedAccountIds: string[];
+  accounts: MetaAdAccount[];
 }
 
 const META_GRAPH_VERSION = "v22.0";
@@ -93,176 +102,13 @@ function parseNumber(value: string | number | null | undefined) {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function startOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(0, 0, 0, 0);
-  return next;
-}
-
-function endOfDay(date: Date) {
-  const next = new Date(date);
-  next.setHours(23, 59, 59, 999);
-  return next;
-}
-
-function subDays(date: Date, days: number) {
-  const next = new Date(date);
-  next.setDate(next.getDate() - days);
-  return next;
-}
-
-function formatISODate(date: Date) {
-  return date.toISOString().slice(0, 10);
-}
-
-function parseISODate(value?: string | null) {
-  if (!value || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T12:00:00Z`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function getPeriodWindow(period: PeriodKey, customRange?: { since?: string | null; until?: string | null }) {
-  const today = new Date();
-  const customSince = period === "custom" ? parseISODate(customRange?.since) : null;
-  const customUntil = period === "custom" ? parseISODate(customRange?.until) : null;
-  const hasValidCustomRange = Boolean(customSince && customUntil && customSince <= customUntil);
-  const days =
-    hasValidCustomRange && customSince && customUntil
-      ? Math.max(1, Math.round((startOfDay(customUntil).getTime() - startOfDay(customSince).getTime()) / 86_400_000) + 1)
-      : period === "last_7d"
-        ? 7
-        : period === "last_90d"
-          ? 90
-          : 30;
-  const currentEnd = endOfDay(hasValidCustomRange && customUntil ? customUntil : today);
-  const currentStart = startOfDay(hasValidCustomRange && customSince ? customSince : subDays(today, days - 1));
-  const previousEnd = endOfDay(subDays(currentStart, 1));
-  const previousStart = startOfDay(subDays(previousEnd, days - 1));
-
-  return {
-    currentStart,
-    currentEnd,
-    previousStart,
-    previousEnd
-  };
-}
-
-function buildTimeRangeParams(start: Date, end: Date) {
+function buildTimeRangeParams(start: string, end: string) {
   return {
     time_range: JSON.stringify({
-      since: formatISODate(start),
-      until: formatISODate(end)
+      since: start,
+      until: end
     })
   };
-}
-
-function getActionValue(actions: MetaInsightAction[] | undefined, candidates: string[]) {
-  if (!actions?.length) return 0;
-
-  for (const candidate of candidates) {
-    const match = actions.find((action) => action.action_type === candidate);
-    if (match) {
-      return parseNumber(match.value);
-    }
-  }
-
-  return 0;
-}
-
-function getLinkClicks(row: MetaInsightRow | undefined) {
-  return getActionValue(row?.actions, ["link_click", "outbound_click"]);
-}
-
-function getPurchaseCount(row: MetaInsightRow | undefined) {
-  return getActionValue(row?.actions, [
-    "purchase",
-    "omni_purchase",
-    "offsite_conversion.fb_pixel_purchase",
-    "onsite_conversion.purchase"
-  ]);
-}
-
-function getProfileVisits(row: MetaInsightRow | undefined) {
-  return getActionValue(row?.actions, [
-    "profile_visit",
-    "profile_visits",
-    "instagram_profile_visit",
-    "ig_profile_visit",
-    "ig_profile_visits"
-  ]);
-}
-
-function getFollowersCount(row: MetaInsightRow | undefined) {
-  return getActionValue(row?.actions, [
-    "follow",
-    "follows",
-    "instagram_follow",
-    "ig_follow",
-    "page_like",
-    "like"
-  ]);
-}
-
-function getResultMetric(row: MetaInsightRow | undefined) {
-  const purchaseCount = getPurchaseCount(row);
-  if (purchaseCount > 0) {
-    return { label: "Vendas", value: purchaseCount };
-  }
-
-  const messageCount = getActionValue(row?.actions, [
-    "onsite_conversion.messaging_conversation_started_7d",
-    "messaging_conversation_started_7d"
-  ]);
-  if (messageCount > 0) {
-    return { label: "Conversas", value: messageCount };
-  }
-
-  const leadCount = getActionValue(row?.actions, ["lead", "onsite_conversion.lead_grouped"]);
-  if (leadCount > 0) {
-    return { label: "Leads", value: leadCount };
-  }
-
-  const profileVisits = getProfileVisits(row);
-  if (profileVisits > 0) {
-    return { label: "Visitas ao perfil", value: profileVisits };
-  }
-
-  const linkClicks = getLinkClicks(row);
-  if (linkClicks > 0) {
-    return { label: "Cliques no link", value: linkClicks };
-  }
-
-  const landingPageViews = getActionValue(row?.actions, ["landing_page_view"]);
-  if (landingPageViews > 0) {
-    return { label: "Landing page views", value: landingPageViews };
-  }
-
-  return { label: "Resultados", value: 0 };
-}
-
-function getRevenueValue(row: MetaInsightRow | undefined) {
-  return getActionValue(row?.action_values, [
-    "purchase",
-    "omni_purchase",
-    "offsite_conversion.fb_pixel_purchase",
-    "onsite_conversion.purchase"
-  ]);
-}
-
-function getRoasValue(row: MetaInsightRow | undefined, spend: number, revenue: number) {
-  if (spend > 0 && revenue > 0) {
-    return revenue / spend;
-  }
-
-  return parseNumber(row?.purchase_roas?.[0]?.value);
-}
-
-function getDelta(current: number, previous: number) {
-  if (previous === 0) {
-    return current === 0 ? 0 : 100;
-  }
-
-  return ((current - previous) / previous) * 100;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -303,14 +149,14 @@ function normalizeCampaignStatus(status?: string) {
   return String(status || "").toUpperCase() === "PAUSED" ? "PAUSED" : "ACTIVE";
 }
 
-function buildHealthScore(spend: number, resultValue: number, roas: number, cpa: number, resultDelta: number, roasDelta: number) {
+function buildHealthScore(spend: number, resultValue: number | null, roas: number, primaryCost: number | null, resultDelta: number | null, roasDelta: number | null, primaryKpi: PrimaryKpiId) {
   let score = 55;
-  score += clamp(roas * 10, 0, 25);
-  score += clamp(resultDelta / 4, -12, 12);
-  score += clamp(roasDelta / 5, -10, 10);
-  score -= clamp(cpa / 8, 0, 18);
+  if (primaryKpi === "purchases") score += clamp(roas * 10, 0, 25);
+  score += clamp((resultDelta ?? 0) / 4, -12, 12);
+  if (primaryKpi === "purchases") score += clamp((roasDelta ?? 0) / 5, -10, 10);
+  score -= clamp((primaryCost ?? 0) / 8, 0, 18);
   score += spend > 0 ? 6 : -6;
-  score += resultValue > 0 ? 8 : -12;
+  score += (resultValue ?? 0) > 0 ? 8 : -12;
 
   return Math.round(clamp(score, 8, 98));
 }
@@ -328,23 +174,20 @@ function buildHealthLabel(score: number) {
 }
 
 function buildFunnel(row: MetaInsightRow | undefined): FunnelStep[] {
-  const clicks = parseNumber(row?.clicks);
-  const landingPageViews = getActionValue(row?.actions, ["landing_page_view"]);
-  const initiatedCheckouts = getActionValue(row?.actions, ["initiate_checkout", "omni_initiated_checkout"]);
-  const purchases = getPurchaseCount(row);
+  const values = metaMetrics(row);
 
   return ([
-    { label: "Cliques", value: clicks, color: "indigo" },
-    { label: "Page views", value: landingPageViews, color: "purple" },
-    { label: "Checkout iniciado", value: initiatedCheckouts, color: "orange" },
-    { label: "Vendas", value: purchases, color: "green" }
+    { label: "Cliques", value: values.link_clicks ?? 0, color: "indigo" },
+    { label: "Page views", value: values.landing_views ?? 0, color: "purple" },
+    { label: "Checkout iniciado", value: values.checkouts ?? 0, color: "orange" },
+    { label: "Vendas", value: values.purchases ?? 0, color: "green" }
   ] satisfies FunnelStep[]).filter((step) => step.value > 0);
 }
 
-function buildAlerts(spendDelta: number, resultDelta: number, cpaDelta: number, roasDelta: number, roas: number): AlertItem[] {
+function buildAlerts(spendDelta: number | null, resultDelta: number | null, primaryCostDelta: number | null, roasDelta: number | null, roas: number, primaryCostLabel: string, primaryKpi: PrimaryKpiId): AlertItem[] {
   const alerts: AlertItem[] = [];
 
-  if (spendDelta > 5 && resultDelta < 0) {
+  if (spendDelta != null && resultDelta != null && spendDelta > 5 && resultDelta < 0) {
     alerts.push({
       id: "spend_result",
       title: "Investimento subiu e resultado caiu",
@@ -353,16 +196,16 @@ function buildAlerts(spendDelta: number, resultDelta: number, cpaDelta: number, 
     });
   }
 
-  if (cpaDelta > 15) {
+  if (primaryCostDelta != null && primaryCostDelta > 15) {
     alerts.push({
-      id: "cpa_pressure",
-      title: "CPA piorou acima do ideal",
-      description: "Vale revisar criativos, publico e posicionamentos antes de ampliar a verba.",
+      id: "primary_cost_pressure",
+      title: `${primaryCostLabel} piorou acima do ideal`,
+      description: "Vale revisar criativos, público e posicionamentos antes de ampliar a verba.",
       tone: "warning"
     });
   }
 
-  if (roasDelta < -10) {
+  if (primaryKpi === "purchases" && roasDelta != null && roasDelta < -10) {
     alerts.push({
       id: "roas_drop",
       title: "ROAS caiu no comparativo",
@@ -371,7 +214,7 @@ function buildAlerts(spendDelta: number, resultDelta: number, cpaDelta: number, 
     });
   }
 
-  if (roas >= 3) {
+  if (primaryKpi === "purchases" && roas >= 3) {
     alerts.push({
       id: "roas_good",
       title: "Conta com boa eficiencia",
@@ -392,32 +235,35 @@ function buildAlerts(spendDelta: number, resultDelta: number, cpaDelta: number, 
   return alerts.slice(0, 4);
 }
 
-function buildQuickInsights(current: MetaInsightRow | undefined, previous: MetaInsightRow | undefined, resultLabel: string, resultValue: number) {
-  const spend = parseNumber(current?.spend);
-  const previousSpend = parseNumber(previous?.spend);
-  const spendDelta = getDelta(spend, previousSpend);
-  const previousResult = getResultMetric(previous).value;
-  const resultDelta = getDelta(resultValue, previousResult);
-  const ctr = parseNumber(current?.ctr);
-  const previousCtr = parseNumber(previous?.ctr);
-  const ctrDelta = getDelta(ctr, previousCtr);
+function comparisonPhrase(label: string, delta: number | null) {
+  if (delta == null) return `${label} sem base comparável no período anterior`;
+  return `${label} ${delta >= 0 ? "subiu" : "caiu"} ${Math.abs(delta).toFixed(1)}%`;
+}
+
+function buildQuickInsights(current: MetaInsightRow | undefined, previous: MetaInsightRow | undefined, primaryKpi: PrimaryKpiId) {
+  const currentValues = metaMetrics(current);
+  const previousValues = metaMetrics(previous);
+  const spendDelta = metricChange(currentValues.spend, previousValues.spend);
+  const resultDelta = metricChange(currentValues[primaryKpi], previousValues[primaryKpi]);
+  const ctrDelta = metricChange(currentValues.ctr, previousValues.ctr);
+  const resultLabel = METRICS[primaryKpi].label;
 
   return [
     {
       label: "O que aconteceu",
-      title: `Investimento ${spendDelta >= 0 ? "subiu" : "caiu"} ${Math.abs(spendDelta).toFixed(1)}% e ${resultLabel.toLowerCase()} ${resultDelta >= 0 ? "subiu" : "caiu"} ${Math.abs(resultDelta).toFixed(1)}%.`,
-      description: "Comparativo automatico da janela atual contra a janela anterior com a mesma duracao.",
+      title: `${comparisonPhrase("Investimento", spendDelta)} e ${comparisonPhrase(resultLabel.toLowerCase(), resultDelta)}.`,
+      description: "Comparativo automático contra o período de comparação configurado.",
       tone: "blue" as const
     },
     {
       label: "Por que importa",
-      title: `CTR ${ctrDelta >= 0 ? "melhorou" : "piorou"} ${Math.abs(ctrDelta).toFixed(1)}% no periodo.`,
+      title: `${comparisonPhrase("CTR", ctrDelta)} no período.`,
       description: "A taxa de clique ajuda a identificar cedo quando a conta esta ganhando ou perdendo tracao.",
       tone: "orange" as const
     },
     {
       label: "Proxima acao",
-      title: resultDelta < 0 ? "Prioridade em revisar campanhas com maior custo e menor retorno." : "Mapear as campanhas mais eficientes para escalar com seguranca.",
+      title: resultDelta != null && resultDelta < 0 ? "Prioridade em revisar campanhas com maior custo e menor retorno." : "Mapear as campanhas mais eficientes para escalar com segurança.",
       description: "O painel cruza conta ativa, campanhas e comparativo para acelerar a decisao.",
       tone: "green" as const
     }
@@ -425,133 +271,81 @@ function buildQuickInsights(current: MetaInsightRow | undefined, previous: MetaI
 }
 
 function buildMediaMetrics(current: MetaInsightRow | undefined, previous: MetaInsightRow | undefined): MediaMetricCard[] {
-  const currentReach = parseNumber(current?.reach);
-  const previousReach = parseNumber(previous?.reach);
-  const currentLinkClicks = getLinkClicks(current);
-  const previousLinkClicks = getLinkClicks(previous);
-  const currentCtr = parseNumber(current?.ctr);
-  const previousCtr = parseNumber(previous?.ctr);
-  const currentCpm = parseNumber(current?.cpm);
-  const previousCpm = parseNumber(previous?.cpm);
-  const currentSpend = parseNumber(current?.spend);
-  const previousSpend = parseNumber(previous?.spend);
-  const currentCpc = currentLinkClicks > 0 ? currentSpend / currentLinkClicks : parseNumber(current?.cpc);
-  const previousCpc = previousLinkClicks > 0 ? previousSpend / previousLinkClicks : parseNumber(previous?.cpc);
+  const currentValues = metaMetrics(current);
+  const previousValues = metaMetrics(previous);
+  const inverse = (value: number | null) => value == null ? null : value * -1;
 
   return [
-    { label: "Alcance", value: currentReach, delta: getDelta(currentReach, previousReach), format: "compact", tone: "purple" },
-    { label: "Cliques no Link", value: currentLinkClicks, delta: getDelta(currentLinkClicks, previousLinkClicks), format: "compact", tone: "blue" },
-    { label: "CTR", value: currentCtr, delta: getDelta(currentCtr, previousCtr), format: "percent", tone: "cyan" },
-    { label: "CPM", value: currentCpm, delta: previousCpm > 0 ? getDelta(currentCpm, previousCpm) * -1 : null, format: "currency", tone: "orange" },
-    { label: "CPC", value: currentCpc, delta: previousCpc > 0 ? getDelta(currentCpc, previousCpc) * -1 : null, format: "currency", tone: "green" }
+    { label: "Alcance", value: currentValues.reach ?? 0, delta: metricChange(currentValues.reach, previousValues.reach), format: "compact", tone: "purple" },
+    { label: "Cliques no Link", value: currentValues.link_clicks ?? 0, delta: metricChange(currentValues.link_clicks, previousValues.link_clicks), format: "compact", tone: "blue" },
+    { label: "CTR", value: currentValues.ctr ?? 0, delta: metricChange(currentValues.ctr, previousValues.ctr), format: "percent", tone: "cyan" },
+    { label: "CPM", value: currentValues.cpm ?? 0, delta: inverse(metricChange(currentValues.cpm, previousValues.cpm)), format: "currency", tone: "orange" },
+    { label: "CPC", value: currentValues.cpc ?? 0, delta: inverse(metricChange(currentValues.cpc, previousValues.cpc)), format: "currency", tone: "green" }
   ];
 }
 
-function getCampaignObjectiveMetric(campaign: CampaignMetric) {
-  const objective = campaign.objective.toLowerCase();
-
-  if (objective.includes("venda")) {
-    return { label: "Vendas", value: campaign.purchases ?? campaign.result };
-  }
-
-  if (objective.includes("trafego") || objective.includes("reconhecimento") || objective.includes("alcance")) {
-    return { label: "Cliques", value: campaign.clicks ?? campaign.result };
-  }
-
-  if (objective.includes("mensagem")) {
-    return { label: "Conversas", value: campaign.result };
-  }
-
-  if (objective.includes("lead")) {
-    return { label: "Leads", value: campaign.result };
-  }
-
-  if (objective.includes("engajamento")) {
-    return { label: "Engajamentos", value: campaign.result };
-  }
-
-  return { label: "Resultados", value: campaign.result };
-}
-
-function buildObjectiveDistribution(campaigns: CampaignMetric[]): ObjectiveDistributionItem[] {
-  const grouped = new Map<string, { value: number; valueLabel: string }>();
-
-  for (const campaign of campaigns) {
-    const metric = getCampaignObjectiveMetric(campaign);
-    const current = grouped.get(campaign.objective) || { value: 0, valueLabel: metric.label };
-    grouped.set(campaign.objective, {
-      value: current.value + metric.value,
-      valueLabel: current.valueLabel
-    });
-  }
-
-  const totalValue = [...grouped.values()].reduce((sum, item) => sum + item.value, 0);
-
-  return [...grouped.entries()]
-    .map(([label, item]) => ({
-      label,
-      value: item.value,
-      valueLabel: item.valueLabel,
-      percentage: totalValue > 0 ? (item.value / totalValue) * 100 : 0
-    }))
-    .sort((first, second) => second.value - first.value);
-}
-
-function buildHourlyPerformance(rows: MetaInsightRow[]): HourlyPerformancePoint[] {
-  const byHour = new Map<number, number>();
+function buildHourlyPerformance(rows: MetaInsightRow[], primaryKpi: PrimaryKpiId): HourlyPerformancePoint[] {
+  const byHour = new Map<number, number | null>();
 
   for (const row of rows) {
     const rawHour = parseInt(row.hourly_stats_aggregated_by_advertiser_time_zone || "0", 10);
-    const value = getPurchaseCount(row) || getResultMetric(row).value || parseNumber(row.clicks);
-    byHour.set(rawHour, (byHour.get(rawHour) || 0) + value);
+    const value = metaMetrics(row)[primaryKpi];
+    const current = byHour.get(rawHour);
+    byHour.set(rawHour, value == null ? current ?? null : (current ?? 0) + value);
   }
 
-  const values = [...byHour.values()];
+  const values = [...byHour.values()].filter((value): value is number => value != null);
   const maxValue = Math.max(...values, 0);
 
   return Array.from({ length: 24 }, (_, hour) => {
-    const value = byHour.get(hour) || 0;
-    const ratio = maxValue > 0 ? value / maxValue : 0;
+    const value = byHour.get(hour) ?? null;
+    const ratio = maxValue > 0 && value != null ? value / maxValue : 0;
 
     return {
       label: `${String(hour).padStart(2, "0")}h`,
       value,
+      metricId: primaryKpi,
       highlight: ratio > 0.8 ? "high" : ratio > 0.5 ? "medium" : "base"
     };
   });
 }
 
-function buildAgeAudience(rows: MetaInsightRow[]): AgeAudiencePoint[] {
-  const grouped = new Map<string, number>();
+function buildAgeAudience(rows: MetaInsightRow[], primaryKpi: PrimaryKpiId): AgeAudiencePoint[] {
+  const grouped = new Map<string, number | null>();
 
   for (const row of rows) {
     const label = row.age || "—";
-    grouped.set(label, (grouped.get(label) || 0) + getResultMetric(row).value);
+    const value = metaMetrics(row)[primaryKpi];
+    const current = grouped.get(label);
+    grouped.set(label, value == null ? current ?? null : (current ?? 0) + value);
   }
 
   return [...grouped.entries()]
-    .map(([label, value]) => ({ label, value }))
+    .map(([label, value]) => ({ label, value, metricId: primaryKpi }))
     .sort((first, second) => first.label.localeCompare(second.label, "pt-BR"));
 }
 
-function buildGenderAudience(rows: MetaInsightRow[]): GenderAudiencePoint[] {
-  const grouped = new Map<string, number>([
-    ["Masculino", 0],
-    ["Feminino", 0],
-    ["Desconhecido", 0]
+function buildGenderAudience(rows: MetaInsightRow[], primaryKpi: PrimaryKpiId): GenderAudiencePoint[] {
+  const grouped = new Map<string, number | null>([
+    ["Masculino", null],
+    ["Feminino", null],
+    ["Desconhecido", null]
   ]);
 
   for (const row of rows) {
     const normalized = String(row.gender || "").toLowerCase();
     const label = normalized === "male" ? "Masculino" : normalized === "female" ? "Feminino" : "Desconhecido";
-    grouped.set(label, (grouped.get(label) || 0) + getResultMetric(row).value);
+    const value = metaMetrics(row)[primaryKpi];
+    const current = grouped.get(label);
+    grouped.set(label, value == null ? current ?? null : (current ?? 0) + value);
   }
 
-  const total = [...grouped.values()].reduce((sum, value) => sum + value, 0);
+  const total = [...grouped.values()].reduce<number>((sum, value) => sum + (value ?? 0), 0);
   return [...grouped.entries()].map(([label, value]) => ({
     label,
     value,
-    percentage: total > 0 ? (value / total) * 100 : 0
+    metricId: primaryKpi,
+    percentage: total > 0 && value != null ? (value / total) * 100 : 0
   }));
 }
 
@@ -608,7 +402,7 @@ async function getMetaSession(): Promise<MetaSessionInfo> {
 
   const { data, error } = await admin
     .from("meta_integration_sessions")
-    .select("access_token, selected_account_ids")
+    .select("access_token, selected_account_ids, accounts")
     .eq("session_token", sessionToken).eq("user_id", await requireMetaUser())
     .maybeSingle();
 
@@ -619,7 +413,8 @@ async function getMetaSession(): Promise<MetaSessionInfo> {
   const row = data as MetaSessionRow;
   return {
     accessToken: row.access_token!,
-    selectedAccountIds: row.selected_account_ids
+    selectedAccountIds: row.selected_account_ids,
+    accounts: row.accounts ?? [],
   };
 }
 
@@ -631,7 +426,8 @@ function ensureAccountAllowed(accountId: string, selectedAccountIds: string[]) {
 export async function fetchMetaDashboardData(
   accountId: string,
   period: PeriodKey,
-  customRange?: { since?: string | null; until?: string | null }
+  primaryKpi: PrimaryKpiId,
+  customRange?: { since?: string | null; until?: string | null; compareSince?: string | null; compareUntil?: string | null }
 ): Promise<DashboardDataBundle> {
   const session = await getMetaSession();
   const normalizedAccountId = accountId.startsWith("act_") ? accountId : `act_${accountId}`;
@@ -640,8 +436,27 @@ export async function fetchMetaDashboardData(
     throw new Error("Essa conta nao esta liberada na integracao atual da Meta.");
   }
 
-  const { currentStart, currentEnd, previousStart, previousEnd } = getPeriodWindow(period, customRange);
   const accessToken = session.accessToken;
+  const storedAccount = session.accounts.find((account) => account.id === normalizedAccountId || account.accountId === normalizedAccountId.replace(/^act_/, ""));
+  let timezone = storedAccount?.timezoneName;
+  let currency = storedAccount?.currency;
+  if (!timezone || !currency) {
+    const account = await fetchGraph<{ timezone_name?: string; currency?: string }>(normalizedAccountId, { fields: "timezone_name,currency" }, accessToken);
+    timezone = account.timezone_name;
+    currency = account.currency;
+  }
+  timezone ||= "UTC";
+  currency ||= "BRL";
+  const today = new Date().toISOString().slice(0, 10);
+  const effective = resolvePeriod(
+    period,
+    timezone,
+    { since: customRange?.since ?? today, until: customRange?.until ?? today },
+    customRange?.compareSince && customRange?.compareUntil ? "custom" : "previous",
+    { since: customRange?.compareSince ?? undefined, until: customRange?.compareUntil ?? undefined },
+  );
+  const previousStart = effective.compare_since!;
+  const previousEnd = effective.compare_until!;
 
   const [currentInsightsPayload, previousInsightsPayload, dailyInsightsPayload, hourlyInsightsPayload, audienceInsightsPayload, campaignsPayload, campaignInsightsPayload] =
     await Promise.all([
@@ -649,7 +464,7 @@ export async function fetchMetaDashboardData(
         `${normalizedAccountId}/insights`,
         {
           fields: "spend,impressions,reach,clicks,cpc,cpm,ctr,actions,action_values,purchase_roas",
-          ...buildTimeRangeParams(currentStart, currentEnd)
+          ...buildTimeRangeParams(effective.since, effective.until)
         },
         accessToken
       ),
@@ -666,27 +481,27 @@ export async function fetchMetaDashboardData(
         {
           fields: "date_start,spend,clicks,actions,action_values",
           time_increment: "1",
-          ...buildTimeRangeParams(currentStart, currentEnd)
+          ...buildTimeRangeParams(effective.since, effective.until)
         },
         accessToken
       ),
       fetchGraph<{ data: MetaInsightRow[] }>(
         `${normalizedAccountId}/insights`,
         {
-          fields: "clicks,actions",
+          fields: "spend,impressions,reach,clicks,actions,action_values",
           breakdowns: "hourly_stats_aggregated_by_advertiser_time_zone",
           limit: "200",
-          ...buildTimeRangeParams(currentStart, currentEnd)
+          ...buildTimeRangeParams(effective.since, effective.until)
         },
         accessToken
       ),
       fetchGraph<{ data: MetaInsightRow[] }>(
         `${normalizedAccountId}/insights`,
         {
-          fields: "actions,clicks",
+          fields: "spend,impressions,reach,clicks,actions,action_values",
           breakdowns: "age,gender",
           limit: "200",
-          ...buildTimeRangeParams(currentStart, currentEnd)
+          ...buildTimeRangeParams(effective.since, effective.until)
         },
         accessToken
       ),
@@ -701,10 +516,10 @@ export async function fetchMetaDashboardData(
       fetchGraph<{ data: MetaCampaignInsightRow[] }>(
         `${normalizedAccountId}/insights`,
         {
-          fields: "campaign_id,campaign_name,spend,reach,clicks,ctr,actions,action_values,purchase_roas",
+          fields: "campaign_id,campaign_name,spend,impressions,reach,clicks,actions,action_values",
           level: "campaign",
           limit: "200",
-          ...buildTimeRangeParams(currentStart, currentEnd)
+          ...buildTimeRangeParams(effective.since, effective.until)
         },
         accessToken
       )
@@ -712,91 +527,102 @@ export async function fetchMetaDashboardData(
 
   const current = currentInsightsPayload.data[0];
   const previous = previousInsightsPayload.data[0];
-  const spend = parseNumber(current?.spend);
-  const previousSpend = parseNumber(previous?.spend);
-  const spendDelta = getDelta(spend, previousSpend);
+  const campaignMeta = new Map(campaignsPayload.data.map((campaign) => [campaign.id, campaign]));
+  const projection = adaptLegacyMeta({
+    current,
+    previous,
+    daily: dailyInsightsPayload.data,
+    campaigns: campaignInsightsPayload.data.map((row) => ({
+      ...row,
+      campaign_name: campaignMeta.get(row.campaign_id)?.name ?? row.campaign_name,
+      objective: formatObjective(campaignMeta.get(row.campaign_id)?.objective),
+    })),
+  }, primaryKpi);
+  const currentValues = projection.current;
+  const previousValues = projection.previous;
+  const primary = primaryMetricSnapshot(current, previous, primaryKpi);
+  const spend = currentValues.spend ?? 0;
+  const spendDelta = metricChange(currentValues.spend, previousValues.spend);
+  const resultValue = primary.currentValue;
+  const resultDelta = primary.delta;
+  const revenue = currentValues.revenue ?? 0;
+  const revenueDelta = metricChange(currentValues.revenue, previousValues.revenue);
+  const roas = currentValues.roas ?? 0;
+  const roasDelta = metricChange(currentValues.roas, previousValues.roas);
+  const primaryCost = currentValues.spend == null || resultValue == null || resultValue === 0 ? null : currentValues.spend / resultValue;
+  const previousPrimaryCost = previousValues.spend == null || primary.previousValue == null || primary.previousValue === 0 ? null : previousValues.spend / primary.previousValue;
+  const primaryCostDelta = metricChange(primaryCost, previousPrimaryCost);
+  const primaryCostMeta = primaryCostDefinition(primaryKpi);
 
-  const currentMetric = getResultMetric(current);
-  const previousMetric = getResultMetric(previous);
-  const resultValue = currentMetric.value;
-  const resultDelta = getDelta(resultValue, previousMetric.value);
-
-  const revenue = getRevenueValue(current);
-  const previousRevenue = getRevenueValue(previous);
-  const revenueDelta = getDelta(revenue, previousRevenue);
-
-  const roas = getRoasValue(current, spend, revenue);
-  const previousRoas = getRoasValue(previous, previousSpend, previousRevenue);
-  const roasDelta = getDelta(roas, previousRoas);
-
-  const cpa = resultValue > 0 ? spend / resultValue : 0;
-  const previousCpa = previousMetric.value > 0 ? previousSpend / previousMetric.value : 0;
-  const cpaDelta = getDelta(cpa, previousCpa);
-
-  const dailySeries: DailyPoint[] = dailyInsightsPayload.data.map((row) => {
-    const resultMetric = getResultMetric(row);
+  const dailySeries: DailyPoint[] = projection.series.map((row) => {
     return {
-      label: row.date_start
-        ? new Date(`${row.date_start}T12:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+      label: row.date
+        ? new Date(`${row.date}T12:00:00Z`).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
         : "--",
-      spend: parseNumber(row.spend),
-      result: resultMetric.value,
-      revenue: getRevenueValue(row)
+      spend: row.metrics.spend ?? 0,
+      result: row.value,
+      metricId: primaryKpi,
+      revenue: row.metrics.revenue ?? undefined,
     };
   });
 
-  const campaignMeta = new Map(campaignsPayload.data.map((campaign) => [campaign.id, campaign]));
   const campaigns: CampaignMetric[] = campaignInsightsPayload.data
     .map((row) => {
       const metaCampaign = campaignMeta.get(row.campaign_id);
-      const campaignSpend = parseNumber(row.spend);
-      const campaignRevenue = getRevenueValue(row);
-      const campaignPurchases = getPurchaseCount(row);
-      const campaignMetric = getResultMetric(row);
+      const projected = projection.campaigns.find((item) => item.id === row.campaign_id)!;
+      const values = projected.metrics;
+      const campaignSpend = values.spend ?? 0;
 
       return {
         id: row.campaign_id,
         name: metaCampaign?.name || row.campaign_name || row.campaign_id,
         status: normalizeCampaignStatus(metaCampaign?.status) as CampaignMetric["status"],
         objective: formatObjective(metaCampaign?.objective),
-        resultLabel: campaignMetric.label,
+        resultLabel: METRICS[primaryKpi].label,
+        metricId: primaryKpi,
+        metrics: values,
         spend: campaignSpend,
-        reach: parseNumber(row.reach),
-        impressions: parseNumber(row.impressions),
-        clicks: parseNumber(row.clicks),
-        purchases: campaignPurchases,
-        followers: getFollowersCount(row),
-        ctr: parseNumber(row.ctr),
-        roas: getRoasValue(row, campaignSpend, campaignRevenue),
-        result: campaignMetric.value
+        reach: values.reach,
+        impressions: values.impressions ?? undefined,
+        clicks: values.clicks ?? undefined,
+        purchases: values.purchases ?? undefined,
+        followers: values.followers ?? undefined,
+        ctr: values.ctr ?? 0,
+        roas: values.roas ?? 0,
+        result: values[primaryKpi],
       };
     })
     .sort((first, second) => second.spend - first.spend);
 
   const mediaMetrics = buildMediaMetrics(current, previous);
-  const objectiveDistribution = buildObjectiveDistribution(campaigns);
-  const hourlyPerformance = buildHourlyPerformance(hourlyInsightsPayload.data);
-  const ageAudience = buildAgeAudience(audienceInsightsPayload.data);
-  const genderAudience = buildGenderAudience(audienceInsightsPayload.data);
-  const healthScore = buildHealthScore(spend, resultValue, roas, cpa, resultDelta, roasDelta);
+  const objectiveDistribution: ObjectiveDistributionItem[] = projection.objectiveDistribution.map((item) => ({
+    ...item,
+    valueLabel: "Investimento",
+  }));
+  const hourlyPerformance = buildHourlyPerformance(hourlyInsightsPayload.data, primaryKpi);
+  const ageAudience = buildAgeAudience(audienceInsightsPayload.data, primaryKpi);
+  const genderAudience = buildGenderAudience(audienceInsightsPayload.data, primaryKpi);
+  const healthScore = buildHealthScore(spend, resultValue, roas, primaryCost, resultDelta, roasDelta, primaryKpi);
   const health = buildHealthLabel(healthScore);
   const funnel = buildFunnel(current);
   const bestCampaign = [...campaigns].sort((first, second) => second.roas - first.roas)[0];
 
   const snapshot: DashboardSnapshot = {
+    primaryMetricId: primaryKpi,
     spend,
     spendDelta,
-    resultLabel: currentMetric.label,
+    resultLabel: METRICS[primaryKpi].label,
     resultValue,
     resultDelta,
     revenue,
     revenueDelta,
     roas,
     roasDelta,
-    cpa,
-    cpaDelta,
-    quickInsights: buildQuickInsights(current, previous, currentMetric.label, resultValue),
-    alerts: buildAlerts(spendDelta, resultDelta, cpaDelta, roasDelta, roas),
+    primaryCostLabel: primaryCostMeta.label,
+    primaryCost,
+    primaryCostDelta,
+    quickInsights: buildQuickInsights(current, previous, primaryKpi),
+    alerts: buildAlerts(spendDelta, resultDelta, primaryCostDelta, roasDelta, roas, primaryCostMeta.label, primaryKpi),
     healthScore,
     healthLabel: health.label,
     healthTone: health.tone,
@@ -811,6 +637,15 @@ export async function fetchMetaDashboardData(
   };
 
   return {
+    primaryMetricId: primaryKpi,
+    timezone,
+    currency,
+    effectivePeriod: {
+      since: effective.since,
+      until: effective.until,
+      compareSince: previousStart,
+      compareUntil: previousEnd,
+    },
     snapshot,
     dailySeries,
     campaigns,
@@ -828,12 +663,19 @@ export async function fetchMetaCampaignAds(
   customRange?: { since?: string | null; until?: string | null }
 ): Promise<AdItem[]> {
   const session = await getMetaSession();
-  const { currentStart, currentEnd } = getPeriodWindow(period, customRange);
   const accessToken = session.accessToken;
   const normalizedCampaignId = campaignId.replace(/^cmp_/, "");
 
   const campaign = await fetchGraph<{account_id:string}>(normalizedCampaignId, {fields:"account_id"}, accessToken);
   if (!ensureAccountAllowed(campaign.account_id, session.selectedAccountIds)) throw new Error("Campanha não autorizada.");
+  const normalizedAccountId = campaign.account_id.startsWith("act_") ? campaign.account_id : `act_${campaign.account_id}`;
+  const storedAccount = session.accounts.find((account) => account.id === normalizedAccountId || account.accountId === campaign.account_id);
+  const timezone = storedAccount?.timezoneName ?? "UTC";
+  const today = new Date().toISOString().slice(0, 10);
+  const effective = resolvePeriod(period, timezone, {
+    since: customRange?.since ?? today,
+    until: customRange?.until ?? today,
+  });
   const [insightsPayload, creativesPayload] = await Promise.all([
     fetchGraph<{ data: MetaAdInsightRow[] }>(
       `${normalizedCampaignId}/insights`,
@@ -841,7 +683,7 @@ export async function fetchMetaCampaignAds(
         fields: "ad_id,ad_name,ctr,cpc,spend,impressions",
         level: "ad",
         limit: "100",
-        ...buildTimeRangeParams(currentStart, currentEnd)
+        ...buildTimeRangeParams(effective.since, effective.until)
       },
       accessToken
     ),

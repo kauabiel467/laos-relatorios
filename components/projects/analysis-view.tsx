@@ -8,6 +8,7 @@ import {
   formatCustomMetric,
   formatMetric,
   metricChange,
+  normalizeAnalysisConfig,
   periodDates,
   comparisonDates,
   type AnalysisConfig,
@@ -18,6 +19,8 @@ import {
   type CustomMetricDefinition,
   type MetricSize,
 } from "@/lib/projects/model";
+import { PRIMARY_KPI_IDS, isPrimaryKpiId, type MetricUnit, type PrimaryKpiId } from "@/lib/metrics/catalog";
+import { inferCalculationFormat } from "@/lib/metrics/engine";
 import { Dialog, MetaMark, shortDate } from "./ui";
 import { LineChart } from "./line-chart";
 
@@ -31,6 +34,10 @@ const defaultCustomMetric = (): CustomMetricDefinition => ({
   left: "revenue",
   right: "spend",
   operation: "divide",
+  unit: "count",
+  origin: "manual",
+  aggregation: "manual",
+  formula: "Valor informado manualmente",
 });
 
 export function AnalysisView({
@@ -53,7 +60,7 @@ export function AnalysisView({
   onAction: (action: string, extra?: Record<string, unknown>) => Promise<void>;
 }) {
   const [auto, setAuto] = useState(false);
-  const [config, setConfig] = useState(doc.config),
+  const [config, setConfig] = useState(normalizeAnalysisConfig(doc.config)),
     [title, setTitle] = useState(doc.title),
     [preview, setPreview] = useState(!staff || initialPreview),
     [editor, setEditor] = useState(doc.kind === "template"),
@@ -65,9 +72,10 @@ export function AnalysisView({
     [draggedMetric, setDraggedMetric] = useState(""),
     [customMetricOpen, setCustomMetricOpen] = useState(false),
     [editingCustomId, setEditingCustomId] = useState(""),
-    [customMetric, setCustomMetric] = useState(defaultCustomMetric());
+    [customMetric, setCustomMetric] = useState(defaultCustomMetric()),
+    [customMetricError, setCustomMetricError] = useState("");
   useEffect(() => {
-    setConfig(doc.config);
+    setConfig(normalizeAnalysisConfig(doc.config));
     setTitle(doc.title);
   }, [doc]);
   useEffect(
@@ -87,7 +95,7 @@ export function AnalysisView({
   const data = doc.data,
     currency = data?.currency ?? "BRL";
   const dirty =
-    JSON.stringify(config) !== JSON.stringify(doc.config) ||
+    JSON.stringify(config) !== JSON.stringify(normalizeAnalysisConfig(doc.config)) ||
     title !== doc.title;
   const patch = (value: Partial<AnalysisConfig>) =>
     setConfig((c) => ({ ...c, ...value }));
@@ -113,6 +121,7 @@ export function AnalysisView({
         : ["impressions", "link_clicks", "leads"];
   const replaceMetric = (current: MetricKey, next: MetricKey) => {
     if (current === next || config.metrics.includes(next)) return;
+    if (config.primary_metric === current && !isPrimaryKpiId(next)) return;
     const sizes = { ...(config.metric_sizes ?? {}) };
     if (sizes[current]) {
       sizes[next] = sizes[current];
@@ -127,6 +136,9 @@ export function AnalysisView({
       ),
       metric_sizes: sizes,
       chart_metric: config.chart_metric === current ? next : config.chart_metric,
+      primary_metric: config.primary_metric === current
+        ? next as PrimaryKpiId
+        : config.primary_metric,
       funnel_metrics: config.funnel_metrics
         ? Array.from(
             new Set(
@@ -141,10 +153,15 @@ export function AnalysisView({
   const removeMetric = (id: string) => {
     const builtIn = id in METRICS;
     if (builtIn && config.metrics.length <= 1) return;
+    const remaining = builtIn
+      ? config.metrics.filter((metric) => metric !== id)
+      : config.metrics;
+    const fallbackPrimary = PRIMARY_KPI_IDS.find((metric) => remaining.includes(metric));
+    if (id === config.primary_metric && !fallbackPrimary) return;
     patch({
-      metrics: builtIn
-        ? config.metrics.filter((metric) => metric !== id)
-        : config.metrics,
+      metrics: remaining,
+      primary_metric: id === config.primary_metric ? fallbackPrimary! : config.primary_metric,
+      chart_metric: id === config.primary_metric ? fallbackPrimary! : config.chart_metric,
       custom_metrics: builtIn
         ? customMetrics
         : customMetrics.filter((metric) => metric.id !== id),
@@ -171,7 +188,52 @@ export function AnalysisView({
   };
   const saveCustomMetric = () => {
     const id = editingCustomId || `custom_${Date.now().toString(36)}`;
-    const next = { ...customMetric, id };
+    let next: CustomMetricDefinition;
+    if (customMetric.kind === "calculated") {
+      if (!customMetric.left || !customMetric.right || !customMetric.operation) {
+        setCustomMetricError("Configure as duas métricas e a operação.");
+        return;
+      }
+      const validation = inferCalculationFormat(
+        customMetric.left,
+        customMetric.right,
+        customMetric.operation,
+      );
+      if (!validation.valid) {
+        setCustomMetricError(validation.reason);
+        return;
+      }
+      const unit: MetricUnit = validation.format === "money"
+        ? "currency"
+        : validation.format === "percent"
+          ? "percent"
+          : "ratio";
+      next = {
+        ...customMetric,
+        id,
+        format: validation.format,
+        unit,
+        origin: "calculated",
+        aggregation: "derived",
+        formula: `${METRICS[customMetric.left].id} ${customMetric.operation} ${METRICS[customMetric.right].id}`,
+      };
+    } else {
+      const unit: MetricUnit = customMetric.format === "money"
+        ? "currency"
+        : customMetric.format === "percent"
+          ? "percent"
+          : customMetric.format === "ratio"
+            ? "ratio"
+            : "count";
+      next = {
+        ...customMetric,
+        id,
+        unit,
+        origin: "manual",
+        aggregation: "manual",
+        formula: "Valor informado manualmente",
+      };
+    }
     patch({
       custom_metrics: editingCustomId
         ? customMetrics.map((metric) => (metric.id === id ? next : metric))
@@ -179,6 +241,7 @@ export function AnalysisView({
       metric_order: editingCustomId ? metricOrder : [...metricOrder, id],
     });
     setEditingCustomId("");
+    setCustomMetricError("");
     setCustomMetric(defaultCustomMetric());
     setCustomMetricOpen(false);
   };
@@ -337,7 +400,8 @@ export function AnalysisView({
                               key={metric}
                               value={metric}
                               disabled={
-                                metric !== builtIn && config.metrics.includes(metric)
+                                (metric !== builtIn && config.metrics.includes(metric)) ||
+                                (builtIn === config.primary_metric && !isPrimaryKpiId(metric))
                               }
                             >
                               {METRICS[metric].label}
@@ -372,7 +436,11 @@ export function AnalysisView({
                     {delta != null && (
                       <small
                         className={
-                          (definition.lower ? delta < 0 : delta > 0)
+                          (("favorableDirection" in definition
+                            ? definition.favorableDirection === "decrease"
+                            : definition.lower)
+                            ? delta < 0
+                            : delta > 0)
                             ? "positive"
                             : delta === 0
                               ? "neutral"
@@ -386,6 +454,9 @@ export function AnalysisView({
                   </div>
                   {data.previous && previous != null && (
                     <p>{formattedPrevious} no período anterior</p>
+                  )}
+                  {data.previous && previous === 0 && value != null && (
+                    <p>Sem base comparável no período anterior.</p>
                   )}
                 </article>
               );
@@ -423,9 +494,7 @@ export function AnalysisView({
         );
       }
       case "results": {
-        const metric = config.chart_metric ??
-          config.metrics.find((key) => key !== "spend") ??
-          "link_clicks";
+        const metric = config.primary_metric;
         return (
           <section className="pj-block">
             <h3>{METRICS[metric].label} ao longo do período</h3>
@@ -602,10 +671,10 @@ export function AnalysisView({
       </div>
       <div className="pj-analysis-subbar">
         <button disabled={!editable || preview} onClick={() => setDates(true)}>
-          ▣ {shortDate(config.since)} — {shortDate(config.until)}
+          ▣ {shortDate(data?.effective_period?.since ?? config.since)} — {shortDate(data?.effective_period?.until ?? config.until)}
           <small>
             {data?.previous
-              ? `Comparação: ${shortDate(compare.compare_since!)} a ${shortDate(compare.compare_until!)}`
+              ? `Comparação: ${shortDate(data.effective_period?.compare_since ?? compare.compare_since!)} a ${shortDate(data.effective_period?.compare_until ?? compare.compare_until!)}`
               : "Sem comparação"}
           </small>
         </button>
@@ -689,6 +758,20 @@ export function AnalysisView({
               />
             </label>
             <h4>Indicadores</h4>
+            <label>
+              KPI principal
+              <select
+                value={config.primary_metric}
+                onChange={(event) => {
+                  const primary = event.target.value as PrimaryKpiId;
+                  patch({ primary_metric: primary, chart_metric: primary });
+                }}
+              >
+                {PRIMARY_KPI_IDS.filter((id) => config.metrics.includes(id)).map((id) => (
+                  <option key={id} value={id}>{METRICS[id].label}</option>
+                ))}
+              </select>
+            </label>
             {(Object.keys(METRICS) as MetricKey[]).map((k) => (
               <label key={k} className="pj-check">
                 <input
@@ -709,6 +792,7 @@ export function AnalysisView({
             <button
               onClick={() => {
                 setEditingCustomId("");
+                setCustomMetricError("");
                 setCustomMetric(defaultCustomMetric());
                 setCustomMetricOpen(true);
               }}
@@ -729,6 +813,7 @@ export function AnalysisView({
                       aria-label={`Editar ${metric.label}`}
                       onClick={() => {
                         setEditingCustomId(metric.id);
+                        setCustomMetricError("");
                         setCustomMetric(metric);
                         setCustomMetricOpen(true);
                       }}
@@ -962,8 +1047,8 @@ export function AnalysisView({
             </select>
           </label>
           {config.comparison === "custom" && (
-            <div className="pj-form-row">
-              <label>
+            <div>
+              <div className="pj-form-row"><label>
                 Comparar de
                 <input
                   type="date"
@@ -978,7 +1063,8 @@ export function AnalysisView({
                   value={config.compare_until ?? ""}
                   onChange={(e) => patch({ compare_until: e.target.value })}
                 />
-              </label>
+              </label></div>
+              <p className="pj-muted">Use um período anterior, sem sobreposição, sem datas futuras e com a mesma duração do período atual.</p>
             </div>
           )}
           <div className="pj-actions">
@@ -1005,6 +1091,7 @@ export function AnalysisView({
           }
           close={() => {
             setEditingCustomId("");
+            setCustomMetricError("");
             setCustomMetricOpen(false);
           }}
         >
@@ -1012,7 +1099,7 @@ export function AnalysisView({
             <button
               className={customMetric.kind === "manual" ? "primary" : ""}
               onClick={() =>
-                setCustomMetric((metric) => ({ ...metric, kind: "manual" }))
+                setCustomMetric((metric) => ({ ...metric, kind: "manual", format: "number" }))
               }
             >
               Métrica manual
@@ -1020,7 +1107,7 @@ export function AnalysisView({
             <button
               className={customMetric.kind === "calculated" ? "primary" : ""}
               onClick={() =>
-                setCustomMetric((metric) => ({ ...metric, kind: "calculated" }))
+                setCustomMetric((metric) => ({ ...metric, kind: "calculated", format: "ratio" }))
               }
             >
               Métrica calculada
@@ -1159,10 +1246,12 @@ export function AnalysisView({
             />
             Menor valor representa melhora
           </label>
+          {customMetricError && <p className="pj-error">{customMetricError}</p>}
           <div className="pj-actions">
             <button
               onClick={() => {
                 setEditingCustomId("");
+                setCustomMetricError("");
                 setCustomMetricOpen(false);
               }}
             >

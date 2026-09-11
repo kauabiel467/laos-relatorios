@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { AdItem, CampaignMetric, Client, DashboardDataBundle, DashboardTab, MetaIntegrationStatus, PeriodKey } from "@/lib/types";
+import { METRICS, primaryCostDefinition, type PrimaryKpiId } from "@/lib/metrics/catalog";
 const clients: Client[] = [{id:"",name:"Conecte uma conta Meta",status:"PAUSED",objective:"SALES"}];
 import { formatCurrency, formatNumber, formatPercent, formatRoas } from "@/lib/utils/format";
 
@@ -23,17 +24,19 @@ import { TabsNav } from "./tabs-nav";
 import { TeamSettingsModal } from "./team-settings-modal";
 
 const emptyMetaSnapshot: DashboardDataBundle["snapshot"] = {
+  primaryMetricId: "purchases",
   spend: 0,
-  spendDelta: 0,
+  spendDelta: null,
   resultLabel: "Resultados",
-  resultValue: 0,
-  resultDelta: 0,
+  resultValue: null,
+  resultDelta: null,
   revenue: 0,
-  revenueDelta: 0,
+  revenueDelta: null,
   roas: 0,
-  roasDelta: 0,
-  cpa: 0,
-  cpaDelta: 0,
+  roasDelta: null,
+  primaryCostLabel: "Custo por compra",
+  primaryCost: null,
+  primaryCostDelta: null,
   quickInsights: [
     {
       label: "O que aconteceu",
@@ -77,7 +80,7 @@ const emptyHourlyPerformance: DashboardDataBundle["hourlyPerformance"] = [];
 const emptyAgeAudience: DashboardDataBundle["ageAudience"] = [];
 const emptyGenderAudience: DashboardDataBundle["genderAudience"] = [];
 
-type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "cpa";
+type MetricDrillType = "spend" | "result" | "revenue" | "roas" | "primaryCost";
 type MetaView = "sales" | "awareness" | "messages";
 
 function formatDateInput(date: Date) {
@@ -92,13 +95,6 @@ function getDefaultCustomRange() {
     start: formatDateInput(start),
     end: formatDateInput(end)
   };
-}
-
-function formatDateLabel(date: Date) {
-  return date.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit"
-  });
 }
 
 function getPeriodRange(period: PeriodKey, customRange: { start: string; end: string }) {
@@ -152,6 +148,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<DashboardTab>("meta");
   const [metaView, setMetaView] = useState<MetaView>("sales");
+  const primaryKpi: PrimaryKpiId = metaView === "sales" ? "purchases" : metaView === "messages" ? "messages" : "profile_visits";
   const [period, setPeriod] = useState<PeriodKey>("last_30d");
   const [customRange, setCustomRange] = useState(getDefaultCustomRange);
   const [search, setSearch] = useState("");
@@ -176,7 +173,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const [campaignAdsError, setCampaignAdsError] = useState<string | null>(null);
 
 
-  const [toastVisible, setToastVisible] = useState(false);
+  const [exportFeedback, setExportFeedback] = useState<string | null>(null);
   const [metricDrilldown, setMetricDrilldown] = useState<MetricDrillType | null>(null);
 
 
@@ -228,7 +225,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
 
     const campaigns = dashboardData?.campaigns ?? [];
     const dailyCount = Math.max(resolvedDailySeries.length, 1);
-    const totalResult = Math.max(resolvedSnapshot.resultValue, 0);
+    const totalResult = Math.max(resolvedSnapshot.resultValue ?? 0, 0);
     const totalSpend = Math.max(resolvedSnapshot.spend, 0);
     const totalRevenue = Math.max(resolvedSnapshot.revenue, 0);
 
@@ -251,15 +248,15 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
         title: `Detalhamento - ${resolvedSnapshot.resultLabel}`,
         accent: "#22c55e",
         label: resolvedSnapshot.resultLabel,
-        values: resolvedDailySeries.map((item) => item.result),
+        values: resolvedDailySeries.map((item) => item.result ?? 0),
         stats: [
           { label: "Total", value: formatNumber(totalResult) },
-          { label: "Custo por resultado", value: totalResult > 0 ? formatCurrency(totalSpend / totalResult) : "R$ 0,00" }
+          { label: resolvedSnapshot.primaryCostLabel, value: formatCurrency(resolvedSnapshot.primaryCost, dashboardData?.currency) }
         ],
         rows: [...campaigns]
-          .sort((a, b) => b.result - a.result)
+          .sort((a, b) => (b.result ?? 0) - (a.result ?? 0))
           .slice(0, 5)
-          .map((campaign) => ({ name: campaign.name, value: campaign.result, formatted: formatNumber(campaign.result), shareBase: totalResult }))
+          .map((campaign) => ({ name: campaign.name, value: campaign.result ?? 0, formatted: campaign.result == null ? "—" : formatNumber(campaign.result), shareBase: totalResult }))
       },
       revenue: {
         title: "Detalhamento - Faturamento",
@@ -292,22 +289,22 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
           .slice(0, 5)
           .map((campaign) => ({ name: campaign.name, value: campaign.roas, formatted: formatRoas(campaign.roas), shareBase: Math.max(resolvedSnapshot.roas, 1) }))
       },
-      cpa: {
-        title: "Detalhamento - CPA",
+      primaryCost: {
+        title: `Detalhamento - ${resolvedSnapshot.primaryCostLabel}`,
         accent: "#f97316",
-        label: "CPA (R$)",
-        values: resolvedDailySeries.map((item) => (item.result > 0 ? item.spend / item.result : 0)),
+        label: `${resolvedSnapshot.primaryCostLabel} (R$)`,
+        values: resolvedDailySeries.map((item) => (item.result != null && item.result > 0 ? item.spend / item.result : 0)),
         stats: [
-          { label: "CPA real", value: formatCurrency(resolvedSnapshot.cpa) },
+          { label: resolvedSnapshot.primaryCostLabel, value: formatCurrency(resolvedSnapshot.primaryCost) },
           { label: "Resultados", value: formatNumber(totalResult) }
         ],
         rows: [...campaigns]
-          .filter((campaign) => campaign.result > 0)
-          .sort((a, b) => a.spend / a.result - b.spend / b.result)
+          .filter((campaign) => campaign.result != null && campaign.result > 0)
+          .sort((a, b) => a.spend / (a.result ?? 1) - b.spend / (b.result ?? 1))
           .slice(0, 5)
           .map((campaign) => {
-            const cpa = campaign.spend / campaign.result;
-            return { name: campaign.name, value: cpa, formatted: formatCurrency(cpa), shareBase: Math.max(resolvedSnapshot.cpa, 1) };
+            const cost = campaign.spend / (campaign.result ?? 1);
+            return { name: campaign.name, value: cost, formatted: formatCurrency(cost), shareBase: Math.max(resolvedSnapshot.primaryCost ?? 0, 1) };
           })
       }
     }[metricDrilldown];
@@ -325,7 +322,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       .join(" ");
 
     return { ...config, points, width, height, padding };
-  }, [dashboardData?.campaigns, metricDrilldown, resolvedDailySeries, resolvedSnapshot]);
+  }, [dashboardData?.campaigns, dashboardData?.currency, metricDrilldown, resolvedDailySeries, resolvedSnapshot]);
 
   useEffect(() => {
     if (!availableClients.length) {
@@ -360,24 +357,25 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
   const metaViewSummary = useMemo(() => {
     const campaigns = (dashboardData?.campaigns ?? []).filter(objectiveMatcher);
     const spend = campaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
-    const reach = campaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
-    const clicks = campaigns.reduce((sum, campaign) => sum + (campaign.clicks ?? 0), 0);
+    const reach = resolvedMediaMetrics.find((metric) => metric.label === "Alcance")?.value ?? 0;
+    const clicks = campaigns.reduce((sum, campaign) => sum + (campaign.metrics.link_clicks ?? 0), 0);
     const followers = campaigns.reduce((sum, campaign) => sum + (campaign.followers ?? 0), 0);
-    const results = campaigns.reduce((sum, campaign) => sum + (metaView === "sales" ? campaign.purchases ?? campaign.result : campaign.result), 0);
+    const supportedResults = campaigns.map((campaign) => campaign.metrics[primaryKpi]).filter((value): value is number => value != null);
+    const results = supportedResults.length ? supportedResults.reduce((sum, value) => sum + value, 0) : null;
     const revenue = campaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0);
     const roas = spend > 0 ? revenue / spend : 0;
-    const costPerResult = results > 0 ? spend / results : 0;
-    const ticket = results > 0 ? revenue / results : 0;
+    const costPerResult = results != null && results > 0 ? spend / results : null;
+    const ticket = results != null && results > 0 ? revenue / results : null;
     const impressions = campaigns.reduce((sum,campaign)=>sum+(campaign.impressions??0),0);
     const ctrWeighted = impressions > 0 ? clicks / impressions * 100 : 0;
-    const conversionRate = clicks > 0 ? (results / clicks) * 100 : 0;
+    const conversionRate = clicks > 0 && results != null ? (results / clicks) * 100 : null;
 
     if (metaView === "messages") {
       return {
         primary: [
           { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
           { label: "Conversas", value: formatNumber(results), tone: "green" as const },
-          { label: "Alcance", value: formatNumber(reach), tone: "yellow" as const },
+          { label: "Alcance da conta", value: formatNumber(reach), tone: "yellow" as const },
           { label: "CTR", value: formatPercent(ctrWeighted, 2), tone: "purple" as const }
         ],
         secondary: [
@@ -394,7 +392,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
           { label: "Investimento Total", value: formatCurrency(spend), tone: "blue" as const },
           { label: "Visitas ao perfil", value: formatNumber(results), tone: "green" as const },
           { label: "Seguidores", value: formatNumber(followers), tone: "yellow" as const },
-          { label: "Alcance", value: formatNumber(reach), tone: "purple" as const }
+          { label: "Alcance da conta", value: formatNumber(reach), tone: "purple" as const }
         ],
         secondary: [
           { label: "Custo por visita ao perfil", value: formatCurrency(costPerResult), tone: "orange" as const },
@@ -412,12 +410,12 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
         { label: "ROAS", value: formatRoas(roas), tone: "purple" as const }
       ],
       secondary: [
-        { label: "CPA real", value: formatCurrency(costPerResult), tone: "orange" as const },
+        { label: primaryCostDefinition(primaryKpi).label, value: formatCurrency(costPerResult), tone: "orange" as const },
         { label: "Ticket medio", value: formatCurrency(ticket), tone: "cyan" as const },
         { label: "Taxa de conversao", value: formatPercent(conversionRate, 2), tone: "green" as const }
       ]
     };
-  }, [dashboardData?.campaigns, metaView, objectiveMatcher]);
+  }, [dashboardData?.campaigns, metaView, objectiveMatcher, primaryKpi, resolvedMediaMetrics]);
 
   function handleSelectClient(client: Client) {
     setSelectedClient(client);
@@ -434,49 +432,53 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
     setSortDirection(-1);
   }
 
-  function exportReport() {
-    const range = getPeriodRange(period, customRange);
-    const startDate = new Date(`${range.start}T12:00:00`);
-    const endDate = new Date(`${range.end}T12:00:00`);
-    const exportCampaigns = (dashboardData?.campaigns ?? visibleCampaigns).filter(
-      (campaign) => isSalesCampaign(campaign) && campaign.spend > 0
-    );
-    const filteredSpend = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
-    const filteredReach = exportCampaigns.reduce((sum, campaign) => sum + campaign.reach, 0);
-    const filteredSales = exportCampaigns.reduce((sum, campaign) => sum + (campaign.purchases ?? campaign.result), 0);
-    const filteredRevenue = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0);
-    const averageTicket = filteredSales > 0 ? filteredRevenue / filteredSales : 0;
-    const filteredCpa = filteredSales > 0 ? filteredSpend / filteredSales : 0;
-    const filteredRoas = filteredSpend > 0 ? filteredRevenue / filteredSpend : 0;
-
-    const reportSpend = exportCampaigns.length ? filteredSpend : resolvedSnapshot.spend;
-    const reportReach = exportCampaigns.length ? filteredReach : (resolvedMediaMetrics.find((metric) => metric.label.toLowerCase().includes("alcance"))?.value ?? 0);
-    const reportSales = exportCampaigns.length ? filteredSales : Math.max(resolvedSnapshot.resultValue, 0);
-    const reportRevenue = exportCampaigns.length ? filteredRevenue : resolvedSnapshot.revenue;
-    const reportAverageTicket = exportCampaigns.length ? averageTicket : reportSales > 0 ? resolvedSnapshot.revenue / reportSales : 0;
-    const reportCpa = exportCampaigns.length ? filteredCpa : resolvedSnapshot.cpa;
-    const reportRoas = exportCampaigns.length ? filteredRoas : resolvedSnapshot.roas;
-
+  async function exportReport() {
+    const fallbackRange = getPeriodRange(period, customRange);
+    const range = dashboardData?.effectivePeriod
+      ? { start: dashboardData.effectivePeriod.since, end: dashboardData.effectivePeriod.until }
+      : fallbackRange;
+    const exportCampaigns = visibleCampaigns;
+    const supportedResults = exportCampaigns
+      .map((campaign) => campaign.metrics[primaryKpi])
+      .filter((value): value is number => value != null);
+    const spend = exportCampaigns.reduce((sum, campaign) => sum + campaign.spend, 0);
+    const result = supportedResults.length ? supportedResults.reduce((sum, value) => sum + value, 0) : null;
+    const primaryCost = spend > 0 && result != null && result > 0 ? spend / result : null;
+    const kpi = METRICS[primaryKpi];
+    const cost = primaryCostDefinition(primaryKpi);
+    const statusLabel = campaignFilter === "all" ? "ativas e pausadas" : campaignFilter === "ACTIVE" ? "ativas" : "pausadas";
+    const campaignLines = exportCampaigns.length
+      ? exportCampaigns.map((campaign) => `• ${campaign.name}: ${formatNumber(campaign.metrics[primaryKpi])} ${kpi.label.toLowerCase()} · ${formatCurrency(campaign.spend, dashboardData?.currency)}`)
+      : ["• Nenhuma campanha corresponde aos filtros atuais."];
+    const purchaseLines = primaryKpi === "purchases"
+      ? [
+          `Receita atribuída pela Meta: ${formatCurrency(exportCampaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0), dashboardData?.currency)}`,
+          `ROAS de compras: ${formatRoas(spend > 0 ? exportCampaigns.reduce((sum, campaign) => sum + campaign.spend * campaign.roas, 0) / spend : null)}`,
+        ]
+      : [];
     const report = [
-      `Segue o relatório do período: ${selectedClient.name}`,
+      `RELATÓRIO — ${kpi.label.toUpperCase()}`,
+      `Cliente: ${selectedClient.name}`,
+      `Período: ${range.start.split("-").reverse().join("/")} a ${range.end.split("-").reverse().join("/")}`,
+      `Filtro: ${statusLabel}; ${metaView === "sales" ? "objetivo de vendas" : metaView === "messages" ? "objetivo de mensagens" : "objetivos de reconhecimento"}`,
       "",
-      `📆 (${formatDateLabel(startDate)} a ${formatDateLabel(endDate)})`,
+      `Investimento das campanhas visíveis: ${formatCurrency(spend, dashboardData?.currency)}`,
+      `${kpi.label}: ${formatNumber(result)}`,
+      `${cost.label}: ${formatCurrency(primaryCost, dashboardData?.currency)}`,
+      ...purchaseLines,
       "",
-      "CAMPANHA DE VENDA",
-      "",
-      `✅ Investimento total: *${formatCurrency(reportSpend)}*`,
-      "",
-      `👥 Alcançamos *${formatNumber(reportReach)}* pessoas`,
-      `🔥 Número de venda: *${formatNumber(reportSales)}*`,
-      `💵 Ticket médio: *${formatCurrency(reportAverageTicket)}*`,
-      `🚀 Custo por venda: *${formatCurrency(reportCpa)}*`,
-      `💸 Valor total das vendas: *${formatCurrency(reportRevenue)}*`,
-      `📈 ROAS (Retorno sobre investimento): *${formatRoas(reportRoas)}*`
+      `Campanhas incluídas (${exportCampaigns.length}):`,
+      ...campaignLines,
     ].join("\n");
 
-    navigator.clipboard.writeText(report).catch(() => undefined);
-    setToastVisible(true);
-    window.setTimeout(() => setToastVisible(false), 2000);
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("Clipboard indisponível");
+      await navigator.clipboard.writeText(report);
+      setExportFeedback("Relatório copiado com sucesso.");
+    } catch {
+      setExportFeedback("Não foi possível copiar o relatório. Verifique a permissão do navegador.");
+    }
+    window.setTimeout(() => setExportFeedback(null), 3500);
   }
 
   const refreshMetaStatus = useCallback(async () => {
@@ -497,7 +499,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       try {
         const customQuery =
           selectedPeriod === "custom" ? `&since=${encodeURIComponent(selectedRange.start)}&until=${encodeURIComponent(selectedRange.end)}` : "";
-        const response = await fetch(`/api/meta/dashboard?accountId=${encodeURIComponent(clientId)}&period=${encodeURIComponent(selectedPeriod)}${customQuery}`, {
+        const response = await fetch(`/api/meta/dashboard?accountId=${encodeURIComponent(clientId)}&period=${encodeURIComponent(selectedPeriod)}&kpi=${primaryKpi}${customQuery}`, {
           cache: "no-store"
         });
 
@@ -514,7 +516,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
         setDashboardLoading(false);
       }
     },
-    [customRange]
+    [customRange, primaryKpi]
   );
 
   const loadCampaignAds = useCallback(
@@ -761,7 +763,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
                 Nao conseguimos carregar os dados reais desta conta agora. {dashboardError}
               </div>
             ) : null}
-            <QuickInsightsSection snapshot={resolvedSnapshot} />
+            <QuickInsightsSection snapshot={resolvedSnapshot} currency={dashboardData?.currency ?? "BRL"} />
 
             <section>
               <SectionTitle>Visao Geral</SectionTitle>
@@ -802,8 +804,8 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
                     value={card.value}
                     tone={card.tone}
                     loading={dashboardLoading}
-                    clickable={!dashboardLoading && metaView === "sales" && card.label === "CPA real"}
-                    onClick={metaView === "sales" && card.label === "CPA real" ? () => setMetricDrilldown("cpa") : undefined}
+                    clickable={!dashboardLoading && card.label === resolvedSnapshot.primaryCostLabel}
+                    onClick={card.label === resolvedSnapshot.primaryCostLabel ? () => setMetricDrilldown("primaryCost") : undefined}
                   />
                 ))}
               </div>
@@ -818,6 +820,7 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
               ageAudience={resolvedAgeAudience}
               genderAudience={resolvedGenderAudience}
               resultLabel={resolvedSnapshot.resultLabel}
+              currency={dashboardData?.currency ?? "BRL"}
             />
 
             <section className="panel p-5">
@@ -1032,10 +1035,12 @@ export function DashboardApp({ requiresWorkspaceSetup = false }: DashboardAppPro
       <div
         className={clsx(
           "fixed bottom-6 left-1/2 z-[100] -translate-x-1/2 rounded-lg border border-blue/30 bg-card px-4 py-3 text-sm font-semibold text-text shadow-panel transition-all duration-200",
-          toastVisible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
+          exportFeedback ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"
         )}
+        role="status"
+        aria-live="polite"
       >
-        Relatório copiado!
+        {exportFeedback}
       </div>
     </div>
   );
