@@ -11,8 +11,8 @@ import {
 } from "@/lib/integrations/meta-oauth";
 
 export async function GET(request: NextRequest) {
-  const candidate = request.nextUrl.searchParams.get("returnTo") || "/traffic";
-  const returnTo = candidate.startsWith("/") && !candidate.startsWith("//") && !candidate.includes("\\") ? candidate : "/traffic";
+  const candidate = request.nextUrl.searchParams.get("returnTo") || "/projects";
+  const returnTo = candidate.startsWith("/") && !candidate.startsWith("//") && !candidate.includes("\\") && !/[\r\n]/.test(candidate) ? candidate : "/projects";
 
   if (!hasMetaOAuthConfig()) {
     return NextResponse.redirect(new URL(`${returnTo}${returnTo.includes("?") ? "&" : "?"}meta=error&reason=missing_config`, request.url));

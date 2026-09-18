@@ -23,6 +23,7 @@ import { PRIMARY_KPI_IDS, isPrimaryKpiId, type MetricUnit, type PrimaryKpiId } f
 import { inferCalculationFormat } from "@/lib/metrics/engine";
 import { Dialog, MetaMark, shortDate } from "./ui";
 import { LineChart } from "./line-chart";
+import { workspaceHref } from "@/lib/projects/routes";
 
 const defaultCustomMetric = (): CustomMetricDefinition => ({
   id: "",
@@ -81,14 +82,12 @@ export function AnalysisView({
   useEffect(
     () =>
       setLink(
-        window.location.origin +
-          "/?project=" +
-          doc.client_id +
-          "&document=" +
-          doc.id +
-          "&preview=1",
+        window.location.origin + workspaceHref(
+          doc.kind === "template" ? "templates" : doc.kind === "report" ? "reports" : "dashboards",
+          { projectId: doc.client_id, documentId: doc.id, preview: "1" },
+        ),
       ),
-    [doc.id, doc.client_id],
+    [doc.id, doc.client_id, doc.kind],
   );
   const editable =
     staff && !(doc.kind === "report" && doc.status === "published");

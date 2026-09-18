@@ -2,8 +2,8 @@ import { cookies } from "next/headers";
 import { env } from "@/lib/env";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
 import type { MetaAdAccount, MetaIntegrationStatus } from "@/lib/types";
+import { fetchGraph, META_GRAPH_VERSION } from "@/lib/integrations/meta-graph";
 
-const META_GRAPH_VERSION = "v22.0";
 export const META_OAUTH_STATE_COOKIE = "laos_meta_oauth_state";
 export const META_DRAFT_COOKIE = "laos_meta_oauth_draft";
 export const META_CONNECTION_COOKIE = "laos_meta_oauth_connection";
@@ -136,15 +136,6 @@ async function upsertMetaSession(
   }
 }
 
-async function deleteMetaSession(sessionToken: string) {
-  const admin = getMetaAdminClient();
-  if (!admin) {
-    return;
-  }
-
-  await admin.from("meta_integration_sessions").delete().eq("session_token", sessionToken).eq("user_id", await requireMetaUser());
-}
-
 export function hasMetaOAuthConfig() {
   return Boolean(env.META_APP_ID && env.META_APP_SECRET && env.NEXT_PUBLIC_APP_URL);
 }
@@ -174,12 +165,19 @@ async function fetchJson<T>(url: string) {
     headers: {
       Accept: "application/json"
     },
-    cache: "no-store"
+    cache: "no-store",
+    signal: AbortSignal.timeout(15000),
   });
-
-  const payload = await response.json();
+  const text = await response.text();
+  let payload: Record<string, unknown>;
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("A Meta respondeu em um formato inesperado. Tente novamente.");
+  }
   if (!response.ok) {
-    const message = typeof payload?.error?.message === "string" ? payload.error.message : "Falha na comunicacao com a Meta.";
+    const error = payload.error as { message?: unknown } | undefined;
+    const message = typeof error?.message === "string" ? error.message : "Falha na comunicacao com a Meta.";
     throw new Error(message);
   }
 
@@ -213,13 +211,7 @@ export async function exchangeCodeForToken(code: string) {
 }
 
 export async function fetchMetaAdAccounts(accessToken: string) {
-  const params = new URLSearchParams({
-    access_token: accessToken,
-    fields: "id,name,account_status,currency,timezone_name",
-    limit: "200"
-  });
-
-  const payload = await fetchJson<{
+  const payload = await fetchGraph<{
     data: Array<{
       id: string;
       name: string;
@@ -227,7 +219,11 @@ export async function fetchMetaAdAccounts(accessToken: string) {
       currency?: string;
       timezone_name?: string;
     }>;
-  }>(`https://graph.facebook.com/${META_GRAPH_VERSION}/me/adaccounts?${params.toString()}`);
+  }>(
+    "me/adaccounts",
+    { fields: "id,name,account_status,currency,timezone_name", limit: "100" },
+    accessToken,
+  );
 
   return payload.data.map((account) => ({
     id: account.id,
@@ -266,11 +262,10 @@ export async function getMetaStatus(): Promise<MetaIntegrationStatus> {
     }
 
     if (session.stage === "connected") {
-      const selected = session.accounts.filter((account) => session.selected_account_ids.includes(account.id));
       return {
         stage: "connected",
         connectedAt: session.connected_at || undefined,
-        accounts: selected
+        accounts: session.accounts
       };
     }
 
@@ -384,11 +379,9 @@ export async function finalizeMetaSelection(selectedAccountIds: string[]) {
 }
 
 export async function disconnectMetaIntegration() {
-  const sessionToken = await getMetaSessionToken();
-  if (sessionToken) {
-    await deleteMetaSession(sessionToken);
-  }
-
+  // Signing the browser out of the Meta authorization must not delete a
+  // server-side session used by another project. Project unlinking has its own
+  // scoped, atomic action.
   return [
     META_CONNECTION_COOKIE,
     META_DRAFT_COOKIE,

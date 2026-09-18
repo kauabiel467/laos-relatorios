@@ -6,7 +6,14 @@ insert into auth.users(id,email,email_confirmed_at) values
 insert into public.teams(id,name,created_by) values('aebb0000-0000-4000-8000-000000000001','RLS test','aeaa0000-0000-4000-8000-000000000001');
 insert into public.team_members(team_id,user_id,role) values('aebb0000-0000-4000-8000-000000000001','aeaa0000-0000-4000-8000-000000000001','owner');
 insert into public.agency_clients(id,team_id,name) values('aecc0000-0000-4000-8000-000000000001','aebb0000-0000-4000-8000-000000000001','Test client');
-insert into public.agency_client_access values('aecc0000-0000-4000-8000-000000000001','aeaa0000-0000-4000-8000-000000000002');
+insert into public.agency_client_access(client_id,user_id,email,role,granted_by)
+values(
+ 'aecc0000-0000-4000-8000-000000000001',
+ 'aeaa0000-0000-4000-8000-000000000002',
+ 'laos-test-client@example.invalid',
+ 'viewer',
+ 'aeaa0000-0000-4000-8000-000000000001'
+);
 insert into public.agency_records(client_id,kind,title,visibility,status,created_by) values
  ('aecc0000-0000-4000-8000-000000000001','timeline','Internal','internal','active','aeaa0000-0000-4000-8000-000000000001'),
  ('aecc0000-0000-4000-8000-000000000001','timeline','Shared','shared','active','aeaa0000-0000-4000-8000-000000000001'),

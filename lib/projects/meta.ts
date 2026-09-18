@@ -1,12 +1,10 @@
-import {
-  getSupabaseAdminClient,
-  getSupabaseServerClient,
-} from "@/lib/supabase/server";
+import { getSupabaseAdminClient } from "@/lib/supabase/server";
+import { authorizeProject } from "@/lib/projects/access";
 import {
   readMetaSessionToken,
   requireMetaUser,
 } from "@/lib/integrations/meta-oauth";
-import { fetchGraph } from "@/lib/integrations/meta-dashboard";
+import { fetchGraph, MetaGraphError } from "@/lib/integrations/meta-graph";
 import {
   type AnalysisConfig,
   type AnalysisData,
@@ -17,62 +15,163 @@ import { resolvePeriod } from "@/lib/metrics/dates";
 import { METRICS } from "@/lib/metrics/catalog";
 import { adaptModernMeta } from "@/lib/metrics/meta-adapters";
 import type { MetaAdAccount } from "@/lib/types";
-export async function authorizeProject(cid: string) {
-  const db = await getSupabaseServerClient();
-  if (!db) throw Error("Serviço indisponível.");
-  const {
-    data: { user },
-  } = await db.auth.getUser();
-  if (!user) throw Error("UNAUTHORIZED");
-  const { data: c } = await db
-    .from("agency_clients")
-    .select("*")
-    .eq("id", cid)
-    .single();
-  if (!c) throw Error("Projeto não encontrado.");
-  const { data: m } = await db
-    .from("team_members")
-    .select("role")
-    .eq("team_id", c.team_id)
-    .eq("user_id", user.id)
-    .maybeSingle();
-  if (!m) throw Error("Esta ação é exclusiva da equipe do projeto.");
-  return { db, user, client: c, role: m.role };
+import type {
+  ProjectMetaConnection,
+  ProjectMetaConnectionStatus,
+} from "@/lib/agency/types";
+
+type MetaAccountProbe = {
+  id: string;
+  name?: string;
+  account_status?: number | string;
+  disable_reason?: number | string;
+  currency?: string;
+  timezone_name?: string;
+};
+
+function connectionFailure(error: unknown): {
+  status: Exclude<ProjectMetaConnectionStatus, "connected" | "untested">;
+  category: string;
+  message: string;
+} {
+  if (error instanceof MetaGraphError) {
+    if (error.code === 190) {
+      return {
+        status: "reauth_required",
+        category: "authorization_expired",
+        message: "A autorização da Meta expirou ou foi revogada. Reconecte a conta.",
+      };
+    }
+    if (error.code === 10 || error.code === 200) {
+      return {
+        status: "error",
+        category: "insufficient_permission",
+        message: "A Meta não liberou as permissões necessárias para consultar esta conta.",
+      };
+    }
+    if (error.transient || [4, 17, 32, 613].includes(error.code ?? -1)) {
+      return {
+        status: "temporarily_unavailable",
+        category: "temporary_failure",
+        message: "A Meta está temporariamente indisponível. Tente o teste novamente.",
+      };
+    }
+  }
+  const raw = error instanceof Error ? error.message.toLowerCase() : "";
+  if (raw.includes("expirou") || raw.includes("revogada") || raw.includes("reconecte")) {
+    return {
+      status: "reauth_required",
+      category: "authorization_expired",
+      message: "A autorização da Meta expirou ou foi revogada. Reconecte a conta.",
+    };
+  }
+  return {
+    status: "error",
+    category: "connection_test_failed",
+    message: "Não foi possível validar a conta Meta. Confira o acesso e tente novamente.",
+  };
 }
+
+async function probeMetaAccount(account: string, token: string) {
+  const info = await fetchGraph<MetaAccountProbe>(
+    account,
+    {
+      fields:
+        "id,name,account_status,disable_reason,currency,timezone_name",
+    },
+    token,
+  );
+  if (info.id !== account && `act_${info.id}` !== account) {
+    throw Error("A Meta retornou uma conta diferente da selecionada.");
+  }
+  // An empty Insights result is a valid connection with no data. A permission
+  // or token failure still rejects the request, proving the dashboard can read.
+  await fetchGraph<{ data: unknown[] }>(
+    account + "/insights",
+    { fields: "spend", date_preset: "last_7d", limit: "1" },
+    token,
+  );
+  return info;
+}
+
+function connectionSummary(
+  accountId: string,
+  info: MetaAccountProbe,
+  connectedAt: string,
+): ProjectMetaConnection {
+  return {
+    account_id: accountId,
+    account_name: info.name ?? accountId,
+    account_currency: info.currency ?? null,
+    account_timezone: info.timezone_name ?? null,
+    account_status: String(info.account_status ?? "UNKNOWN"),
+    connection_status: "connected",
+    connected_at: connectedAt,
+    last_checked_at: connectedAt,
+    last_success_at: connectedAt,
+    last_error_category: null,
+    last_error_message: null,
+  };
+}
+
 export async function bindProjectMeta(cid: string, accountId: string) {
   const { db, user } = await authorizeProject(cid);
   const actor = await requireMetaUser();
-  const token = await readMetaSessionToken();
+  const sessionToken = await readMetaSessionToken();
   const admin = getSupabaseAdminClient();
-  if (!admin || !token) throw Error("Conecte sua conta Meta.");
+  if (!admin || !sessionToken) throw Error("Conecte sua conta Meta.");
   const { data: s } = await admin
     .from("meta_integration_sessions")
-    .select("id,accounts,stage,selected_account_ids")
-    .eq("session_token", token)
+    .select("id,accounts,stage,access_token")
+    .eq("session_token", sessionToken)
     .eq("user_id", actor)
     .single();
   if (
     !s ||
     s.stage !== "connected" ||
-    !s.selected_account_ids.includes(accountId)
+    !s.access_token ||
+    !(s.accounts as MetaAdAccount[] | null)?.some(
+      (item) => item.id === accountId,
+    )
   )
     throw Error("Autorize esta conta na conexão Meta.");
-  const connected_at = new Date().toISOString();
-  const { error } = await admin
+  if (actor !== user.id) throw Error("A sessão da Meta pertence a outro usuário.");
+  const info = await probeMetaAccount(accountId, s.access_token as string);
+  const checkedAt = new Date().toISOString();
+  const { error } = await db.rpc("agency_bind_meta_connection", {
+    cid,
+    target_session_id: s.id,
+    target_account_id: accountId,
+  });
+  if (error) throw Error("Não foi possível vincular a conta ao projeto.");
+  // Only the server-side service role may promote an untested mapping to
+  // connected. Calling the public RPC directly can never forge connection
+  // health or provider metadata.
+  const { error: healthError } = await admin
     .from("agency_meta_connections")
-    .upsert({
-      client_id: cid,
-      session_id: s.id,
-      account_id: accountId,
-      connected_by: user.id,
-      connected_at,
-    });
-  if (error) throw Error("Não foi possível vincular a conta.");
-  const { error: e } = await db
-    .from("agency_clients")
-    .update({ meta_account_id: accountId, meta_connected_at: connected_at })
-    .eq("id", cid);
-  if (e) throw Error("Não foi possível atualizar o projeto.");
+    .update({
+      account_name: info.name ?? accountId,
+      account_currency: info.currency ?? null,
+      account_timezone: info.timezone_name ?? null,
+      account_status: String(info.account_status ?? "UNKNOWN"),
+      connection_status: "connected",
+      last_checked_at: checkedAt,
+      last_success_at: checkedAt,
+      last_error_category: null,
+      last_error_message: null,
+    })
+    .eq("client_id", cid);
+  if (healthError) {
+    throw Error(
+      "A conta foi vinculada, mas não foi possível confirmar a saúde da conexão. Teste novamente.",
+    );
+  }
+  return connectionSummary(accountId, info, checkedAt);
+}
+export async function unlinkProjectMeta(cid: string) {
+  const { db } = await authorizeProject(cid, true);
+  const { error } = await db.rpc("agency_unlink_meta_connection", { cid });
+  if (error) throw Error("Não foi possível desvincular a conta deste projeto.");
 }
 async function credentials(cid: string) {
   await authorizeProject(cid);
@@ -87,13 +186,15 @@ async function credentials(cid: string) {
     throw Error("Vincule novamente a Meta nas integrações deste projeto.");
   const { data: s } = await admin
     .from("meta_integration_sessions")
-    .select("access_token,stage,selected_account_ids,accounts")
+    .select("access_token,stage,accounts")
     .eq("id", c.session_id)
     .single();
   if (
     !s?.access_token ||
     s.stage !== "connected" ||
-    !s.selected_account_ids.includes(c.account_id)
+    !(s.accounts as MetaAdAccount[] | null)?.some(
+      (item) => item.id === c.account_id,
+    )
   )
     throw Error(
       "A conexão expirou ou foi revogada. Reconecte a Meta nas integrações.",
@@ -107,6 +208,54 @@ async function credentials(cid: string) {
     timezone: metadata?.timezoneName,
     currency: metadata?.currency,
   };
+}
+
+export async function testProjectMetaConnection(cid: string) {
+  await authorizeProject(cid);
+  const admin = getSupabaseAdminClient();
+  if (!admin) throw Error("Serviço indisponível.");
+  const checkedAt = new Date().toISOString();
+  try {
+    const { token, account } = await credentials(cid);
+    const info = await probeMetaAccount(account, token);
+    const { data: current } = await admin
+      .from("agency_meta_connections")
+      .select("connected_at")
+      .eq("client_id", cid)
+      .single();
+    const { error } = await admin
+      .from("agency_meta_connections")
+      .update({
+        account_name: info.name ?? account,
+        account_currency: info.currency ?? null,
+        account_timezone: info.timezone_name ?? null,
+        account_status: String(info.account_status ?? "UNKNOWN"),
+        connection_status: "connected",
+        last_checked_at: checkedAt,
+        last_success_at: checkedAt,
+        last_error_category: null,
+        last_error_message: null,
+      })
+      .eq("client_id", cid);
+    if (error) throw Error("Não foi possível salvar o teste da conexão.");
+    return connectionSummary(
+      account,
+      info,
+      (current?.connected_at as string | undefined) ?? checkedAt,
+    );
+  } catch (error) {
+    const failure = connectionFailure(error);
+    await admin
+      .from("agency_meta_connections")
+      .update({
+        connection_status: failure.status,
+        last_checked_at: checkedAt,
+        last_error_category: failure.category,
+        last_error_message: failure.message.slice(0, 500),
+      })
+      .eq("client_id", cid);
+    throw Error(failure.message);
+  }
 }
 export async function projectCampaigns(cid: string) {
   const { token, account } = await credentials(cid);

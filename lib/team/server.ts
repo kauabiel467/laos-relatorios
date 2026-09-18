@@ -1,5 +1,5 @@
-import { env } from "@/lib/env";
 import { getSupabaseAdminClient, getSupabaseServerClient } from "@/lib/supabase/server";
+import { sendAuthInvitation } from "@/lib/auth-invitations";
 import type { TeamContext, TeamRole } from "./types";
 
 type TeamMemberRow = {
@@ -55,20 +55,6 @@ function normalizeTeamError(error: unknown) {
 
   if (normalized.includes("could not find the table") || normalized.includes("relation") && normalized.includes("does not exist")) {
     return "As tabelas de equipe ainda nao existem nesse projeto Supabase. A migration de auth/equipes precisa ser aplicada no banco de producao.";
-  }
-
-  return message;
-}
-
-function normalizeEmailProviderError(message: string) {
-  const normalized = message.toLowerCase();
-
-  if (normalized.includes("email rate limit exceeded")) {
-    return "O Supabase atingiu o limite do provedor de e-mail. O convite ficou salvo, mas para enviar e-mails em producao voce precisa configurar um SMTP proprio no projeto.";
-  }
-
-  if (normalized.includes("email address not authorized")) {
-    return "O convite ficou salvo, mas o e-mail nao foi disparado. O SMTP padrao do Supabase so envia para enderecos autorizados da equipe do projeto.";
   }
 
   return message;
@@ -130,7 +116,7 @@ async function acceptPendingInvitations() {
   }
 }
 
-export async function getTeamContext(): Promise<TeamContext> {
+export async function getTeamContext(teamId?: string): Promise<TeamContext> {
   const supabase = await getSupabaseServerClient();
   const user = await getCurrentUser();
 
@@ -140,13 +126,14 @@ export async function getTeamContext(): Promise<TeamContext> {
 
   await acceptPendingInvitations();
 
-  const { data: membership } = await supabase
+  let membershipQuery = supabase
     .from("team_members")
     .select("id, team_id, user_id, email, role, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle<TeamMemberRow>();
+    .limit(1);
+  if (teamId) membershipQuery = membershipQuery.eq("team_id", teamId);
+  const { data: membership } = await membershipQuery.maybeSingle<TeamMemberRow>();
 
   if (!membership) {
     return { team: null, currentRole: null, members: [], invitations: [] };
@@ -186,10 +173,9 @@ export async function createTeam(name: string) {
   return data as string;
 }
 
-export async function inviteTeamMember(email: string, role: TeamRole) {
-  const context = await getTeamContext();
+export async function inviteTeamMember(email: string, role: TeamRole, teamId?: string) {
+  const context = await getTeamContext(teamId);
   const supabase = await getSupabaseServerClient();
-  const admin = getSupabaseAdminClient();
   const user = await getCurrentUser();
 
   if (!supabase || !context.team || !canManage(context.currentRole)) {
@@ -207,35 +193,11 @@ export async function inviteTeamMember(email: string, role: TeamRole) {
   }, { onConflict: "team_id,email,status" });
   if (error) throw error;
 
-  if (!admin) {
-    return {
-      emailSent: false,
-      message:
-        "Convite salvo. Para disparar o e-mail automaticamente, configure SUPABASE_SECRET_KEY no app e um SMTP proprio no Supabase Auth."
-    };
-  }
-
-  try {
-    await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
-      redirectTo: `${env.NEXT_PUBLIC_APP_URL}/auth/callback`
-    });
-
-    return {
-      emailSent: true,
-      message: "Convite enviado por e-mail."
-    };
-  } catch (error) {
-    const message = error instanceof Error ? normalizeEmailProviderError(error.message) : "Convite salvo, mas nao foi possivel enviar o e-mail agora.";
-
-    return {
-      emailSent: false,
-      message
-    };
-  }
+  return sendAuthInvitation(normalizedEmail);
 }
 
-export async function removeTeamMember(memberId: string) {
-  const context = await getTeamContext();
+export async function removeTeamMember(memberId: string, teamId?: string) {
+  const context = await getTeamContext(teamId);
   const admin = getSupabaseAdminClient();
   const user = await getCurrentUser();
 

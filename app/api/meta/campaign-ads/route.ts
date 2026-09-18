@@ -1,30 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
-import { fetchMetaCampaignAds } from "@/lib/integrations/meta-dashboard";
-import type { PeriodKey } from "@/lib/types";
+import { NextResponse } from "next/server";
 
-const VALID_PERIODS = new Set<PeriodKey>(["last_7d", "last_30d", "last_90d", "custom"]);
-
-export async function GET(request: NextRequest) {
-  const { searchParams } = request.nextUrl;
-  const campaignId = searchParams.get("campaignId");
-  const periodParam = searchParams.get("period") as PeriodKey | null;
-  const period = periodParam && VALID_PERIODS.has(periodParam) ? periodParam : "last_30d";
-  const since = searchParams.get("since");
-  const until = searchParams.get("until");
-
-  if (!campaignId) {
-    return NextResponse.json({ error: "Informe a campanha da Meta para carregar os anuncios." }, { status: 400 });
-  }
-
-  try {
-    const ads = await fetchMetaCampaignAds(campaignId, period, { since, until });
-    return NextResponse.json({ ads });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: error instanceof Error ? error.message : "Nao foi possivel carregar os anuncios da campanha."
-      },
-      { status: 500 }
-    );
-  }
+// The account-only legacy API cannot establish a project authorization boundary.
+export function GET() {
+  return NextResponse.json(
+    { error: "Esta consulta legada foi desativada. Abra o projeto e use seus documentos e integrações.", successor: "/api/projects" },
+    { status: 410, headers: { "Cache-Control": "no-store", Link: '</api/projects>; rel="successor-version"' } },
+  );
 }

@@ -18,6 +18,7 @@ npm install
 npm run dev
 npm run lint
 npm run typecheck
+npm test
 npm run build
 ```
 
@@ -57,3 +58,13 @@ Compatibilidade legada:
 ## Deploy
 
 Projeto pronto para deploy futuro na Vercel com import direto do repositorio.
+
+## Workspace canônico
+
+A entrada é `/projects`. Dashboards, relatórios, integrações, metas e histórico pertencem a `/projects/[projectId]`.
+Templates, overview e equipe ficam em `/templates`, `/overview` e `/team/settings`.
+As rotas antigas apenas redirecionam; os dados históricos permanecem preservados.
+
+Veja [a documentação da consolidação](docs/architecture-workflow.md) para compatibilidade, arquivos alterados, testes e limitações.
+O fluxo de criação, acessos, integrações e finalização está detalhado em
+[Configuração de projetos](docs/project-setup-workflow.md).

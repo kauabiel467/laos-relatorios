@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode } from "react";
 export function Dialog({
   title,
   children,
@@ -11,9 +11,13 @@ export function Dialog({
   close: () => void;
   wide?: boolean;
 }) {
+  const dialogRef = useRef<HTMLElement>(null);
+  const titleId = useId();
+  const closeRef = useRef(close);
+  closeRef.current = close;
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    const el = document.querySelector<HTMLElement>(".pj-dialog");
+    const el = dialogRef.current;
     const items = () =>
       Array.from(
         el?.querySelectorAll<HTMLElement>(
@@ -22,7 +26,7 @@ export function Dialog({
       );
     items()[0]?.focus();
     const key = (e: KeyboardEvent) => {
-      if (e.key === "Escape") close();
+      if (e.key === "Escape") closeRef.current();
       if (e.key === "Tab") {
         const a = items();
         if (e.shiftKey && document.activeElement === a[0]) {
@@ -42,17 +46,18 @@ export function Dialog({
       document.body.style.overflow = old;
       previous?.focus();
     };
-  }, [close]);
+  }, []);
   return (
     <div className="pj-overlay">
       <section
+        ref={dialogRef}
         className={"pj-dialog " + (wide ? "wide" : "")}
         role="dialog"
         aria-modal="true"
-        aria-label={title}
+        aria-labelledby={titleId}
       >
         <header>
-          <h2>{title}</h2>
+          <h2 id={titleId}>{title}</h2>
           <button
             className="pj-icon-button"
             aria-label="Fechar"

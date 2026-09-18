@@ -78,17 +78,22 @@ export function NewWorkspaceFlow() {
           <p className="mb-4 text-sm leading-6 text-muted">
             Escolha um nome para o workspace da sua equipe e siga para os convites.
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <input
-              value={teamName}
-              onChange={(event) => setTeamName(event.target.value)}
-              placeholder="Ex.: Laos Growth Team"
-              className="min-w-0 flex-1 rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
-            />
+          <div className="flex flex-col items-end gap-3 sm:flex-row">
+            <label className="min-w-0 flex-1 text-sm text-muted">
+              Nome da equipe
+              <input
+                value={teamName}
+                onChange={(event) => setTeamName(event.target.value)}
+                minLength={2}
+                maxLength={120}
+                placeholder="Ex.: Laos Growth Team"
+                className="mt-2 w-full rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
+              />
+            </label>
             <button
               type="button"
               onClick={createWorkspace}
-              disabled={loading || !teamName.trim()}
+              disabled={loading || teamName.trim().length < 2}
               className="rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
             >
               {loading ? "Criando..." : "Criar workspace"}
@@ -109,18 +114,28 @@ export function NewWorkspaceFlow() {
           <section className="rounded-xl border border-border bg-bg p-5">
             <div className="mb-4 text-lg font-semibold text-text">Convide por e-mail</div>
             <div className="space-y-3">
-              <input
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                type="email"
-                placeholder="email@empresa.com"
-                className="w-full rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
-              />
-              <div className="grid grid-cols-3 gap-2">
+              <label className="block text-sm text-muted">
+                E-mail do membro
+                <input
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  type="email"
+                  autoComplete="email"
+                  maxLength={320}
+                  placeholder="email@empresa.com"
+                  className="mt-2 w-full rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
+                />
+              </label>
+              <div
+                className="grid grid-cols-3 gap-2"
+                role="group"
+                aria-label="Papel do novo membro"
+              >
                 {roleOptions.map((role) => (
                   <button
                     key={role}
                     type="button"
+                    aria-pressed={inviteRole === role}
                     onClick={() => setInviteRole(role)}
                     className={clsx(
                       "rounded-lg border px-3 py-2 text-xs font-semibold transition",
@@ -169,7 +184,7 @@ export function NewWorkspaceFlow() {
         </div>
       )}
 
-      {feedback ? <div className="mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+      {feedback ? <div role="status" className="mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
     </div>
   );
 }

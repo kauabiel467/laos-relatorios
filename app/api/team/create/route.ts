@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createTeam } from "@/lib/team/server";
+import { z } from "zod";
 
 function getErrorMessage(error: unknown) {
   if (error instanceof Error && error.message) {
@@ -15,14 +16,22 @@ function getErrorMessage(error: unknown) {
 
 export async function POST(request: NextRequest) {
   const body = (await request.json()) as { name?: string };
-  const name = body.name?.trim();
+  const parsed = z
+    .string()
+    .trim()
+    .min(2, "Informe um nome com pelo menos 2 caracteres.")
+    .max(120, "O nome da equipe pode ter no máximo 120 caracteres.")
+    .safeParse(body.name);
 
-  if (!name) {
-    return NextResponse.json({ error: "Informe o nome da equipe." }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: parsed.error.issues[0]?.message },
+      { status: 400 },
+    );
   }
 
   try {
-    await createTeam(name);
+    await createTeam(parsed.data);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return NextResponse.json({ error: getErrorMessage(error) }, { status: 500 });

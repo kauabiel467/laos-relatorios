@@ -55,7 +55,7 @@ try {
     assert.deepEqual(legacy.objectiveDistribution, modern.objectiveDistribution);
   }
   assert.equal(adapters.adaptModernMeta(fixture, "purchases").current.purchases, 27, "aliases equivalentes não são somados");
-  assert.equal(fs.readFileSync("lib/integrations/meta-dashboard.ts", "utf8").includes("adaptLegacyMeta"), true);
+  assert.equal(fs.readFileSync("lib/integrations/meta-dashboard.ts", "utf8").includes("fetchMetaDashboardData"), false, "the retired account-only engine must not remain callable");
   assert.equal(fs.readFileSync("lib/projects/meta.ts", "utf8").includes("adaptModernMeta"), true);
   console.log("PASS: compra, lead, mensagem, clique, comparação, alcance, dimensões, fuso e reconciliação");
 } finally { fs.rmSync(dir, { recursive: true, force: true }); }

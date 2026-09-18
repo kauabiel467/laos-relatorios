@@ -1,23 +1,52 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import {
-  getSupabaseServerClient,
-  getSupabaseAdminClient,
-} from "@/lib/supabase/server";
-import {
-  authorizeProject,
   bindProjectMeta,
+  unlinkProjectMeta,
+  testProjectMetaConnection,
   projectCampaigns,
-  collectAnalysis,
 } from "@/lib/projects/meta";
+import { authorizeProject, ProjectAccessError } from "@/lib/projects/access";
+import {
+  loadProjectWorkspace,
+  createProject,
+  addProjectRecord,
+  updateGoalProgress,
+  updateProject,
+  setProjectOnboardingStep,
+  completeProjectSetup,
+  inviteProjectClient,
+  revokeProjectClient,
+  revokeProjectInvitation,
+} from "@/lib/projects/service";
+import { copyProjectDocument, getProjectDocument, deleteProjectDocument, setProjectDocumentPublication, saveProjectDocument } from "@/lib/projects/documents";
 import { configSchema } from "@/lib/projects/schema";
 import {
   normalizeAnalysisConfig,
   type AnalysisConfig,
   type ProjectDocument,
 } from "@/lib/projects/model";
+import {
+  projectCreateSchema,
+  projectDetailsSchema,
+} from "@/lib/projects/config";
 export const maxDuration = 60;
 const uuid = z.string().uuid();
+const recordSchema = z.object({
+  client_id: uuid,
+  kind: z.enum(["goal", "timeline", "automation"]),
+  title: z.string().trim().min(1).max(180),
+  visibility: z.enum(["internal", "shared"]).default("internal"),
+  payload: z.object({
+    description: z.string().max(12000).optional(),
+    metric: z.string().max(80).optional(),
+    target: z.number().positive().finite().optional(),
+    actual: z.number().nonnegative().finite().optional(),
+    direction: z.enum(["above", "below"]).optional(),
+    deadline: z.string().date().optional(),
+    cadence: z.enum(["weekly", "monthly"]).optional(),
+  }).strict(),
+});
 const fail = (e: unknown) =>
   NextResponse.json(
     {
@@ -30,16 +59,10 @@ const fail = (e: unknown) =>
               : e.message
             : "Não foi possível concluir.",
     },
-    { status: e instanceof Error && e.message === "UNAUTHORIZED" ? 401 : 400 },
+    { status: e instanceof ProjectAccessError ? e.status : e instanceof Error && e.message === "UNAUTHORIZED" ? 401 : 400 },
   );
 export async function GET(req: NextRequest) {
   try {
-    const db = await getSupabaseServerClient();
-    if (!db) throw Error("Serviço indisponível.");
-    const {
-      data: { user },
-    } = await db.auth.getUser();
-    if (!user) throw Error("UNAUTHORIZED");
     if (req.nextUrl.searchParams.get("campaigns"))
       return NextResponse.json(
         {
@@ -49,14 +72,13 @@ export async function GET(req: NextRequest) {
         },
         { headers: { "Cache-Control": "private, no-store" } },
       );
-    const { data, error } = await db
-      .from("agency_documents")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .limit(500);
-    if (error) throw Error("Não foi possível carregar os documentos.");
+    const params = req.nextUrl.searchParams;
+    const clientId = params.has("project") ? uuid.parse(params.get("project")) : undefined;
+    const documentId = params.has("document") ? uuid.parse(params.get("document")) : undefined;
+    const legacyDocumentId = params.has("legacyDocument") ? uuid.parse(params.get("legacyDocument")) : undefined;
+    if ((documentId || legacyDocumentId) && !clientId) throw Error("Informe o projeto do documento.");
     return NextResponse.json(
-      { documents: data },
+      await loadProjectWorkspace(clientId, documentId, legacyDocumentId),
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (e) {
@@ -65,102 +87,87 @@ export async function GET(req: NextRequest) {
 }
 export async function POST(req: NextRequest) {
   try {
-    const b = await req.json(),
-      cid = uuid.parse(b.client_id);
-    const { db, user, role } = await authorizeProject(cid);
-    if (b.action === "bind") {
-      await bindProjectMeta(
+    const b = await req.json();
+    if (b.action === "client") {
+      return NextResponse.json(
+        await createProject(projectCreateSchema.parse(b.value)),
+      );
+    }
+    const cid = uuid.parse(b.client_id ?? b.value?.client_id);
+    const { db, user } = await authorizeProject(cid);
+    if (b.action === "bind" || b.action === "meta") {
+      return NextResponse.json(await bindProjectMeta(
         cid,
         z
           .string()
           .regex(/^act_\d+$/)
           .parse(b.account_id),
+      ));
+    }
+    if (b.action === "test_integration") {
+      return NextResponse.json(await testProjectMetaConnection(cid));
+    }
+    if (b.action === "record") {
+      if (b.value?.kind === "report") throw Error("Crie relatórios na área de documentos do projeto. Registros históricos permanecem preservados.");
+      await addProjectRecord(recordSchema.parse(b.value));
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "progress") {
+      await updateGoalProgress(cid, uuid.parse(b.id), z.number().nonnegative().finite().parse(b.actual));
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "access") {
+      return NextResponse.json(
+        await inviteProjectClient(
+          cid,
+          z.string().trim().email("Informe um e-mail válido.").parse(b.email),
+        ),
       );
+    }
+    if (b.action === "revoke_access") {
+      await revokeProjectClient(cid, uuid.parse(b.user_id));
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "revoke_invitation") {
+      await revokeProjectInvitation(cid, uuid.parse(b.invitation_id));
       return NextResponse.json({ ok: true });
     }
     if (b.action === "project") {
-      const value = z
-        .object({
-          name: z.string().trim().min(2).max(120),
-          segment: z.string().max(80),
-          unit: z.string().max(100),
-          contact_email: z.string().email().or(z.literal("")),
-          logo_url: z.string().url().startsWith("https://").or(z.literal("")),
-        })
-        .parse(b.value);
-      const { error } = await db
-        .from("agency_clients")
-        .update(value)
-        .eq("id", cid);
-      if (error) throw Error("Não foi possível salvar o projeto.");
+      await updateProject(cid, projectDetailsSchema.parse(b.value));
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "advance_onboarding") {
+      await setProjectOnboardingStep(
+        cid,
+        z.union([z.literal(2), z.literal(3), z.literal(4)]).parse(b.step),
+      );
+      return NextResponse.json({ ok: true });
+    }
+    if (b.action === "complete_setup") {
+      await completeProjectSetup(cid);
       return NextResponse.json({ ok: true });
     }
     if (b.action === "unlink") {
-      if (!["owner", "manager"].includes(role))
-        throw Error("Somente proprietários e gerentes podem desconectar.");
-      const admin = getSupabaseAdminClient();
-      if (!admin) throw Error("Serviço indisponível.");
-      const { error } = await admin
-        .from("agency_meta_connections")
-        .delete()
-        .eq("client_id", cid);
-      if (error) throw Error("Falha ao desvincular.");
-      await db
-        .from("agency_clients")
-        .update({ meta_account_id: null, meta_connected_at: null })
-        .eq("id", cid);
+      await unlinkProjectMeta(cid);
       return NextResponse.json({ ok: true });
     }
     let existing: ProjectDocument | null = null;
     if (b.id) {
-      const { data } = await db
-        .from("agency_documents")
-        .select("*")
-        .eq("id", uuid.parse(b.id))
-        .eq("client_id", cid)
-        .single();
-      if (!data) throw Error("Documento não encontrado.");
-      existing = data;
+      existing = await getProjectDocument(db, cid, uuid.parse(b.id));
     }
     if (["duplicate", "convert", "template"].includes(b.action)) {
       if (!existing) throw Error("Documento não encontrado.");
-      const kind =
-        b.action === "convert"
-          ? "report"
-          : b.action === "template"
-            ? "template"
-            : existing.kind;
-      const { data, error } = await db
-        .from("agency_documents")
-        .insert({
-          client_id: cid,
-          kind,
-          title:
-            (b.action === "template"
-              ? "Modelo · "
-              : b.action === "duplicate"
-                ? "Cópia · "
-                : "Relatório · ") + existing.title.slice(0, 145),
-          config: existing.config,
-          data: kind === "template" ? null : existing.data,
-          created_by: user.id,
-        })
-        .select()
-        .single();
-      if (error) throw Error("Não foi possível criar a cópia.");
-      return NextResponse.json(data);
+      return NextResponse.json(await copyProjectDocument(db, existing, user.id, b.action));
     }
     if (b.action === "timeline") {
       if (!existing) throw Error("Documento não encontrado.");
-      const { error } = await db
-        .from("agency_records")
-        .insert({
+      await addProjectRecord({
           client_id: cid,
           kind: "timeline",
           title: existing.title,
           visibility: existing.status === "published" ? "shared" : "internal",
-          created_by: user.id,
           payload: {
+            document_id: existing.id,
             description:
               (existing.kind === "dashboard" ? "Dashboard" : "Relatório") +
               " registrado no histórico. Período: " +
@@ -169,48 +176,20 @@ export async function POST(req: NextRequest) {
               existing.config.until,
           },
         });
-      if (error) throw Error("Não foi possível registrar.");
       return NextResponse.json({ ok: true });
     }
     if (b.action === "delete") {
-      if (!existing || existing.status !== "draft")
-        throw Error("Apenas rascunhos podem ser excluídos.");
-      const { error } = await db
-        .from("agency_documents")
-        .delete()
-        .eq("id", existing.id)
-        .eq("client_id", cid);
-      if (error) throw Error("Não foi possível excluir.");
+      await deleteProjectDocument(db, existing);
       return NextResponse.json({ ok: true });
     }
     if (b.action === "publish") {
-      if (!existing?.data || existing.kind === "template")
-        throw Error("Importe os resultados antes de publicar.");
-      const { data, error } = await db
-        .from("agency_documents")
-        .update({ status: "published" })
-        .eq("id", existing.id)
-        .select()
-        .single();
-      if (error) throw Error("Não foi possível publicar.");
-      return NextResponse.json(data);
+      return NextResponse.json(await setProjectDocumentPublication(db, existing, true));
     }
     if (b.action === "unpublish") {
-      if (!existing || existing.kind !== "dashboard")
-        throw Error("Relatórios publicados permanecem preservados.");
-      const { data, error } = await db
-        .from("agency_documents")
-        .update({ status: "draft" })
-        .eq("id", existing.id)
-        .select()
-        .single();
-      if (error) throw Error("Não foi possível restringir o acesso.");
-      return NextResponse.json(data);
+      return NextResponse.json(await setProjectDocumentPublication(db, existing, false));
     }
     if (!["create", "save", "refresh"].includes(b.action))
       throw Error("Ação não reconhecida.");
-    if (existing?.kind === "report" && existing.status === "published")
-      throw Error("Duplique o relatório publicado para criar uma nova versão.");
     const config = configSchema.parse(
       normalizeAnalysisConfig(b.config ?? existing?.config),
     ) as AnalysisConfig;
@@ -222,55 +201,7 @@ export async function POST(req: NextRequest) {
       .parse(b.title ?? existing?.title);
     const kind =
       existing?.kind ?? z.enum(["dashboard", "report"]).parse(b.kind);
-    // Editing dates or filters invalidates the saved result; never relabel an old snapshot as new data.
-    const changed =
-      existing &&
-      JSON.stringify([
-        config.since,
-        config.until,
-        config.comparison,
-        config.compare_since,
-        config.compare_until,
-        config.campaign_ids,
-        config.primary_metric,
-      ]) !==
-        JSON.stringify([
-          existing.config.since,
-          existing.config.until,
-          existing.config.comparison,
-          existing.config.compare_since,
-          existing.config.compare_until,
-          existing.config.campaign_ids,
-          normalizeAnalysisConfig(existing.config).primary_metric,
-        ]);
-    const data =
-      kind === "template"
-        ? null
-        : b.action === "refresh" || b.action === "create"
-          ? await collectAnalysis(cid, config)
-          : changed
-            ? null
-            : existing?.data;
-    const value = {
-      title,
-      config,
-      data,
-      ...(changed && b.action === "save" ? { status: "draft" } : {}),
-    };
-    const result = existing
-      ? await db
-          .from("agency_documents")
-          .update(value)
-          .eq("id", existing.id)
-          .select()
-          .single()
-      : await db
-          .from("agency_documents")
-          .insert({ ...value, client_id: cid, kind, created_by: user.id })
-          .select()
-          .single();
-    if (result.error) throw Error("Não foi possível salvar o documento.");
-    return NextResponse.json(result.data);
+    return NextResponse.json(await saveProjectDocument(db, cid, user.id, { action: b.action, title, config, kind }, existing));
   } catch (e) {
     return fail(e);
   }
