@@ -1,11 +1,11 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useRef, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
 import type { AgencyData, AgencyClient, AgencyRecord } from "@/lib/agency/types";
 import type { MetaIntegrationStatus } from "@/lib/types";
 import type { AnalysisConfig, ProjectDocument } from "@/lib/projects/model";
-import { workspaceHref, type WorkspaceView } from "@/lib/projects/routes";
+import { isProjectSection, workspaceHref, type WorkspaceView } from "@/lib/projects/routes";
 import { TeamSettingsModal } from "@/components/dashboard/team-settings-modal";
 import {
   firstProjectValidationError,
@@ -48,7 +48,7 @@ const empty: AgencyData = {
   isStaff: false,
   userName: "",
 };
-type WorkspaceSnapshot = {
+export type WorkspaceSnapshot = {
   data: AgencyData;
   documents: ProjectDocument[];
   legacyDocuments: AgencyRecord[];
@@ -57,23 +57,28 @@ const workspaceSnapshots = new Map<string, WorkspaceSnapshot>();
 export function ProjectsWorkspace({
   initialProjectId = "",
   initialView = "projects",
+  initialQuery = {},
+  initialSnapshot,
 }: {
   initialProjectId?: string;
   initialView?: WorkspaceView;
+  initialQuery?: Record<string, string>;
+  initialSnapshot?: WorkspaceSnapshot;
 }) {
-  const router = useRouter(),
-    params = useSearchParams();
-  const cid = initialProjectId || (initialView === "templates" ? params.get("project") ?? "" : ""),
-    view = initialView,
-    docId = params.get("document") ?? "",
-    legacyDocId = params.get("legacyDocument") ?? "",
-    creating = params.get("create");
+  const router = useRouter();
+  const [isNavigating, startNavigation] = useTransition();
+  const [activeView, setActiveView] = useState(initialView);
+  const cid = initialProjectId || (initialView === "templates" ? initialQuery.project ?? "" : ""),
+    view = activeView,
+    docId = initialQuery.document ?? "",
+    legacyDocId = initialQuery.legacyDocument ?? "",
+    creating = initialQuery.create;
   const routeIdentity = JSON.stringify([cid, docId, legacyDocId]);
-  const initialSnapshot = workspaceSnapshots.get(routeIdentity);
-  const [data, setData] = useState<AgencyData>(initialSnapshot?.data ?? empty),
-    [docs, setDocs] = useState<ProjectDocument[]>(initialSnapshot?.documents ?? []),
-    [legacyDocs, setLegacyDocs] = useState<AgencyRecord[]>(initialSnapshot?.legacyDocuments ?? []),
-    [loading, setLoading] = useState(!initialSnapshot),
+  const availableSnapshot = initialSnapshot ?? workspaceSnapshots.get(routeIdentity);
+  const [data, setData] = useState<AgencyData>(availableSnapshot?.data ?? empty),
+    [docs, setDocs] = useState<ProjectDocument[]>(availableSnapshot?.documents ?? []),
+    [legacyDocs, setLegacyDocs] = useState<AgencyRecord[]>(availableSnapshot?.legacyDocuments ?? []),
+    [loading, setLoading] = useState(!availableSnapshot),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
@@ -122,14 +127,14 @@ export function ProjectsWorkspace({
   const staff = project ? data.staffClientIds.includes(cid) : data.isStaff;
   const projectRole = cid ? data.projectRoles[cid] : undefined;
   const canManageAccess = projectRole === "owner" || projectRole === "manager";
-  const onboardingParam = params.get("onboarding");
+  const onboardingParam = initialQuery.onboarding;
   const onboardingValue = ["1", "2", "3", "4"].includes(onboardingParam ?? "")
     ? onboardingParam
     : null;
   const onboardingStep = (onboardingValue
     ? Number(onboardingValue)
     : project?.onboarding_step ?? 1) as 1 | 2 | 3 | 4;
-  const selectedTeamId = project?.team_id ?? params.get("team") ?? data.teams[0]?.id;
+  const selectedTeamId = project?.team_id ?? initialQuery.team ?? data.teams[0]?.id;
   const selectedTeam = data.teams.find((item) => item.id === selectedTeamId);
   const workspaceLabel = project
     ? selectedTeam?.name ?? "Acesso de cliente"
@@ -170,20 +175,51 @@ export function ProjectsWorkspace({
                 ? "dashboards"
                 : "overview"
             : "projects";
-    router.push(
-      workspaceHref(nextView, {
-        projectId: nextProjectId,
-        documentId: nextDocumentId,
-        legacyDocumentId: values.legacyDocument,
-        create: values.create,
-        onboarding: values.onboarding,
-        preview: values.preview,
-        teamId: values.team,
-      }),
-    );
+    const href = workspaceHref(nextView, {
+      projectId: nextProjectId,
+      documentId: nextDocumentId,
+      legacyDocumentId: values.legacyDocument,
+      create: values.create,
+      onboarding: values.onboarding,
+      preview: values.preview,
+      teamId: values.team,
+    });
+    const isLocalProjectTab =
+      Boolean(initialProjectId) &&
+      nextProjectId === cid &&
+      isProjectSection(nextView) &&
+      !docId &&
+      !legacyDocId &&
+      !creating &&
+      !onboardingValue &&
+      !initialQuery.meta &&
+      !nextDocumentId &&
+      !values.legacyDocument &&
+      !values.create &&
+      !values.onboarding;
+    if (isLocalProjectTab) {
+      window.history.pushState(null, "", href);
+      setActiveView(nextView);
+    } else {
+      startNavigation(() => router.push(href));
+    }
     setSearch("");
     setNotice("");
   };
+  useEffect(() => setActiveView(initialView), [initialView]);
+  useEffect(() => {
+    if (!initialProjectId) return;
+    const syncViewWithHistory = () => {
+      const [root, encodedProjectId, section] = window.location.pathname
+        .split("/")
+        .filter(Boolean);
+      if (root !== "projects" || decodeURIComponent(encodedProjectId ?? "") !== initialProjectId) return;
+      const nextView = section ?? "overview";
+      if (isProjectSection(nextView)) setActiveView(nextView);
+    };
+    window.addEventListener("popstate", syncViewWithHistory);
+    return () => window.removeEventListener("popstate", syncViewWithHistory);
+  }, [initialProjectId]);
   const activeProjectRef = useRef(routeIdentity);
   activeProjectRef.current = routeIdentity;
   const reload = useCallback(async (signal?: AbortSignal) => {
@@ -207,12 +243,15 @@ export function ProjectsWorkspace({
   }, [cid, docId, legacyDocId, routeIdentity]);
   useEffect(() => {
     const controller = new AbortController();
-    const snapshot = workspaceSnapshots.get(routeIdentity);
+    const snapshot = initialSnapshot ?? workspaceSnapshots.get(routeIdentity);
     if (snapshot) {
+      workspaceSnapshots.set(routeIdentity, snapshot);
       setData(snapshot.data);
       setDocs(snapshot.documents);
       setLegacyDocs(snapshot.legacyDocuments);
       setLoading(false);
+      setError("");
+      return () => controller.abort();
     } else {
       setLoading(true);
     }
@@ -228,16 +267,16 @@ export function ProjectsWorkspace({
       })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [reload, routeIdentity]);
+  }, [initialSnapshot, reload, routeIdentity]);
   useEffect(() => {
     const section = document?.kind === "template" ? "templates" : document?.kind === "report" || legacyDocument ? "reports" : document ? "dashboards" : undefined;
     if (section && view !== section) router.replace(workspaceHref(section, {
       projectId: cid,
       documentId: document?.id,
       legacyDocumentId: legacyDocument?.id,
-      preview: params.get("preview") ?? undefined,
+      preview: initialQuery.preview,
     }));
-  }, [document, legacyDocument, view, router, cid, params]);
+  }, [document, legacyDocument, view, router, cid, initialQuery.preview]);
   const request = async (path: string, body: unknown) => {
     const r = await fetch(path, {
       method: "POST",
@@ -281,10 +320,10 @@ export function ProjectsWorkspace({
     }
   }, []);
   useEffect(() => {
-    if (params.get("meta")) {
+    if (initialQuery.meta) {
       const reason =
-        params.get("meta") === "error"
-          ? params.get("reason") || "A autorização não foi concluída."
+        initialQuery.meta === "error"
+          ? initialQuery.reason || "A autorização não foi concluída."
           : "";
       void openMeta(reason);
       router.replace(
@@ -294,7 +333,7 @@ export function ProjectsWorkspace({
         }),
       );
     }
-  }, [params, cid, router, openMeta, onboardingValue]);
+  }, [initialQuery.meta, initialQuery.reason, cid, router, openMeta, onboardingValue]);
   async function bind() {
     await run(async () => {
       if (meta?.stage === "needs_selection")
@@ -567,6 +606,11 @@ export function ProjectsWorkspace({
   const primaryDocumentKind = view === "reports" ? "report" : "dashboard";
   return (
     <div className={`projects theme-${theme}`}>
+      {isNavigating ? (
+        <div className="pj-route-progress" role="status" aria-label="Carregando próxima tela">
+          <span aria-hidden="true" />
+        </div>
+      ) : null}
       <header className="pj-topnav">
         <button
           className="pj-brand"
@@ -715,7 +759,7 @@ export function ProjectsWorkspace({
           clientName={project.name}
           logo={project.logo_url}
           staff={staff}
-          initialPreview={params.get("preview") === "1"}
+          initialPreview={initialQuery.preview === "1"}
           busy={busy}
           onBack={() => navigate({ project: cid })}
           onAction={documentAction}

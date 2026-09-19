@@ -1,10 +1,10 @@
-import { Suspense } from "react";
 import { notFound, redirect } from "next/navigation";
 import { z } from "zod";
 import { ProjectsWorkspace } from "@/components/projects/workspace";
 import type { WorkspaceView } from "@/lib/projects/routes";
 import { hasSupabaseEnv } from "@/lib/env";
-import { projectAccess, ProjectAccessError, requireProjectSession } from "@/lib/projects/access";
+import { ProjectAccessError } from "@/lib/projects/access";
+import { loadProjectWorkspace } from "@/lib/projects/service";
 
 export async function WorkspacePage({
   path,
@@ -26,23 +26,35 @@ export async function WorkspacePage({
   const target = path + (query.size ? `?${query.toString()}` : "");
   const login = `/login?next=${encodeURIComponent(target)}`;
   if (!hasSupabaseEnv()) redirect(login);
-  const session = await requireProjectSession().catch((error: unknown) => {
+  const scopedProjectId = projectId || (view === "templates" ? query.get("project") ?? "" : "");
+  if (scopedProjectId && !z.string().uuid().safeParse(scopedProjectId).success) notFound();
+
+  const workspace = await loadProjectWorkspace(
+    scopedProjectId || undefined,
+    query.get("document") ?? undefined,
+    query.get("legacyDocument") ?? undefined,
+  ).catch((error: unknown) => {
     if (error instanceof ProjectAccessError && error.status === 401) redirect(login);
+    if (error instanceof ProjectAccessError && error.status === 404) notFound();
     throw error;
   });
+  const { documents, legacyDocuments, ...data } = workspace;
 
-  if (projectId) {
-    if (!z.string().uuid().safeParse(projectId).success) notFound();
-    const access = await projectAccess(projectId, session).catch((error: unknown) => {
-      if (error instanceof ProjectAccessError && error.status === 404) notFound();
-      throw error;
-    });
-    if (["integrations", "settings", "access"].includes(view) && !access.role) notFound();
+  if (
+    projectId &&
+    ["integrations", "settings", "access"].includes(view) &&
+    !data.projectRoles[projectId]
+  ) {
+    notFound();
   }
 
   return (
-    <Suspense fallback={<main className="agency-loading">Carregando sua área de trabalho…</main>}>
-      <ProjectsWorkspace initialProjectId={projectId} initialView={view} />
-    </Suspense>
+    <ProjectsWorkspace
+      key={JSON.stringify([projectId || view, query.get("document"), query.get("legacyDocument")])}
+      initialProjectId={projectId}
+      initialView={view}
+      initialQuery={Object.fromEntries(query)}
+      initialSnapshot={{ data, documents, legacyDocuments }}
+    />
   );
 }
