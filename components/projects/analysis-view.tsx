@@ -416,6 +416,7 @@ export function AnalysisView({
                         {size === "compact" ? "1×" : size === "wide" ? "2×" : "4×"}
                       </button>
                       <button
+                        className="danger"
                         aria-label={`Remover ${definition.label}`}
                         disabled={builtIn != null && config.metrics.length <= 1}
                         onClick={() => removeMetric(id)}
@@ -653,6 +654,7 @@ export function AnalysisView({
                   )}
                   {doc.status === "draft" && (
                     <button
+                      className="danger"
                       disabled={busy}
                       onClick={() => {
                         if (window.confirm("Excluir este rascunho?"))
@@ -820,6 +822,7 @@ export function AnalysisView({
                       ✎
                     </button>
                     <button
+                      className="danger"
                       aria-label={`Remover ${metric.label}`}
                       onClick={() => removeMetric(metric.id)}
                     >
@@ -848,6 +851,7 @@ export function AnalysisView({
                   ↓
                 </button>
                 <button
+                  className="danger"
                   aria-label={"Remover " + SECTIONS[k]}
                   onClick={() =>
                     patch({ sections: config.sections.filter((x) => x !== k) })

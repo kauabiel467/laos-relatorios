@@ -20,7 +20,7 @@ import { ProjectDetailsFields } from "./project-details-fields";
 import { ProjectAccessPanel } from "./project-access-panel";
 import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
-import { Dialog, Empty, MetaMark, shortDate } from "./ui";
+import { Dialog, Empty, LoadingState, MetaMark, shortDate } from "./ui";
 import "./projects.css";
 const viewLabels: Record<WorkspaceView, string> = {
   projects: "Projetos",
@@ -84,6 +84,23 @@ export function ProjectsWorkspace({
     const saved = window.localStorage.getItem("laos-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
   }, []);
+  useEffect(() => {
+    window.document.documentElement.style.colorScheme = theme;
+    let themeColor = window.document.head.querySelector<HTMLMetaElement>(
+      'meta[name="theme-color"][data-laos-theme]',
+    );
+    if (!themeColor) {
+      themeColor = window.document.createElement("meta");
+      themeColor.name = "theme-color";
+      themeColor.dataset.laosTheme = "true";
+      window.document.head.appendChild(themeColor);
+    }
+    themeColor.content = theme === "dark" ? "#090c12" : "#f4f7fb";
+    return () => {
+      window.document.documentElement.style.colorScheme = "";
+      themeColor?.remove();
+    };
+  }, [theme]);
   const toggleTheme = () => {
     setTheme((current) => {
       const next = current === "dark" ? "light" : "dark";
@@ -479,75 +496,145 @@ export function ProjectsWorkspace({
         : latest(b.id).localeCompare(latest(a.id)),
     );
   function latest(id: string) {
-    return (
-      docs.find((d) => d.client_id === id && d.kind !== "template")
-        ?.created_at ??
-      data.clients.find((c) => c.id === id)?.created_at ??
-      ""
-    );
+    return [
+      ...docs
+        .filter((d) => d.client_id === id && d.kind !== "template")
+        .map((d) => d.created_at),
+      ...legacyDocs
+        .filter((record) => record.client_id === id)
+        .map((record) => record.created_at),
+      data.clients.find((c) => c.id === id)?.created_at ?? "",
+    ]
+      .filter(Boolean)
+      .sort((a, b) => b.localeCompare(a))[0] ?? "";
   }
+  const pageTitle =
+    creating === "project"
+      ? "Novo projeto"
+      : onboardingValue && project
+        ? "Configurar projeto"
+        : creating === "dashboard"
+          ? "Novo dashboard"
+          : creating === "report"
+            ? "Novo relatório"
+            : project
+              ? viewLabels[view]
+              : view === "overview"
+                ? "Overview da agência"
+                : view === "templates"
+                  ? "Meus templates"
+                  : view === "team"
+                    ? "Equipe e configurações"
+                    : "Meus projetos";
+  const pageContext = project
+    ? `${project.name}${project.segment ? ` · ${project.segment}` : ""}`
+    : workspaceLabel;
+  const canCreateDocumentFromScreen =
+    Boolean(project) &&
+    !creating &&
+    staff &&
+    !onboardingValue &&
+    Boolean(project?.onboarding_completed_at) &&
+    data.projectMetaConnection?.connection_status === "connected" &&
+    ["overview", "dashboards", "reports"].includes(view);
+  const primaryDocumentKind = view === "reports" ? "report" : "dashboard";
   return (
     <div className={`projects theme-${theme}`}>
       <header className="pj-topnav">
-        <button className="pj-brand" onClick={() => navigate({})}>
-          <span>◧</span> laos<span className="pj-brand-sub">relatórios</span>
+        <button
+          className="pj-brand"
+          aria-label="Ir para meus projetos"
+          onClick={() => navigate({})}
+        >
+          <span aria-hidden="true">◧</span> laos
+          <span className="pj-brand-sub">relatórios</span>
         </button>
-        <nav aria-label="Navegação principal">
+        <nav className="pj-global-nav" aria-label="Navegação global">
           <button
-            className={!cid && view === "projects" ? "active" : ""}
+            className={
+              view === "projects" || (Boolean(cid) && view !== "templates")
+                ? "active"
+                : ""
+            }
+            aria-current={
+              view === "projects" || (Boolean(cid) && view !== "templates")
+                ? "page"
+                : undefined
+            }
             onClick={() => navigate({})}
           >
-            ♙ Meus projetos
+            Projetos
           </button>
           <button
             className={!cid && view === "overview" ? "active" : ""}
+            aria-current={!cid && view === "overview" ? "page" : undefined}
             onClick={() => navigate({ view: "overview" })}
           >
-            ▤ Overview
+            Overview
           </button>
           {data.isStaff && (
             <button
               className={view === "templates" ? "active" : ""}
+              aria-current={view === "templates" ? "page" : undefined}
               onClick={() => navigate({ view: "templates" })}
             >
-              ▦ Templates
+              Templates
             </button>
           )}
           {data.isStaff && (
             <button
-              className={view === "team" ? "active" : ""}
+              className={!cid && view === "team" ? "active" : ""}
+              aria-current={!cid && view === "team" ? "page" : undefined}
               onClick={() => navigate({ view: "team" })}
             >
-              ♙ Equipe
+              Equipe
             </button>
           )}
         </nav>
         {project ? (
-          <span className="pj-active-project" title={`Projeto ativo: ${project.name}`}>
-            <span aria-hidden="true">●</span> {project.name}
-          </span>
+          <button
+            className="pj-active-project"
+            title={`Abrir visão geral de ${project.name}`}
+            aria-label={`Projeto ativo: ${project.name}. Abrir visão geral.`}
+            onClick={() => navigate({ project: cid })}
+          >
+            <span className="pj-active-project-dot" aria-hidden="true" />
+            <span>
+              <small>Projeto ativo</small>
+              <strong>{project.name}</strong>
+            </span>
+          </button>
         ) : null}
         <div className="pj-account">
           <button
             className="pj-theme-toggle"
             aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            aria-pressed={theme === "dark"}
             title={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
             onClick={toggleTheme}
           >
-            {theme === "dark" ? "☀ Claro" : "☾ Escuro"}
+            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
+            <span className="pj-account-label">
+              {theme === "dark" ? "Tema claro" : "Tema escuro"}
+            </span>
           </button>
           <span className="pj-small-avatar">
             {data.userName.slice(0, 1).toUpperCase() || "L"}
           </span>
-          <span title={`Workspace: ${workspaceLabel}`}>{workspaceLabel}</span>
+          <span className="pj-workspace-name" title={`Workspace: ${workspaceLabel}`}>
+            {workspaceLabel}
+          </span>
           <button
+            className="pj-signout"
             aria-label="Sair"
+            title="Sair da conta"
             onClick={async () => {
               await fetch("/api/auth/signout", { method: "POST" });
               window.location.href = "/login";
             }}
           >
-            ↗
+            <span aria-hidden="true">↗</span>
+            <span className="pj-account-label">Sair</span>
           </button>
         </div>
       </header>
@@ -561,7 +648,7 @@ export function ProjectsWorkspace({
       )}
       {loading ? (
         <main className="pj-container">
-          <Empty title="Carregando seus projetos…" />
+          <LoadingState label="Carregando seus projetos" />
         </main>
       ) : error ? (
         <main className="pj-container">
@@ -619,37 +706,21 @@ export function ProjectsWorkspace({
           <div className="pj-page-heading">
             <div className="pj-container">
               <div className="pj-title-group">
-                <span className="pj-project-avatar">
-                  {project?.logo_url ? (
-                    <img src={project.logo_url} alt="" />
-                  ) : (
-                    (project?.name.slice(0, 1).toUpperCase() ??
-                    (view === "templates" ? "▦" : "L"))
-                  )}
-                </span>
+                {project ? (
+                  <span className="pj-project-avatar" aria-hidden="true">
+                    {project.logo_url ? (
+                      <img src={project.logo_url} alt="" />
+                    ) : (
+                      project.name.slice(0, 1).toUpperCase()
+                    )}
+                  </span>
+                ) : null}
                 <div>
-                  {cid && (
-                    <button className="pj-back" onClick={() => navigate({})}>
-                      ← Voltar para meus projetos
-                    </button>
-                  )}
-                  <h1>
-                    {creating === "project"
-                      ? "Novo projeto"
-                      : creating
-                        ? creating === "dashboard"
-                          ? "Novo dashboard"
-                          : "Novo relatório"
-                        : project
-                          ? project.name
-                          : !cid && view === "overview"
-                            ? "Overview da agência"
-                            : view === "templates"
-                              ? "Meus templates"
-                              : view === "team"
-                                ? "Equipe e configurações"
-                              : "Meus projetos"}
-                  </h1>
+                  <span className="pj-heading-eyebrow">
+                    {project ? "Projeto" : "Workspace"}
+                  </span>
+                  <h1>{pageTitle}</h1>
+                  <p className="pj-heading-context">{pageContext}</p>
                 </div>
               </div>
               {!cid && !creating && data.isStaff && view === "projects" && (
@@ -660,17 +731,38 @@ export function ProjectsWorkspace({
                   ＋ Novo projeto
                 </button>
               )}
-              {cid && !creating && staff && !onboardingValue && (
-                <div className="pj-inline-actions">
-                  <button onClick={() => newDocument("dashboard")}>
-                    ◴ Criar dashboard
-                  </button>
+              {canCreateDocumentFromScreen && (
+                <div className="pj-screen-actions" aria-label="Ações da tela">
                   <button
                     className="accent"
-                    onClick={() => newDocument("report")}
+                    onClick={() => newDocument(primaryDocumentKind)}
                   >
-                    ▤ Criar relatório
+                    {primaryDocumentKind === "report"
+                      ? "Criar relatório"
+                      : "Criar dashboard"}
                   </button>
+                  <details className="pj-context-menu">
+                    <summary aria-label="Mais ações de criação">
+                      Mais ações
+                      <span aria-hidden="true">⌄</span>
+                    </summary>
+                    <div role="menu">
+                      <button
+                        role="menuitem"
+                        onClick={() =>
+                          newDocument(
+                            primaryDocumentKind === "report"
+                              ? "dashboard"
+                              : "report",
+                          )
+                        }
+                      >
+                        {primaryDocumentKind === "report"
+                          ? "Criar dashboard"
+                          : "Criar relatório"}
+                      </button>
+                    </div>
+                  </details>
                 </div>
               )}
             </div>
@@ -682,14 +774,39 @@ export function ProjectsWorkspace({
                 <>
                   <span aria-hidden="true">/</span>
                   <button onClick={() => navigate({ project: cid })}>{project.name}</button>
-                  {view !== "overview" ? (
+                  <span aria-hidden="true">/</span>
+                  {creating || onboardingValue ? (
                     <>
+                      <button
+                        onClick={() =>
+                          navigate({
+                            project: cid,
+                            view:
+                              creating === "report"
+                                ? "reports"
+                                : creating === "dashboard"
+                                  ? "dashboards"
+                                  : "overview",
+                          })
+                        }
+                      >
+                        {creating === "report"
+                          ? "Relatórios"
+                          : creating === "dashboard"
+                            ? "Dashboards"
+                            : "Visão geral"}
+                      </button>
                       <span aria-hidden="true">/</span>
-                      <span aria-current="page">
-                        {viewLabels[view]}
-                      </span>
+                      <span aria-current="page">{pageTitle}</span>
                     </>
-                  ) : null}
+                  ) : (
+                    <span aria-current="page">{viewLabels[view]}</span>
+                  )}
+                </>
+              ) : creating === "project" ? (
+                <>
+                  <span aria-hidden="true">/</span>
+                  <span aria-current="page">Novo projeto</span>
                 </>
               ) : view !== "projects" ? (
                 <>
@@ -802,30 +919,49 @@ export function ProjectsWorkspace({
             ) : project ? (
               <>
                 <nav className="pj-project-tabs" aria-label="Áreas do projeto">
-                  {[
-                    ["overview", "Visão geral"],
-                    ["dashboards", "Dashboards"],
-                    ["reports", "Relatórios"],
-                    ["integrations", "Integrações"],
-                    ["timeline", "Linha do tempo"],
-                    ["goals", "Metas"],
-                    ["settings", "Dados do projeto"],
-                    ["access", "Equipe e acesso"],
-                  ]
-                    .filter(
-                      ([key]) =>
-                        staff ||
-                        !["integrations", "settings", "access"].includes(key),
-                    )
-                    .map(([key, label]) => (
-                      <button
-                        key={key}
-                        className={view === key ? "active" : ""}
-                        onClick={() => navigate({ project: cid, view: key })}
-                      >
-                        {label}
-                      </button>
-                    ))}
+                  <div className="pj-project-tab-group">
+                    {[
+                      ["overview", "Visão geral"],
+                      ["dashboards", "Dashboards"],
+                      ["reports", "Relatórios"],
+                      ["integrations", "Integrações"],
+                      ["timeline", "Linha do tempo"],
+                      ["goals", "Metas"],
+                    ]
+                      .filter(
+                        ([key]) => staff || key !== "integrations",
+                      )
+                      .map(([key, label]) => (
+                        <button
+                          key={key}
+                          className={view === key ? "active" : ""}
+                          aria-current={view === key ? "page" : undefined}
+                          onClick={() => navigate({ project: cid, view: key })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                  </div>
+                  {staff ? (
+                    <div
+                      className="pj-project-tab-group pj-project-tab-settings"
+                      aria-label="Configurações do projeto"
+                    >
+                      {[
+                        ["settings", "Dados do projeto"],
+                        ["access", "Equipe e acesso"],
+                      ].map(([key, label]) => (
+                        <button
+                          key={key}
+                          className={view === key ? "active" : ""}
+                          aria-current={view === key ? "page" : undefined}
+                          onClick={() => navigate({ project: cid, view: key })}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                 </nav>
                 {view === "overview" &&
                 staff &&
@@ -939,7 +1075,7 @@ export function ProjectsWorkspace({
                             ? "Escolha um modelo, defina o período e gere os resultados deste cliente."
                             : "Conecte a conta Meta para começar a gerar dashboards e relatórios."}
                         </p>
-                        {staff && (
+                        {staff && !canCreateDocumentFromScreen && (
                           <button
                             className="accent"
                             onClick={() =>
@@ -1261,59 +1397,69 @@ export function ProjectsWorkspace({
                       <option value="name">Nome do projeto</option>
                     </select>
                   </label>
-                  {data.isStaff && (
-                    <button onClick={() => navigate({ view: "team" })}>
-                      ♙ Gerenciar equipe
-                    </button>
-                  )}
+                  <span className="pj-result-count" aria-live="polite">
+                    {filtered.length} {filtered.length === 1 ? "projeto" : "projetos"}
+                  </span>
                 </div>
                 <div className="pj-project-grid">
                   {filtered.map((c) => {
                     const documents = docs.filter(
                       (d) => d.client_id === c.id && d.kind !== "template",
                     );
+                    const dashboardCount = documents.filter(
+                      (d) => d.kind === "dashboard",
+                    ).length;
+                    const reportCount =
+                      documents.filter((d) => d.kind === "report").length +
+                      legacyDocs.filter((record) => record.client_id === c.id)
+                        .length;
+                    const lastActivity = latest(c.id);
+                    const status = c.meta_account_id
+                      ? { label: "Meta conectada", tone: "connected" }
+                      : c.onboarding_completed_at
+                        ? { label: "Sem integração", tone: "unavailable" }
+                        : { label: "Configuração pendente", tone: "beta" };
                     return (
                       <button
                         className="pj-project-card"
                         key={c.id}
+                        aria-label={`Abrir projeto ${c.name}`}
                         onClick={() => navigate({ project: c.id })}
                       >
                         <span className="pj-project-avatar">
                           {c.name.slice(0, 1).toUpperCase()}
                         </span>
-                        <div>
-                          <h3>{c.name}</h3>
+                        <div className="pj-project-card-content">
+                          <div className="pj-project-card-heading">
+                            <h3>{c.name}</h3>
+                            <span className={`pj-status-badge ${status.tone}`}>
+                              {status.label}
+                            </span>
+                          </div>
                           <div className="pj-card-integrations">
                             {c.meta_account_id ? (
-                              <MetaMark />
+                              <span className="pj-integration-pill">
+                                <MetaMark />
+                                Meta Ads
+                              </span>
                             ) : (
-                              <small>Nenhuma integração</small>
+                              <small>Nenhuma fonte conectada</small>
                             )}
                           </div>
-                          <p>
-                            {
-                              documents.filter((d) => d.kind === "dashboard")
-                                .length
-                            }{" "}
-                            dashboards ·{" "}
-                            {
-                              documents.filter((d) => d.kind === "report")
-                                .length + legacyDocs.filter((record) => record.client_id === c.id).length
-                            }{" "}
-                            relatórios
-                          </p>
-                          <small>
-                            {documents.length ? (
-                              <>
-                                Última análise em{" "}
-                                <b>{shortDate(documents[0].created_at)}</b>
-                              </>
-                            ) : (
-                              "Conecte as fontes para criar sua primeira análise"
-                            )}
-                          </small>
+                          <div className="pj-project-card-meta">
+                            <span>{dashboardCount} dashboards</span>
+                            <span>{reportCount} relatórios</span>
+                          </div>
+                          <div className="pj-project-card-footer">
+                            <small>
+                              Última atividade{" "}
+                              <b>{lastActivity ? shortDate(lastActivity) : "indisponível"}</b>
+                            </small>
+                            <span className="pj-open-project">
+                              Abrir projeto <span aria-hidden="true">→</span>
+                            </span>
+                          </div>
                         </div>
-                        <span className="pj-card-arrow">→</span>
                       </button>
                     );
                   })}

@@ -80,14 +80,27 @@ export function Empty({
 }) {
   return (
     <div className="pj-empty">
-      <span>▦</span>
+      <span aria-hidden="true">▦</span>
       <h3>{title}</h3>
       {children}
     </div>
   );
 }
+
+export function LoadingState({ label = "Carregando conteúdo…" }: { label?: string }) {
+  return (
+    <div className="pj-loading-state" role="status" aria-live="polite" aria-label={label}>
+      <span className="pj-skeleton-line" aria-hidden="true" />
+      <div className="pj-skeleton-grid" aria-hidden="true">
+        <span className="pj-skeleton-card" />
+        <span className="pj-skeleton-card" />
+      </div>
+      <span className="sr-only">{label}</span>
+    </div>
+  );
+}
 export function MetaMark() {
-  return <span className="pj-meta">∞</span>;
+  return <span className="pj-meta" aria-label="Meta Ads">∞</span>;
 }
 export const shortDate = (v: string) =>
   new Date(v.length === 10 ? v + "T12:00:00" : v).toLocaleDateString("pt-BR");
