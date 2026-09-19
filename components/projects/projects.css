@@ -438,6 +438,12 @@
   min-width: 35px;
   flex-shrink: 0;
 }
+.pj-meta svg,
+.pj-integration-card-header > span:first-child svg {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
 .pj-project-card p {
   margin: 0;
   font-size: 12px;

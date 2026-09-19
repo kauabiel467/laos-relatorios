@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
+import { BrandIcon } from "./brand-icons";
 export function Dialog({
   title,
   children,
@@ -100,7 +101,11 @@ export function LoadingState({ label = "Carregando conteúdo…" }: { label?: st
   );
 }
 export function MetaMark() {
-  return <span className="pj-meta" aria-label="Meta Ads">∞</span>;
+  return (
+    <span className="pj-meta" role="img" aria-label="Meta Ads">
+      <BrandIcon name="meta" />
+    </span>
+  );
 }
 export const shortDate = (v: string) =>
   new Date(v.length === 10 ? v + "T12:00:00" : v).toLocaleDateString("pt-BR");

@@ -9,6 +9,7 @@ import {
   PROJECT_INTEGRATIONS,
   type IntegrationAvailability,
 } from "@/lib/projects/config";
+import { BrandIcon } from "./brand-icons";
 import { MetaMark, shortDate } from "./ui";
 
 function connectionMessage(connection: ProjectMetaConnection | null) {
@@ -177,7 +178,7 @@ export function ProjectIntegrations({
               >
                 <div className="pj-integration-card-header">
                   <span style={{ background: integration.color }} aria-hidden="true">
-                    {integration.icon}
+                    <BrandIcon name={integration.icon} />
                   </span>
                   <div className="pj-badge-row">
                     <span className={`pj-status-badge ${primaryStatus}`}>
@@ -222,4 +223,3 @@ export function ProjectIntegrations({
     </div>
   );
 }
-

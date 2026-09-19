@@ -186,7 +186,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "meta",
     name: "Meta Ads",
-    icon: "∞",
+    icon: "meta",
     color: "#0967d9",
     description: "Anúncios de Facebook e Instagram.",
     availability: "available" as const,
@@ -197,7 +197,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "instagram",
     name: "Instagram Business",
-    icon: "◎",
+    icon: "instagram",
     color: "#cf43a0",
     description: "Conteúdo e perfil orgânico.",
     availability: "soon" as const,
@@ -207,7 +207,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "facebook",
     name: "Facebook",
-    icon: "f",
+    icon: "facebook",
     color: "#2379df",
     description: "Conteúdo e página orgânica.",
     availability: "soon" as const,
@@ -217,7 +217,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "google_ads",
     name: "Google Ads",
-    icon: "A",
+    icon: "google-ads",
     color: "#33a56b",
     description: "Anúncios na pesquisa e na rede Google.",
     availability: "soon" as const,
@@ -227,7 +227,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "ga4",
     name: "Google Analytics 4",
-    icon: "▥",
+    icon: "google-analytics",
     color: "#ed9638",
     description: "Eventos e navegação no site.",
     availability: "soon" as const,
@@ -237,7 +237,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "ifood",
     name: "iFood",
-    icon: "iF",
+    icon: "ifood",
     color: "#ed3948",
     description: "Pedidos do marketplace.",
     availability: "unavailable" as const,
@@ -247,7 +247,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "cardapio",
     name: "Cardápio digital",
-    icon: "C",
+    icon: "digital-menu",
     color: "#744abd",
     description: "Pedidos do canal próprio.",
     availability: "unavailable" as const,
@@ -257,7 +257,7 @@ export const PROJECT_INTEGRATIONS = [
   {
     id: "google_business",
     name: "Perfil da Empresa no Google",
-    icon: "G",
+    icon: "google",
     color: "#277cc9",
     description: "Presença local e avaliações.",
     availability: "soon" as const,
@@ -265,4 +265,3 @@ export const PROJECT_INTEGRATIONS = [
     note: "OAuth e coleta ainda não foram implementados.",
   },
 ] as const;
-
