@@ -24,6 +24,11 @@ import { inferCalculationFormat } from "@/lib/metrics/engine";
 import { Dialog, MetaMark, shortDate } from "./ui";
 import { LineChart } from "./line-chart";
 import { workspaceHref } from "@/lib/projects/routes";
+import ProgressMetricCard, {
+  type CardSize,
+  type MetricAccent,
+  type SeriesPoint,
+} from "@/components/ui/progress-metric-card";
 
 const defaultCustomMetric = (): CustomMetricDefinition => ({
   id: "",
@@ -365,100 +370,125 @@ export function AnalysisView({
               const formattedPrevious = builtIn
                 ? formatMetric(builtIn, previous, currency)
                 : formatCustomMetric(custom!, previous, currency);
+              const seriesData: SeriesPoint[] = data.daily.flatMap((day) => {
+                const pointValue = builtIn
+                  ? day.metrics[builtIn]
+                  : custom?.kind === "calculated"
+                    ? customMetricValue(custom, day.metrics)
+                    : null;
+                return typeof pointValue === "number" && Number.isFinite(pointValue)
+                  ? [{ date: day.date, value: pointValue }]
+                  : [];
+              });
+              const favorableDirection = builtIn
+                ? METRICS[builtIn].favorableDirection
+                : custom?.lower
+                  ? "decrease"
+                  : "increase";
+              const favorable = delta == null || delta === 0 || favorableDirection === "neutral"
+                ? null
+                : favorableDirection === "decrease"
+                  ? delta < 0
+                  : delta > 0;
+              const accent: MetricAccent = favorable == null
+                ? id === config.primary_metric
+                  ? "blue"
+                  : "neutral"
+                : favorable
+                  ? "emerald"
+                  : "rose";
+              const cardSize: CardSize = size === "full" ? "lg" : size === "wide" ? "md" : "sm";
+              const effectiveSince = data.effective_period?.since ?? config.since;
+              const effectiveUntil = data.effective_period?.until ?? config.until;
+              const periodLabel = effectiveSince && effectiveUntil
+                ? `${shortDate(effectiveSince)} – ${shortDate(effectiveUntil)}`
+                : "Período atual";
+              const comparisonLabel = !data.previous
+                ? "Comparação desativada"
+                : previous === 0 && value != null
+                  ? "Sem base comparável no período anterior"
+                  : previous != null
+                    ? `${formattedPrevious} no período anterior`
+                    : "Sem dado no período anterior";
               return (
-                <article
-                  className={`pj-metric size-${size} ${editor && !preview ? "editable" : ""}`}
+                <div
+                  className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""}`}
                   key={id}
                   onDragOver={(event) => {
                     if (editor && !preview) event.preventDefault();
                   }}
                   onDrop={() => reorderMetric(id)}
                 >
-                  {editor && !preview && (
-                    <div className="pj-metric-controls">
-                      <button
-                        className="pj-drag-handle"
-                        draggable
-                        aria-label={`Arrastar ${definition.label}`}
-                        title="Segure e arraste para reordenar"
-                        onDragStart={() => setDraggedMetric(id)}
-                        onDragEnd={() => setDraggedMetric("")}
-                      >
-                        ⠿
-                      </button>
-                      {builtIn && (
-                        <select
-                          aria-label={`Trocar ${definition.label}`}
-                          value={builtIn}
-                          onChange={(event) =>
-                            replaceMetric(builtIn, event.target.value as MetricKey)
-                          }
+                  <ProgressMetricCard
+                    title={definition.label}
+                    description={definition.description || "Métrica personalizada"}
+                    total={formatted}
+                    percent={delta == null ? undefined : `${Math.abs(delta).toFixed(1).replace(".", ",")}%`}
+                    trend={delta == null || delta === 0 ? "flat" : delta > 0 ? "up" : "down"}
+                    comparisonLabel={comparisonLabel}
+                    period={periodLabel}
+                    accent={accent}
+                    data={seriesData}
+                    size={cardSize}
+                    featured={id === config.primary_metric}
+                    defaultIndex={Math.max(seriesData.length - 1, 0)}
+                    dateFormatter={shortDate}
+                    valueFormatter={(pointValue) =>
+                      builtIn
+                        ? formatMetric(builtIn, pointValue, currency)
+                        : formatCustomMetric(custom!, pointValue, currency)
+                    }
+                    controls={editor && !preview ? (
+                      <div className="pj-metric-controls">
+                        <button
+                          className="pj-drag-handle"
+                          draggable
+                          aria-label={`Arrastar ${definition.label}`}
+                          title="Segure e arraste para reordenar"
+                          onDragStart={() => setDraggedMetric(id)}
+                          onDragEnd={() => setDraggedMetric("")}
                         >
-                          {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
-                            <option
-                              key={metric}
-                              value={metric}
-                              disabled={
-                                (metric !== builtIn && config.metrics.includes(metric)) ||
-                                (builtIn === config.primary_metric && !isPrimaryKpiId(metric))
-                              }
-                            >
-                              {METRICS[metric].label}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <button
-                        aria-label={`Alterar tamanho de ${definition.label}`}
-                        title="Alternar entre compacto, largo e largura total"
-                        onClick={() => resizeMetric(id)}
-                      >
-                        {size === "compact" ? "1×" : size === "wide" ? "2×" : "4×"}
-                      </button>
-                      <button
-                        className="danger"
-                        aria-label={`Remover ${definition.label}`}
-                        disabled={builtIn != null && config.metrics.length <= 1}
-                        onClick={() => removeMetric(id)}
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                  <span>
-                    {definition.label}{" "}
-                    <abbr title={definition.description || "Métrica personalizada"}>
-                      ⓘ
-                    </abbr>
-                  </span>
-                  <div>
-                    <strong>{formatted}</strong>
-                    {delta != null && (
-                      <small
-                        className={
-                          (("favorableDirection" in definition
-                            ? definition.favorableDirection === "decrease"
-                            : definition.lower)
-                            ? delta < 0
-                            : delta > 0)
-                            ? "positive"
-                            : delta === 0
-                              ? "neutral"
-                              : "negative"
-                        }
-                      >
-                        {delta > 0 ? "↑" : "↓"}{" "}
-                        {Math.abs(delta).toFixed(1).replace(".", ",")}%
-                      </small>
-                    )}
-                  </div>
-                  {data.previous && previous != null && (
-                    <p>{formattedPrevious} no período anterior</p>
-                  )}
-                  {data.previous && previous === 0 && value != null && (
-                    <p>Sem base comparável no período anterior.</p>
-                  )}
-                </article>
+                          ⠿
+                        </button>
+                        {builtIn ? (
+                          <select
+                            aria-label={`Trocar ${definition.label}`}
+                            value={builtIn}
+                            onChange={(event) => replaceMetric(builtIn, event.target.value as MetricKey)}
+                          >
+                            {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
+                              <option
+                                key={metric}
+                                value={metric}
+                                disabled={
+                                  (metric !== builtIn && config.metrics.includes(metric)) ||
+                                  (builtIn === config.primary_metric && !isPrimaryKpiId(metric))
+                                }
+                              >
+                                {METRICS[metric].label}
+                              </option>
+                            ))}
+                          </select>
+                        ) : null}
+                        <button
+                          aria-label={`Alterar tamanho de ${definition.label}`}
+                          title="Alternar entre compacto, largo e largura total"
+                          onClick={() => resizeMetric(id)}
+                        >
+                          {size === "compact" ? "1×" : size === "wide" ? "2×" : "4×"}
+                        </button>
+                        <button
+                          className="danger"
+                          aria-label={`Remover ${definition.label}`}
+                          disabled={builtIn != null && config.metrics.length <= 1}
+                          onClick={() => removeMetric(id)}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ) : undefined}
+                  />
+                </div>
               );
             })}
           </div>

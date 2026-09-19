@@ -3651,3 +3651,57 @@
     --pj-border-strong: color-mix(in srgb, var(--pj-text) 60%, transparent);
   }
 }
+
+/* Rich metric cards used by dashboards and client reports. */
+.projects .pj-metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--pj-space-5);
+}
+
+.pj-progress-metric-item {
+  min-width: 0;
+}
+
+.pj-progress-metric-item.size-wide,
+.pj-progress-metric-item.size-full {
+  grid-column: 1 / -1;
+}
+
+.pj-progress-metric-item .pj-metric-controls {
+  margin: 0 !important;
+}
+
+.pj-progress-metric-item .pj-metric-controls select {
+  min-height: 34px;
+  font-size: 11px !important;
+}
+
+.pj-progress-metric-item .pj-metric-controls button {
+  min-height: 34px;
+}
+
+@media (max-width: 900px) {
+  .projects .pj-metric-grid,
+  .projects .editing .pj-metric-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .pj-progress-metric-item.size-wide,
+  .pj-progress-metric-item.size-full {
+    grid-column: auto;
+  }
+}
+
+@media print {
+  .projects .pj-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+
+  .pj-progress-metric-item,
+  .pj-progress-metric-item.size-wide,
+  .pj-progress-metric-item.size-full {
+    grid-column: auto !important;
+    break-inside: avoid;
+  }
+}
