@@ -127,17 +127,12 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
     await loadContext();
   }
 
-  async function signOut() {
-    await fetch("/api/auth/signout", { method: "POST" });
-    window.location.href = "/login";
-  }
-
   const canManage = context?.currentRole === "owner" || context?.currentRole === "manager";
 
   return (
     <div
       className={clsx(
-        "fixed inset-0 z-[85] grid place-items-center bg-black/70 p-4 transition-opacity duration-200",
+        "pj-team-modal-overlay fixed inset-0 grid place-items-center p-4 transition-opacity duration-200",
         open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
       )}
       onClick={onClose}
@@ -148,12 +143,12 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
         aria-modal="true"
         aria-labelledby="team-settings-title"
         className={clsx(
-          "panel max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto p-6 transition duration-200",
+          "pj-team-modal panel w-full max-w-4xl transition duration-200",
           open ? "scale-100 opacity-100" : "scale-95 opacity-0"
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <div className="mb-6 flex items-start justify-between gap-4">
+        <header className="pj-team-modal-header">
           <div>
             <div className="eyebrow mb-2">Equipe</div>
             <h2 id="team-settings-title" className="text-2xl font-bold text-text">{context?.team?.name || "Equipe"}</h2>
@@ -161,22 +156,18 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
               Organize os membros e as permissões do workspace selecionado.
             </p>
           </div>
-          <div className="flex gap-2">
-            <button type="button" onClick={signOut} className="rounded-lg border border-border px-3 py-2 text-sm text-muted transition hover:border-red hover:text-red">
-              Sair
-            </button>
-            <button type="button" onClick={onClose} className="rounded-lg border border-border px-3 py-2 text-sm text-muted transition hover:border-blue hover:text-text">
-              Fechar
-            </button>
-          </div>
-        </div>
+          <button type="button" onClick={onClose} aria-label="Fechar configurações da equipe">
+            Fechar
+          </button>
+        </header>
 
+        <div className="pj-team-modal-body">
         {contextLoading ? (
-          <p role="status">Carregando equipe…</p>
+          <p className="pj-team-loading" role="status">Carregando equipe…</p>
         ) : !context?.team && teamId ? (
           <p role="alert">Esta equipe não existe ou sua conta não possui acesso a ela.</p>
         ) : !context?.team ? (
-          <section className="rounded-xl border border-border bg-bg p-4">
+          <section className="pj-team-section rounded-xl border border-border bg-bg p-4">
             <div className="mb-2 text-sm font-semibold text-text">Primeira equipe</div>
             <p className="mb-4 text-sm leading-6 text-muted">
               Crie uma equipe para convidar pessoas e controlar quem gerencia o dashboard.
@@ -195,7 +186,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                 type="button"
                 onClick={createTeam}
                 disabled={loading || !teamName.trim()}
-                className="rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
+                className="accent rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
               >
                 Criar equipe
               </button>
@@ -203,7 +194,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
           </section>
         ) : (
           <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-            <section className="rounded-xl border border-border bg-bg p-4">
+            <section className="pj-team-section rounded-xl border border-border bg-bg p-4">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div>
                   <div className="text-sm font-semibold text-text">Membros</div>
@@ -225,7 +216,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                         : false;
 
                   return (
-                  <div key={member.id} className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3">
+                  <div key={member.id} className="pj-team-member flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-text">{member.email || member.user_id}</div>
                       <div className="font-mono text-[11px] text-muted">{member.user_id}</div>
@@ -237,8 +228,12 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                       {canRemove ? (
                         <button
                           type="button"
-                          onClick={() => removeMember(member.id)}
-                          className="rounded-md border border-red/30 px-2 py-1 font-mono text-[10px] text-red transition hover:bg-red hover:text-white"
+                          onClick={() => {
+                            if (window.confirm(`Remover ${member.email || "este membro"} da equipe?`)) {
+                              void removeMember(member.id);
+                            }
+                          }}
+                          className="danger rounded-md border border-red/30 px-2 py-1 font-mono text-[10px] text-red transition hover:bg-red hover:text-white"
                         >
                           Remover
                         </button>
@@ -250,7 +245,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
               </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-bg p-4">
+            <section className="pj-team-section rounded-xl border border-border bg-bg p-4">
               <div className="mb-4">
                 <div className="text-sm font-semibold text-text">Convidar membro</div>
                 <div className="font-mono text-[11px] text-muted">Dono, gerente ou gestor</div>
@@ -280,7 +275,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                         aria-pressed={inviteRole === role}
                         onClick={() => setInviteRole(role)}
                         className={clsx(
-                          "rounded-lg border px-3 py-2 text-xs font-semibold transition",
+                          "pj-team-role rounded-lg border px-3 py-2 text-xs font-semibold transition",
                           inviteRole === role ? "border-blue bg-blue/10 text-blue-100" : "border-border text-muted hover:border-blue"
                         )}
                       >
@@ -292,13 +287,13 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                     type="button"
                     onClick={inviteMember}
                     disabled={loading || !inviteEmail.trim()}
-                    className="w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
+                    className="accent w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
                   >
                     Enviar convite
                   </button>
                 </div>
               ) : (
-                <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted">
+                <div className="pj-team-member rounded-xl border border-border bg-card p-3 text-sm text-muted">
                   Apenas dono e gerente podem convidar membros.
                 </div>
               )}
@@ -307,7 +302,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                 <div className="mt-5 space-y-2">
                   <div className="eyebrow">Convites pendentes</div>
                   {context.invitations.map((invite) => (
-                    <div key={invite.id} className="rounded-lg border border-border bg-card px-3 py-2 text-sm">
+                    <div key={invite.id} className="pj-team-member rounded-lg border border-border bg-card px-3 py-2 text-sm">
                       <div className="font-semibold text-text">{invite.email}</div>
                       <div className="font-mono text-[11px] text-muted">{teamRoleLabels[invite.role]}</div>
                     </div>
@@ -318,7 +313,8 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
           </div>
         )}
 
-        {feedback ? <div role="status" className="mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+        {feedback ? <div role="status" className="pj-team-feedback mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+        </div>
       </div>
     </div>
   );

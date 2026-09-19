@@ -48,6 +48,12 @@ const empty: AgencyData = {
   isStaff: false,
   userName: "",
 };
+type WorkspaceSnapshot = {
+  data: AgencyData;
+  documents: ProjectDocument[];
+  legacyDocuments: AgencyRecord[];
+};
+const workspaceSnapshots = new Map<string, WorkspaceSnapshot>();
 export function ProjectsWorkspace({
   initialProjectId = "",
   initialView = "projects",
@@ -62,10 +68,12 @@ export function ProjectsWorkspace({
     docId = params.get("document") ?? "",
     legacyDocId = params.get("legacyDocument") ?? "",
     creating = params.get("create");
-  const [data, setData] = useState(empty),
-    [docs, setDocs] = useState<ProjectDocument[]>([]),
-    [legacyDocs, setLegacyDocs] = useState<AgencyRecord[]>([]),
-    [loading, setLoading] = useState(true),
+  const routeIdentity = JSON.stringify([cid, docId, legacyDocId]);
+  const initialSnapshot = workspaceSnapshots.get(routeIdentity);
+  const [data, setData] = useState<AgencyData>(initialSnapshot?.data ?? empty),
+    [docs, setDocs] = useState<ProjectDocument[]>(initialSnapshot?.documents ?? []),
+    [legacyDocs, setLegacyDocs] = useState<AgencyRecord[]>(initialSnapshot?.legacyDocuments ?? []),
+    [loading, setLoading] = useState(!initialSnapshot),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
     [busy, setBusy] = useState(false),
@@ -176,7 +184,6 @@ export function ProjectsWorkspace({
     setSearch("");
     setNotice("");
   };
-  const routeIdentity = JSON.stringify([cid, docId, legacyDocId]);
   const activeProjectRef = useRef(routeIdentity);
   activeProjectRef.current = routeIdentity;
   const reload = useCallback(async (signal?: AbortSignal) => {
@@ -189,19 +196,39 @@ export function ProjectsWorkspace({
     const payload = await response.json();
     if (!response.ok) throw Error(payload.error);
     if (signal?.aborted || activeProjectRef.current !== routeIdentity) return;
+    workspaceSnapshots.set(routeIdentity, {
+      data: payload,
+      documents: payload.documents,
+      legacyDocuments: payload.legacyDocuments,
+    });
     setData(payload);
     setDocs(payload.documents);
     setLegacyDocs(payload.legacyDocuments);
   }, [cid, docId, legacyDocId, routeIdentity]);
   useEffect(() => {
     const controller = new AbortController();
-    setLoading(true);
+    const snapshot = workspaceSnapshots.get(routeIdentity);
+    if (snapshot) {
+      setData(snapshot.data);
+      setDocs(snapshot.documents);
+      setLegacyDocs(snapshot.legacyDocuments);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError("");
     reload(controller.signal)
-      .catch((e) => { if (!controller.signal.aborted) setError(e.message); })
+      .catch((e) => {
+        if (controller.signal.aborted) return;
+        if (snapshot) {
+          setNotice("Não foi possível atualizar os dados agora. Exibindo a última versão carregada.");
+        } else {
+          setError(e.message);
+        }
+      })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [reload]);
+  }, [reload, routeIdentity]);
   useEffect(() => {
     const section = document?.kind === "template" ? "templates" : document?.kind === "report" || legacyDocument ? "reports" : document ? "dashboards" : undefined;
     if (section && view !== section) router.replace(workspaceHref(section, {
@@ -546,7 +573,7 @@ export function ProjectsWorkspace({
           aria-label="Ir para meus projetos"
           onClick={() => navigate({})}
         >
-          <span aria-hidden="true">◧</span> laos
+          laos
           <span className="pj-brand-sub">relatórios</span>
         </button>
         <nav className="pj-global-nav" aria-label="Navegação global">
