@@ -43,65 +43,41 @@
   padding: 14px 20px 0;
 }
 
-.header {
-  position: relative;
-  z-index: 3;
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 22px 24px 0;
-}
-
-.controlsSlot + .header { padding-top: 14px; }
-.md .header { padding: 26px 28px 0; }
-.lg .header { padding: 30px 32px 0; }
-
-.titleGroup,
-.headerMeta,
 .viewToggle,
 .stats {
   display: flex;
   align-items: center;
 }
 
-.titleGroup { min-width: 0; gap: 10px; }
-.titleGroup > div { min-width: 0; }
-.titleGroup h3 {
+.metricIdentity {
+  min-width: 0;
+  margin-top: 14px;
+}
+.metricIdentity h3 {
   margin: 0;
   color: var(--pj-text, #1c2b3d);
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.015em;
   line-height: 1.3;
 }
-.titleGroup p {
+.metricIdentity p {
   max-width: 34rem;
-  margin: 4px 0 0;
-  overflow: hidden;
+  margin: 6px 0 0;
   color: var(--pj-text-muted, #788ba0);
-  font-size: 11px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.md .titleGroup h3 { font-size: 16px; }
-.lg .titleGroup h3 { font-size: 18px; }
-
-.headerMeta {
-  flex: 0 0 auto;
-  justify-content: flex-end;
-  gap: 12px;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .trend {
   display: inline-flex;
+  align-self: flex-start;
   align-items: center;
   gap: 5px;
+  margin-top: 14px;
   color: var(--metric-accent);
   font-size: 12px;
   font-weight: 750;
-  white-space: nowrap;
 }
 .trend svg,
 .viewToggle svg {
@@ -143,7 +119,7 @@
 .periodLabel,
 .periodSelect select {
   color: var(--pj-text-muted, #788ba0);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -170,7 +146,7 @@
   grid-template-columns: minmax(160px, 0.78fr) minmax(230px, 1.22fr);
   align-items: stretch;
   min-height: 0;
-  padding: 10px 0 0 24px;
+  padding: 24px 0 0 24px;
 }
 .md .body { grid-template-columns: minmax(190px, 0.72fr) minmax(280px, 1.28fr); padding-left: 28px; }
 .lg .body { grid-template-columns: minmax(220px, 0.68fr) minmax(340px, 1.32fr); padding-left: 32px; }
@@ -211,10 +187,28 @@
 .lg .total { font-size: clamp(3.4rem, 6vw, 5.5rem); }
 .comparison {
   max-width: 19rem;
-  margin-top: 15px;
+  margin-top: 7px;
   color: var(--pj-text-muted, #788ba0);
-  font-size: 11px;
-  line-height: 1.45;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 16px;
+}
+.context > span {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 9px;
+  border: 1px solid var(--pj-border, #dce5ef);
+  border-radius: 999px;
+  color: var(--pj-text-muted, #788ba0);
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .chartArea {
@@ -223,6 +217,31 @@
   min-height: 190px;
   overflow: hidden;
   background: linear-gradient(to left, var(--metric-soft), transparent 82%);
+}
+.chartHeader {
+  position: absolute;
+  z-index: 4;
+  top: 14px;
+  right: 18px;
+  left: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--pj-text-muted, #788ba0);
+  font-size: 12px;
+  font-weight: 650;
+}
+.chartHeader > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.chartHeader i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--metric-accent);
 }
 .dotPattern {
   position: absolute;
@@ -236,6 +255,7 @@
 .chart {
   position: absolute;
   inset: 0;
+  top: 38px;
   min-width: 0;
   outline: none;
   touch-action: pan-y;
@@ -259,7 +279,7 @@
   background: color-mix(in srgb, var(--pj-surface-raised, #fff) 94%, transparent);
   color: var(--pj-text, #1c2b3d);
   box-shadow: var(--pj-shadow-md, 0 12px 32px rgb(15 23 42 / 0.14));
-  font-size: 10px;
+  font-size: 12px;
   pointer-events: none;
   transform: translateX(-50%);
   backdrop-filter: blur(12px);
@@ -274,7 +294,7 @@
   place-items: center;
   padding: 24px;
   color: var(--pj-text-muted, #788ba0);
-  font-size: 11px;
+  font-size: 12px;
   text-align: center;
 }
 
@@ -289,7 +309,7 @@
   padding: 12px 24px;
   border-top: 1px solid var(--pj-border, #dce5ef);
   background: color-mix(in srgb, var(--pj-surface-raised) 94%, var(--pj-surface-sunken));
-  font-size: 10px;
+  font-size: 12px;
 }
 .md .footer { padding-inline: 28px; }
 .lg .footer { padding-inline: 32px; }
@@ -322,14 +342,7 @@
   .card,
   .md,
   .lg { min-height: 410px; border-radius: 20px; }
-  .header,
-  .md .header,
-  .lg .header { flex-direction: column; gap: 12px; padding: 20px 18px 0; }
   .controlsSlot { padding: 12px 18px 0; }
-  .titleGroup { width: 100%; justify-content: space-between; }
-  .titleGroup > div { order: 1; }
-  .titleGroup .viewToggle { order: 2; }
-  .headerMeta { width: 100%; justify-content: space-between; }
   .body,
   .md .body,
   .lg .body {
@@ -342,6 +355,7 @@
   .sm .total,
   .lg .total { font-size: clamp(2.6rem, 14vw, 4.3rem); }
   .chartArea { min-height: 180px; }
+  .chartHeader { top: 10px; right: 14px; left: 14px; }
   .footer,
   .md .footer,
   .lg .footer { align-items: flex-start; flex-direction: column; padding: 12px 18px; }
@@ -371,7 +385,6 @@
   .controlsSlot,
   .viewToggle,
   .chartTooltip { display: none !important; }
-  .header { padding: 14px 14px 0; }
   .body { grid-template-columns: minmax(120px, 0.7fr) minmax(180px, 1.3fr); padding-left: 14px; }
   .valueArea { padding-block: 12px; }
   .total,

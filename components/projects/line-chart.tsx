@@ -13,11 +13,15 @@ export function LineChart({
   metric,
   currency,
   color = "#3b82f6",
+  label,
+  unitLabel,
 }: {
   daily: AnalysisData["daily"];
   metric: MetricKey;
   currency: string;
   color?: string;
+  label?: string;
+  unitLabel?: string;
 }) {
   const [active, setActive] = useState<number | null>(null);
   const gradientId = "chart" + useId().replaceAll(":", "");
@@ -33,7 +37,11 @@ export function LineChart({
 
   return (
     <div className="pj-chart" onMouseLeave={() => setActive(null)}>
-      <svg viewBox="0 0 900 200" role="img" aria-label="Gráfico diário">
+      <svg
+        viewBox="0 0 900 200"
+        role="img"
+        aria-label={`${label ?? "Métrica"} por dia${unitLabel ? `, em ${unitLabel}` : ""}`}
+      >
         <defs>
           <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
             <stop offset="0%" stopColor={color} stopOpacity="0.28" />
@@ -95,6 +103,7 @@ export function LineChart({
         >
           <span>{shortDate(daily[active].date)}</span>
           <strong>{formatMetric(metric, points[active].value, currency)}</strong>
+          {unitLabel ? <small>Unidade: {unitLabel}</small> : null}
         </div>
       )}
       <div className="pj-chart-axis">

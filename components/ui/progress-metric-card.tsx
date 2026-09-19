@@ -25,8 +25,10 @@ export interface ProgressMetricCardProps {
   total: string | number;
   percent?: string;
   trend?: "up" | "down" | "flat";
+  statusLabel?: string;
   comparisonLabel?: string;
   period: string;
+  unitLabel?: string;
   periodOptions?: PeriodOption[];
   onPeriodChange?: (option: PeriodOption) => void;
   defaultView?: ChartView;
@@ -62,8 +64,10 @@ export default function ProgressMetricCard({
   total,
   percent,
   trend = "flat",
+  statusLabel = "Sem base comparável",
   comparisonLabel = "Comparação indisponível",
   period,
+  unitLabel,
   periodOptions,
   onPeriodChange,
   defaultView = "curve",
@@ -141,40 +145,37 @@ export default function ProgressMetricCard({
       <div className={styles.glow} aria-hidden="true" />
       {controls ? <div className={styles.controlsSlot}>{controls}</div> : null}
 
-      <header className={styles.header}>
-        <div className={styles.titleGroup}>
-          <div>
-            <h3>{title}</h3>
-            {description ? <p>{description}</p> : null}
-          </div>
-          <ViewToggle value={view} onChange={setView} />
-        </div>
-        <div className={styles.headerMeta}>
-          {percent ? (
-            <span className={styles.trend}>
-              <TrendIcon trend={trend} />
-              {percent}
-            </span>
-          ) : null}
-          <PeriodSelect
-            value={selectedPeriod}
-            options={periodOptions}
-            onChange={(option) => {
-              setSelectedPeriodOverride(option.label);
-              onPeriodChange?.(option);
-            }}
-          />
-        </div>
-      </header>
-
       <div className={styles.body}>
         <div className={styles.valueArea}>
           {featured ? <span className={styles.primaryLabel}>KPI principal</span> : null}
           <strong className={styles.total}>{total}</strong>
+          <div className={styles.metricIdentity}>
+            <h3>{title}</h3>
+            {description ? <p>{description}</p> : null}
+          </div>
+          <span className={styles.trend}>
+            <TrendIcon trend={trend} />
+            {statusLabel}{percent ? ` · ${percent}` : ""}
+          </span>
           <span className={styles.comparison}>{comparisonLabel}</span>
+          <div className={styles.context}>
+            <PeriodSelect
+              value={selectedPeriod}
+              options={periodOptions}
+              onChange={(option) => {
+                setSelectedPeriodOverride(option.label);
+                onPeriodChange?.(option);
+              }}
+            />
+            {unitLabel ? <span>Unidade: {unitLabel}</span> : null}
+          </div>
         </div>
         <div className={styles.chartArea}>
           <div className={styles.dotPattern} aria-hidden="true" />
+          <div className={styles.chartHeader}>
+            <span><i aria-hidden="true" /> Evolução diária</span>
+            <ViewToggle value={view} onChange={setView} />
+          </div>
           <MetricChart
             series={chartSeries}
             view={view}
@@ -186,7 +187,7 @@ export default function ProgressMetricCard({
       </div>
 
       <footer className={styles.footer}>
-        <span className={styles.footerContext}>Evolução diária</span>
+        <span className={styles.footerContext}>Resumo do período</span>
         {showStats && stats ? (
           <div className={styles.stats} aria-label="Resumo da série diária">
             <span><b>{valueFormatter(stats.peak)}</b> pico</span>

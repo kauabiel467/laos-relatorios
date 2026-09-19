@@ -46,6 +46,45 @@ const defaultCustomMetric = (): CustomMetricDefinition => ({
   formula: "Valor informado manualmente",
 });
 
+const metricUnitLabel = (unit: MetricUnit | undefined, currency: string) => {
+  if (unit === "currency") return currency;
+  if (unit === "percent") return "percentual";
+  if (unit === "ratio") return "índice";
+  return "contagem";
+};
+
+const formatSyncTime = (value: string, timezone: string) => {
+  try {
+    return new Intl.DateTimeFormat("pt-BR", {
+      dateStyle: "short",
+      timeStyle: "short",
+      timeZone: timezone,
+    }).format(new Date(value));
+  } catch {
+    return new Date(value).toLocaleString("pt-BR");
+  }
+};
+
+function SectionHeading({
+  title,
+  description,
+  unit,
+}: {
+  title: string;
+  description: string;
+  unit?: string;
+}) {
+  return (
+    <header className="pj-block-heading">
+      <div>
+        <h3>{title}</h3>
+        <p>{description}</p>
+      </div>
+      {unit ? <span className="pj-chart-unit">Unidade: {unit}</span> : null}
+    </header>
+  );
+}
+
 export function AnalysisView({
   document: doc,
   clientName,
@@ -285,9 +324,30 @@ export function AnalysisView({
   };
   const compare =
     config.comparison === "previous" ? comparisonDates(config) : config;
-  const row = (items: InsightItem[], name: string) => (
-    <div className="pj-table-scroll">
+  const effectiveSince = data?.effective_period?.since ?? config.since;
+  const effectiveUntil = data?.effective_period?.until ?? config.until;
+  const effectiveCompareSince = data?.effective_period?.compare_since ?? compare.compare_since;
+  const effectiveCompareUntil = data?.effective_period?.compare_until ?? compare.compare_until;
+  const row = (items: InsightItem[], name: string) => items.length ? (
+    <div
+      className="pj-table-scroll"
+      role="region"
+      aria-label={`Tabela de desempenho por ${name.toLowerCase()}`}
+      aria-busy={busy}
+      tabIndex={0}
+    >
+      {busy ? (
+        <div className="pj-table-loading" role="status" aria-live="polite">
+          Atualizando dados…
+        </div>
+      ) : null}
+      <p className="pj-table-hint" aria-hidden="true">
+        Deslize horizontalmente para ver todas as métricas →
+      </p>
       <table>
+        <caption className="pj-sr-only">
+          Desempenho detalhado por {name.toLowerCase()}, com investimento e métricas configuradas.
+        </caption>
         <thead>
           <tr>
             <th>{name}</th>
@@ -336,11 +396,18 @@ export function AnalysisView({
           ))}
         </tbody>
       </table>
-      {!items.length && (
-        <p className="pj-no-data">
-          Sem dados disponíveis para este período e filtro.
-        </p>
-      )}
+    </div>
+  ) : busy ? (
+    <div className="pj-table-skeleton" role="status" aria-live="polite" aria-label={`Carregando ${name.toLowerCase()}`}>
+      <span />
+      <span />
+      <span />
+      <span />
+    </div>
+  ) : (
+    <div className="pj-no-data" role="status">
+      <strong>Nenhum dado encontrado</strong>
+      <span>Não há resultados de {name.toLowerCase()} para este período e filtro.</span>
     </div>
   );
   function renderSection(section: SectionKey) {
@@ -390,10 +457,10 @@ export function AnalysisView({
                 : favorableDirection === "decrease"
                   ? delta < 0
                   : delta > 0;
-              const accent: MetricAccent = favorable == null
-                ? id === config.primary_metric
+              const accent: MetricAccent = delta == null || delta === 0
+                ? "neutral"
+                : favorableDirection === "neutral"
                   ? "blue"
-                  : "neutral"
                 : favorable
                   ? "emerald"
                   : "rose";
@@ -406,10 +473,21 @@ export function AnalysisView({
               const comparisonLabel = !data.previous
                 ? "Comparação desativada"
                 : previous === 0 && value != null
-                  ? "Sem base comparável no período anterior"
+                  ? "O período anterior terminou em zero"
                   : previous != null
                     ? `${formattedPrevious} no período anterior`
                     : "Sem dado no período anterior";
+              const statusLabel = delta == null
+                ? data.previous
+                  ? "Sem base comparável"
+                  : "Sem comparação"
+                : delta === 0
+                  ? "Sem variação"
+                  : favorable == null
+                    ? "Variação"
+                    : favorable
+                      ? "Melhora"
+                      : "Piora";
               return (
                 <div
                   className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""}`}
@@ -425,8 +503,10 @@ export function AnalysisView({
                     total={formatted}
                     percent={delta == null ? undefined : `${Math.abs(delta).toFixed(1).replace(".", ",")}%`}
                     trend={delta == null || delta === 0 ? "flat" : delta > 0 ? "up" : "down"}
+                    statusLabel={statusLabel}
                     comparisonLabel={comparisonLabel}
                     period={periodLabel}
+                    unitLabel={metricUnitLabel(definition.unit, currency)}
                     accent={accent}
                     data={seriesData}
                     size={cardSize}
@@ -496,14 +576,23 @@ export function AnalysisView({
       case "daily": {
         return (
           <section className="pj-block">
-            <h3>Investimento ao longo do período</h3>
+            <SectionHeading
+              title="Investimento ao longo do período"
+              description="Evolução diária do valor registrado pela Meta para os filtros selecionados."
+              unit={currency}
+            />
             {data.daily.length ? (
               <>
+                <div className="pj-chart-legend" aria-label={`Legenda: investimento em ${currency}`}>
+                  <span><i className="investment" aria-hidden="true" /> Investimento</span>
+                </div>
                 <LineChart
                   daily={data.daily}
                   metric="spend"
                   currency={currency}
-                  color="#22c55e"
+                  color="var(--pj-primary)"
+                  label="Investimento"
+                  unitLabel={currency}
                 />
                 <details>
                   <summary>Ver valores por dia</summary>
@@ -518,7 +607,10 @@ export function AnalysisView({
                 </details>
               </>
             ) : (
-              <p>Sem dados diários neste período.</p>
+              <div className="pj-no-data" role="status">
+                <strong>Sem evolução diária</strong>
+                <span>Não há investimento diário para o período e os filtros selecionados.</span>
+              </div>
             )}
           </section>
         );
@@ -527,20 +619,52 @@ export function AnalysisView({
         const metric = config.primary_metric;
         return (
           <section className="pj-block">
-            <h3>{METRICS[metric].label} ao longo do período</h3>
-            <LineChart
-              daily={data.daily}
-              metric={metric}
-              currency={currency}
-              color="#3b82f6"
+            <SectionHeading
+              title={`${METRICS[metric].label} ao longo do período`}
+              description={`Evolução diária do KPI principal: ${METRICS[metric].description}`}
+              unit={metricUnitLabel(METRICS[metric].unit, currency)}
             />
+            {data.daily.length ? (
+              <>
+                <div className="pj-chart-legend" aria-label={`Legenda: ${METRICS[metric].label}`}>
+                  <span><i aria-hidden="true" /> {METRICS[metric].label}</span>
+                </div>
+                <LineChart
+                  daily={data.daily}
+                  metric={metric}
+                  currency={currency}
+                  color="var(--pj-primary)"
+                  label={METRICS[metric].label}
+                  unitLabel={metricUnitLabel(METRICS[metric].unit, currency)}
+                />
+                <details>
+                  <summary>Ver valores do KPI por dia</summary>
+                  {row(
+                    data.daily.map((day) => ({
+                      id: day.date,
+                      name: shortDate(day.date),
+                      metrics: day.metrics,
+                    })),
+                    "Dia",
+                  )}
+                </details>
+              </>
+            ) : (
+              <div className="pj-no-data" role="status">
+                <strong>Sem evolução diária</strong>
+                <span>Não há dados diários do KPI principal para este período.</span>
+              </div>
+            )}
           </section>
         );
       }
       case "funnel": {
         return (
           <section className="pj-block">
-            <h3>Etapas de resultado</h3>
+            <SectionHeading
+              title="Etapas de resultado"
+              description="Leitura das etapas reportadas pela Meta, sem inferir uma jornada individual entre elas."
+            />
             <div className="pj-funnel">
               {funnelMetrics.map((k, i) => (
                 <div
@@ -566,21 +690,21 @@ export function AnalysisView({
       case "campaigns":
         return (
           <section className="pj-block">
-            <h3>Campanhas em destaque</h3>
+            <SectionHeading title="Campanhas em destaque" description="Onde investimento e resultados tiveram maior impacto no período." />
             {row(data.campaigns, "Campanha")}
           </section>
         );
       case "adsets":
         return (
           <section className="pj-block">
-            <h3>Conjuntos de anúncios</h3>
+            <SectionHeading title="Conjuntos de anúncios" description="Detalhamento dos conjuntos que compõem o resultado da conta." />
             {row(data.adsets, "Conjunto")}
           </section>
         );
       case "ads":
         return (
           <section className="pj-block">
-            <h3>Criativos e anúncios</h3>
+            <SectionHeading title="Criativos e anúncios" description="Desempenho dos anúncios e prévias disponibilizadas pela Meta." />
             {row(data.ads, "Anúncio")}
             <p className="pj-footnote">
               Prévias disponíveis para até 12 anúncios com maior investimento. A
@@ -591,21 +715,21 @@ export function AnalysisView({
       case "platforms":
         return (
           <section className="pj-block">
-            <h3>Desempenho por plataforma</h3>
+            <SectionHeading title="Desempenho por plataforma" description="Comparação dos resultados reportados em cada posicionamento de plataforma." />
             {row(data.platforms, "Plataforma")}
           </section>
         );
       case "audience":
         return (
           <section className="pj-block">
-            <h3>Público por idade e gênero</h3>
+            <SectionHeading title="Público por idade e gênero" description="Distribuição dos resultados nos segmentos disponibilizados pela Meta." />
             {row(data.audience, "Público")}
           </section>
         );
       case "analysis":
         return (
           <section className="pj-block">
-            <h3>Análise e próximos passos</h3>
+            <SectionHeading title="Análise e próximos passos" description="Contexto, pontos de atenção e recomendações registrados pelo gestor." />
             <p className="pj-prose">
               {config.analysis || "Nenhuma análise adicionada pelo gestor."}
             </p>
@@ -623,7 +747,8 @@ export function AnalysisView({
     >
       <div className="pj-analysis-toolbar">
         <button onClick={onBack}>
-          ← {preview ? clientName : "Voltar ao projeto"}
+          <span aria-hidden="true">←</span>
+          <span>{preview ? clientName : "Voltar ao projeto"}</span>
         </button>
         <strong>{title}</strong>
         <span className="pj-badge">
@@ -701,45 +826,70 @@ export function AnalysisView({
         </div>
       </div>
       <div className="pj-analysis-subbar">
-        <button disabled={!editable || preview} onClick={() => setDates(true)}>
-          ▣ {shortDate(data?.effective_period?.since ?? config.since)} — {shortDate(data?.effective_period?.until ?? config.until)}
-          <small>
-            {data?.previous
-              ? `Comparação: ${shortDate(data.effective_period?.compare_since ?? compare.compare_since!)} a ${shortDate(data.effective_period?.compare_until ?? compare.compare_until!)}`
-              : "Sem comparação"}
-          </small>
-        </button>
-        <span>
-          Meta Ads · {data?.timezone ?? "Conta do projeto"}
-          <small>
-            {data
-              ? "Atualizado em " +
-                new Date(data.updated_at).toLocaleString("pt-BR")
-              : "Nenhuma atualização salva"}
-          </small>
-        </span>
+        <div className="pj-analysis-data-controls">
+          <span className="pj-control-label">Período e dados</span>
+          <button
+            className="pj-period-control"
+            disabled={!editable || preview}
+            onClick={() => setDates(true)}
+          >
+            <span aria-hidden="true">▣</span>
+            Alterar período
+          </button>
+          {staff && !preview && editable && (
+            <>
+              <button disabled={busy} onClick={() => void action("refresh")}>
+                {busy ? "Atualizando…" : "↻ Atualizar dados"}
+              </button>
+              {doc.kind === "dashboard" && (
+                <label className="pj-check">
+                  <input
+                    type="checkbox"
+                    checked={auto}
+                    onChange={(e) => setAuto(e.target.checked)}
+                  />
+                  Atualizar a cada 5 min
+                </label>
+              )}
+            </>
+          )}
+        </div>
+        <dl className="pj-trust-strip" aria-label="Contexto e origem dos dados">
+          <div>
+            <dt>Período atual</dt>
+            <dd>{shortDate(effectiveSince)} — {shortDate(effectiveUntil)}</dd>
+          </div>
+          <div>
+            <dt>Comparação</dt>
+            <dd>
+              {config.comparison !== "none" && effectiveCompareSince && effectiveCompareUntil
+                ? `${shortDate(effectiveCompareSince)} — ${shortDate(effectiveCompareUntil)}`
+                : "Sem comparação"}
+            </dd>
+          </div>
+          <div>
+            <dt>Última sincronização</dt>
+            <dd>{data ? formatSyncTime(data.updated_at, data.timezone) : "Não sincronizado"}</dd>
+          </div>
+          <div>
+            <dt>Timezone</dt>
+            <dd>{data?.timezone ?? "Conta do projeto"}</dd>
+          </div>
+          <div>
+            <dt>Origem</dt>
+            <dd>Meta Ads</dd>
+          </div>
+        </dl>
         {staff && !preview && (
-          <div className="pj-inline-actions">
-            {doc.kind === "dashboard" && editable && (
-              <label className="pj-check">
-                <input
-                  type="checkbox"
-                  checked={auto}
-                  onChange={(e) => setAuto(e.target.checked)}
-                />
-                Atualizar a cada 5 min
-              </label>
-            )}
+          <div className="pj-analysis-edit-controls">
+            <span className="pj-control-label">Editar layout</span>
             {editable && (
               <>
-                <button disabled={busy} onClick={() => void action("refresh")}>
-                  {busy ? "Atualizando…" : "↻ Atualizar dados"}
-                </button>
                 <button onClick={() => setEditor(!editor)}>
                   ✎ Editar blocos
                 </button>
                 <button
-                  className="primary"
+                  className={dirty ? "primary" : ""}
                   disabled={busy || !dirty}
                   onClick={() => void action("save")}
                 >
@@ -749,7 +899,7 @@ export function AnalysisView({
             )}
             {doc.status === "draft" && (
               <button
-                className="accent"
+                className={!dirty ? "primary" : ""}
                 disabled={busy || !data || dirty}
                 onClick={() => void action("publish")}
               >
