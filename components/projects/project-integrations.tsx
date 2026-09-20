@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   AgencyClient,
   ProjectMetaConnection,
@@ -66,6 +67,7 @@ export function ProjectIntegrations({
   onTest: () => void;
   onUnlink: () => void;
 }) {
+  const [confirmUnlink, setConfirmUnlink] = useState(false);
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const visible = PROJECT_INTEGRATIONS.filter((integration) =>
     `${integration.name} ${integration.description}`
@@ -120,15 +122,8 @@ export function ProjectIntegrations({
                   <button
                     type="button"
                     disabled={busy}
-                    onClick={() => {
-                      if (
-                        window.confirm(
-                          "Desvincular a Meta deste projeto? Dashboards e relatórios salvos serão preservados.",
-                        )
-                      ) {
-                        onUnlink();
-                      }
-                    }}
+                    className="danger"
+                    onClick={() => setConfirmUnlink(true)}
                   >
                     Desvincular
                   </button>
@@ -136,6 +131,29 @@ export function ProjectIntegrations({
               </div>
             ) : null}
           </div>
+          {confirmUnlink ? (
+            <div className="pj-inline-confirm" role="alert">
+              <p>
+                Desvincular a Meta deste projeto? A coleta será interrompida, mas dashboards e relatórios salvos serão preservados.
+              </p>
+              <div>
+                <button type="button" disabled={busy} onClick={() => setConfirmUnlink(false)}>
+                  Manter conexão
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  disabled={busy}
+                  onClick={() => {
+                    onUnlink();
+                    setConfirmUnlink(false);
+                  }}
+                >
+                  {busy ? "Desvinculando…" : "Desvincular Meta"}
+                </button>
+              </div>
+            </div>
+          ) : null}
         </section>
       ) : project.meta_account_id ? (
         <div className="pj-warning" role="alert">
@@ -216,7 +234,8 @@ export function ProjectIntegrations({
         {!visible.length ? (
           <div className="pj-empty pj-empty-compact">
             <h3>Nenhuma integração encontrada</h3>
-            <p>Tente outro nome ou canal.</p>
+            <p>Revise o termo pesquisado para localizar outra fonte de dados disponível.</p>
+            <button type="button" onClick={() => onSearch("")}>Limpar pesquisa</button>
           </div>
         ) : null}
       </section>

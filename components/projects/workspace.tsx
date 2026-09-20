@@ -20,7 +20,7 @@ import { ProjectDetailsFields } from "./project-details-fields";
 import { ProjectAccessPanel } from "./project-access-panel";
 import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
-import { Dialog, Empty, LoadingState, MetaMark, shortDate } from "./ui";
+import { Dialog, Empty, FieldMessage, LoadingState, MetaMark, Toast, shortDate } from "./ui";
 import "./projects.css";
 const viewLabels: Record<WorkspaceView, string> = {
   projects: "Projetos",
@@ -81,6 +81,8 @@ export function ProjectsWorkspace({
     [loading, setLoading] = useState(!availableSnapshot),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
+    [toast, setToast] = useState(""),
+    [formError, setFormError] = useState(""),
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState(""),
     [sort, setSort] = useState("recent"),
@@ -93,6 +95,28 @@ export function ProjectsWorkspace({
     [account, setAccount] = useState(""),
     [goalId, setGoalId] = useState(""),
     [theme, setTheme] = useState<"dark" | "light">("dark");
+  const busyRef = useRef(false);
+  const createMenuRef = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const closeMenu = (returnFocus = false) => {
+      const details = createMenuRef.current;
+      if (!details?.open) return;
+      details.open = false;
+      if (returnFocus) details.querySelector<HTMLElement>("summary")?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!createMenuRef.current?.contains(event.target as Node)) closeMenu();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeMenu(true);
+    };
+    window.document.addEventListener("pointerdown", onPointerDown);
+    window.document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.document.removeEventListener("pointerdown", onPointerDown);
+      window.document.removeEventListener("keydown", onKeyDown);
+    };
+  }, []);
   useEffect(() => {
     const saved = window.localStorage.getItem("laos-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
@@ -205,6 +229,7 @@ export function ProjectsWorkspace({
     }
     setSearch("");
     setNotice("");
+    setFormError("");
   };
   useEffect(() => setActiveView(initialView), [initialView]);
   useEffect(() => {
@@ -288,14 +313,18 @@ export function ProjectsWorkspace({
     return d;
   };
   async function run(fn: () => Promise<void>) {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setNotice("");
     try {
       await fn();
       await reload();
     } catch (e) {
-      setNotice(e instanceof Error ? e.message : "Não foi possível concluir.");
+      const message = e instanceof Error ? e.message : "Não foi possível concluir.";
+      setNotice(`${message} Revise os dados e tente novamente.`);
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -346,7 +375,7 @@ export function ProjectsWorkspace({
         account_id: account,
       });
       setModal("");
-      setNotice(
+      setToast(
         "Conta vinculada e testada com sucesso. A coleta está pronta.",
       );
     });
@@ -359,9 +388,10 @@ export function ProjectsWorkspace({
       team_id: String(f.get("team_id") ?? ""),
     });
     if (!parsed.success) {
-      setNotice(firstProjectValidationError(parsed.error));
+      setFormError(firstProjectValidationError(parsed.error));
       return;
     }
+    setFormError("");
     await run(async () => {
       const p = await request("/api/projects", {
         action: "client",
@@ -397,7 +427,7 @@ export function ProjectsWorkspace({
       else if (d.id && action !== "template")
         navigate({ project: cid, document: d.id, view: d.kind === "report" ? "reports" : d.kind === "template" ? "templates" : "dashboards" });
       else
-        setNotice(
+        setToast(
           action === "template"
             ? "Template salvo na biblioteca da equipe."
             : action === "timeline"
@@ -411,16 +441,17 @@ export function ProjectsWorkspace({
     const f = new FormData(e.currentTarget);
     const parsed = projectDetailsSchema.safeParse(projectDetailsFromForm(f));
     if (!parsed.success) {
-      setNotice(firstProjectValidationError(parsed.error));
+      setFormError(firstProjectValidationError(parsed.error));
       return;
     }
+    setFormError("");
     await run(async () => {
       await request("/api/projects", {
         action: "project",
         client_id: cid,
         value: parsed.data,
       });
-      setNotice("Projeto atualizado.");
+      setToast("Preferências do projeto salvas.");
     });
   }
   const setupView = (step: 1 | 2 | 3 | 4): WorkspaceView =>
@@ -480,6 +511,8 @@ export function ProjectsWorkspace({
     });
   }
   async function inviteClient(email: string) {
+    if (busyRef.current) return false;
+    busyRef.current = true;
     setBusy(true);
     setNotice("");
     try {
@@ -489,14 +522,15 @@ export function ProjectsWorkspace({
         email,
       });
       await reload();
-      setNotice(result.message ?? "Convite salvo.");
+      setToast(result.message ?? "Convite salvo.");
       return true;
     } catch (error) {
       setNotice(
-        error instanceof Error ? error.message : "Não foi possível salvar o convite.",
+        `${error instanceof Error ? error.message : "Não foi possível salvar o convite."} Confirme o e-mail e tente novamente.`,
       );
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   }
@@ -507,7 +541,7 @@ export function ProjectsWorkspace({
         client_id: cid,
         user_id: userId,
       });
-      setNotice("Acesso do cliente revogado.");
+      setToast("Acesso do cliente revogado.");
     });
   }
   async function revokeInvitation(invitationId: string) {
@@ -517,10 +551,12 @@ export function ProjectsWorkspace({
         client_id: cid,
         invitation_id: invitationId,
       });
-      setNotice("Convite cancelado.");
+      setToast("Convite cancelado.");
     });
   }
   async function testMetaConnection() {
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     setNotice("");
     try {
@@ -528,20 +564,21 @@ export function ProjectsWorkspace({
         action: "test_integration",
         client_id: cid,
       });
-      setNotice("Teste concluído: a conta e a leitura de Insights estão disponíveis.");
+      setToast("Teste concluído: conta e leitura de Insights disponíveis.");
     } catch (error) {
       setNotice(
-        error instanceof Error ? error.message : "Não foi possível testar a conexão.",
+        `${error instanceof Error ? error.message : "Não foi possível testar a conexão."} Verifique a autorização Meta e tente novamente.`,
       );
     } finally {
       await reload().catch(() => undefined);
+      busyRef.current = false;
       setBusy(false);
     }
   }
   async function unlinkMetaConnection() {
     await run(async () => {
       await request("/api/projects", { action: "unlink", client_id: cid });
-      setNotice("A conta Meta foi desvinculada somente deste projeto.");
+      setToast("A conta Meta foi desvinculada deste projeto.");
     });
   }
   const newDocument = (kind: string) => {
@@ -710,8 +747,11 @@ export function ProjectsWorkspace({
         </div>
       </header>
       {notice && creating !== "project" && !onboardingValue && (
-        <div className="pj-notice" role="status">
-          {notice}
+        <div className="pj-notice" role="alert">
+          <div>
+            <strong>Atenção necessária</strong>
+            <span>{notice}</span>
+          </div>
           <button aria-label="Fechar aviso" onClick={() => setNotice("")}>
             ×
           </button>
@@ -812,8 +852,18 @@ export function ProjectsWorkspace({
                       ? "Criar relatório"
                       : "Criar dashboard"}
                   </button>
-                  <details className="pj-context-menu">
-                    <summary aria-label="Mais ações de criação">
+                  <details
+                    ref={createMenuRef}
+                    className="pj-context-menu"
+                    onToggle={(event) => {
+                      if (event.currentTarget.open) {
+                        window.requestAnimationFrame(() =>
+                          event.currentTarget.querySelector<HTMLButtonElement>("[role='menuitem']")?.focus(),
+                        );
+                      }
+                    }}
+                  >
+                    <summary aria-label="Mais ações de criação" aria-haspopup="menu">
                       Mais ações
                       <span aria-hidden="true">⌄</span>
                     </summary>
@@ -917,11 +967,7 @@ export function ProjectsWorkspace({
                       dashboards e relatórios e poderão ser editadas depois.
                     </p>
                     <ProjectDetailsFields teams={data.teams} includeTeam />
-                    {notice ? (
-                      <div className="pj-warning" role="alert">
-                        {notice}
-                      </div>
-                    ) : null}
+                    {formError ? <FieldMessage error>{formError}</FieldMessage> : null}
                     <div className="pj-actions">
                       <button type="button" onClick={() => navigate({})}>
                         Cancelar
@@ -1235,6 +1281,7 @@ export function ProjectsWorkspace({
                       deste cliente.
                     </p>
                     <ProjectDetailsFields project={project} />
+                    {formError ? <FieldMessage error>{formError}</FieldMessage> : null}
                     <button className="accent" disabled={busy}>
                       {busy ? "Salvando…" : "Salvar preferências"}
                     </button>
@@ -1571,14 +1618,14 @@ export function ProjectsWorkspace({
           void reload().catch(e => setNotice(e.message));
         }}
       />}
-      {goalId && <Dialog title="Atualizar meta" close={() => setGoalId("")}>
+      {goalId && <Dialog title="Atualizar meta" close={() => setGoalId("")} busy={busy}>
         <form onSubmit={e => {e.preventDefault(); const actual = Number(new FormData(e.currentTarget).get("actual")); void run(async () => {await request("/api/projects", {action:"progress", client_id:cid, id:goalId, actual}); setGoalId("");});}}>
-          <label>Valor realizado<input name="actual" type="number" min="0" step="any" required defaultValue={data.records.find(r => r.id === goalId)?.payload.actual ?? 0}/></label>
-          <div className="pj-actions"><button type="button" onClick={() => setGoalId("")}>Cancelar</button><button disabled={busy} className="primary">Salvar</button></div>
+          <label>Valor realizado<input data-autofocus name="actual" type="number" min="0" step="any" required defaultValue={data.records.find(r => r.id === goalId)?.payload.actual ?? 0}/><FieldMessage>Informe o resultado acumulado até agora.</FieldMessage></label>
+          <div className="pj-actions"><button type="button" disabled={busy} onClick={() => setGoalId("")}>Cancelar</button><button disabled={busy} className="primary">{busy ? "Salvando…" : "Salvar resultado"}</button></div>
         </form>
       </Dialog>}
       {modal === "meta" && (
-        <Dialog title="Conectar Meta Ads" close={() => setModal("")} wide>
+        <Dialog title="Conectar Meta Ads" close={() => setModal("")} busy={busy} wide>
           <p>
             Selecione a conta de anúncios que pertence a{" "}
             <strong>{project?.name}</strong>.
@@ -1722,6 +1769,7 @@ export function ProjectsWorkspace({
         <Dialog
           title={modal === "goal" ? "Nova meta" : "Registrar ação"}
           close={() => setModal("")}
+          busy={busy}
         >
           <form
             onSubmit={(e) => {
@@ -1755,7 +1803,8 @@ export function ProjectsWorkspace({
           >
             <label>
               Título
-              <input name="title" required maxLength={180} />
+              <input data-autofocus name="title" required maxLength={180} aria-describedby="record-title-help" />
+              <FieldMessage id="record-title-help">Use um título curto e fácil de reconhecer no histórico.</FieldMessage>
             </label>
             {modal === "goal" && (
               <>
@@ -1808,11 +1857,12 @@ export function ProjectsWorkspace({
               </select>
             </label>
             <button className="accent" disabled={busy}>
-              Salvar
+              {busy ? "Salvando…" : modal === "goal" ? "Criar meta" : "Registrar ação"}
             </button>
           </form>
         </Dialog>
       )}
+      {toast ? <Toast message={toast} close={() => setToast("")} /> : null}
     </div>
   );
 }

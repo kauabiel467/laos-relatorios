@@ -21,7 +21,7 @@ import {
 } from "@/lib/projects/model";
 import { PRIMARY_KPI_IDS, isPrimaryKpiId, type MetricUnit, type PrimaryKpiId } from "@/lib/metrics/catalog";
 import { inferCalculationFormat } from "@/lib/metrics/engine";
-import { Dialog, MetaMark, shortDate } from "./ui";
+import { Dialog, FieldMessage, MetaMark, Toast, shortDate } from "./ui";
 import { LineChart } from "./line-chart";
 import { workspaceHref } from "@/lib/projects/routes";
 import ProgressMetricCard, {
@@ -112,13 +112,17 @@ export function AnalysisView({
     [dates, setDates] = useState(false),
     [share, setShare] = useState(false),
     [menu, setMenu] = useState(false),
+    [confirmDelete, setConfirmDelete] = useState(false),
     [copied, setCopied] = useState(false),
+    [copyError, setCopyError] = useState(""),
     [link, setLink] = useState(""),
     [draggedMetric, setDraggedMetric] = useState(""),
     [customMetricOpen, setCustomMetricOpen] = useState(false),
     [editingCustomId, setEditingCustomId] = useState(""),
     [customMetric, setCustomMetric] = useState(defaultCustomMetric()),
     [customMetricError, setCustomMetricError] = useState("");
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setConfig(normalizeAnalysisConfig(doc.config));
     setTitle(doc.title);
@@ -133,6 +137,39 @@ export function AnalysisView({
       ),
     [doc.id, doc.client_id, doc.kind],
   );
+  useEffect(() => {
+    if (!menu) return;
+    const menuElement = menuRef.current;
+    const items = Array.from(
+      menuElement?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [],
+    );
+    items[0]?.focus();
+    const closeMenu = () => {
+      setMenu(false);
+      menuButtonRef.current?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!menuElement?.contains(target) && !menuButtonRef.current?.contains(target)) closeMenu();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closeMenu();
+      }
+      if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+      event.preventDefault();
+      const current = Math.max(items.indexOf(document.activeElement as HTMLButtonElement), 0);
+      const direction = event.key === "ArrowDown" ? 1 : -1;
+      items[(current + direction + items.length) % items.length]?.focus();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [menu]);
   const editable =
     staff && !(doc.kind === "report" && doc.status === "published");
   const data = doc.data,
@@ -773,51 +810,84 @@ export function AnalysisView({
           <button onClick={() => setShare(true)}>Compartilhar ↗</button>
           {staff && !preview && (
             <div className="pj-more-actions">
-              <button aria-label="Mais ações" onClick={() => setMenu(!menu)}>
-                •••
+              <button
+                ref={menuButtonRef}
+                aria-label="Mais ações do documento"
+                aria-haspopup="menu"
+                aria-expanded={menu}
+                aria-controls="document-actions-menu"
+                onClick={() => setMenu(!menu)}
+              >
+                <span aria-hidden="true">•••</span>
               </button>
               {menu && (
-                <div className="pj-menu">
+                <div ref={menuRef} className="pj-menu" id="document-actions-menu" role="menu">
                   {editable && (
                     <button
+                      role="menuitem"
                       onClick={() => {
                         setEditor(true);
                         setMenu(false);
+                        menuButtonRef.current?.focus();
                       }}
                     >
                       Configurações e blocos
                     </button>
                   )}
-                  <button disabled={busy} onClick={() => void action("template")}>
+                  <button role="menuitem" disabled={busy} onClick={() => {
+                    setMenu(false);
+                    menuButtonRef.current?.focus();
+                    void action("template");
+                  }}>
                     Salvar como template
                   </button>
-                  <button disabled={busy} onClick={() => void action("duplicate")}>
+                  <button role="menuitem" disabled={busy} onClick={() => {
+                    setMenu(false);
+                    menuButtonRef.current?.focus();
+                    void action("duplicate");
+                  }}>
                     Duplicar {doc.kind === "dashboard" ? "dashboard" : "relatório"}
                   </button>
                   {doc.kind === "dashboard" && (
-                    <button disabled={busy} onClick={() => void action("convert")}>
+                    <button role="menuitem" disabled={busy} onClick={() => {
+                      setMenu(false);
+                      menuButtonRef.current?.focus();
+                      void action("convert");
+                    }}>
                       Converter em relatório
                     </button>
                   )}
-                  <button disabled={busy} onClick={() => void action("timeline")}>
+                  <button role="menuitem" disabled={busy} onClick={() => {
+                    setMenu(false);
+                    menuButtonRef.current?.focus();
+                    void action("timeline");
+                  }}>
                     Adicionar à linha do tempo
                   </button>
                   {doc.kind === "dashboard" && doc.status === "published" && (
-                    <button disabled={busy} onClick={() => void action("unpublish")}>
+                    <button role="menuitem" disabled={busy} onClick={() => {
+                      setMenu(false);
+                      menuButtonRef.current?.focus();
+                      void action("unpublish");
+                    }}>
                       Restringir ao gestor
                     </button>
                   )}
                   {doc.status === "draft" && (
-                    <button
-                      className="danger"
-                      disabled={busy}
-                      onClick={() => {
-                        if (window.confirm("Excluir este rascunho?"))
-                          void action("delete");
-                      }}
-                    >
-                      Excluir rascunho
-                    </button>
+                    <>
+                      <div className="pj-menu-separator" role="separator" />
+                      <button
+                        role="menuitem"
+                        className="danger"
+                        disabled={busy}
+                        onClick={() => {
+                          setMenu(false);
+                          setConfirmDelete(true);
+                        }}
+                      >
+                        Excluir rascunho
+                      </button>
+                    </>
                   )}
                 </div>
               )}
@@ -1164,6 +1234,11 @@ export function AnalysisView({
                 As datas ou os filtros foram alterados. Importe os resultados
                 antes de publicar.
               </p>
+              {editable && !preview ? (
+                <button type="button" className="primary" disabled={busy} onClick={() => void action("refresh")}>
+                  {busy ? "Atualizando dados…" : "Atualizar dados"}
+                </button>
+              ) : null}
             </div>
           )}
           <footer className="pj-document-footer">
@@ -1173,7 +1248,7 @@ export function AnalysisView({
         </article>
       </div>
       {dates && (
-        <Dialog title="Período da análise" close={() => setDates(false)}>
+        <Dialog title="Período da análise" close={() => setDates(false)} busy={busy}>
           <label>
             Período
             <select
@@ -1299,9 +1374,12 @@ export function AnalysisView({
           <label>
             Nome da métrica
             <input
+              data-autofocus
               value={customMetric.label}
               maxLength={80}
               placeholder="Ex.: Taxa de conversão"
+              aria-invalid={Boolean(customMetricError && !customMetric.label.trim())}
+              aria-describedby="custom-metric-name-help"
               onChange={(event) =>
                 setCustomMetric((metric) => ({
                   ...metric,
@@ -1309,6 +1387,9 @@ export function AnalysisView({
                 }))
               }
             />
+            <FieldMessage id="custom-metric-name-help">
+              Use um nome que deixe claro o que será medido.
+            </FieldMessage>
           </label>
           <label>
             Descrição
@@ -1316,6 +1397,7 @@ export function AnalysisView({
               value={customMetric.description}
               maxLength={240}
               placeholder="Explique o que este indicador representa"
+              aria-describedby="custom-metric-description-help"
               onChange={(event) =>
                 setCustomMetric((metric) => ({
                   ...metric,
@@ -1323,6 +1405,9 @@ export function AnalysisView({
                 }))
               }
             />
+            <FieldMessage id="custom-metric-description-help">
+              Informe a origem e a interpretação para quem visualizar o documento.
+            </FieldMessage>
           </label>
           <label>
             Formato
@@ -1429,7 +1514,7 @@ export function AnalysisView({
             />
             Menor valor representa melhora
           </label>
-          {customMetricError && <p className="pj-error">{customMetricError}</p>}
+          {customMetricError && <FieldMessage error>{customMetricError}</FieldMessage>}
           <div className="pj-actions">
             <button
               onClick={() => {
@@ -1468,8 +1553,10 @@ export function AnalysisView({
                 try {
                   await navigator.clipboard.writeText(link);
                   setCopied(true);
+                  setCopyError("");
                 } catch {
                   setCopied(false);
+                  setCopyError("Não foi possível copiar automaticamente. Selecione o endereço acima e copie manualmente.");
                 }
               }}
             >
@@ -1510,12 +1597,39 @@ export function AnalysisView({
               </>
             )}
           </div>
+          {copyError ? <FieldMessage error>{copyError}</FieldMessage> : null}
           <p className="pj-muted">
             WhatsApp e e-mail abrem uma mensagem para você revisar e enviar. O
             acesso é controlado nas configurações do projeto.
           </p>
         </Dialog>
       )}
+      {confirmDelete ? (
+        <Dialog title="Excluir rascunho?" close={() => setConfirmDelete(false)} busy={busy}>
+          <div className="pj-confirm-content">
+            <p>
+              O rascunho “{title}” será removido. Esta ação não pode ser desfeita.
+            </p>
+          </div>
+          <div className="pj-actions">
+            <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>
+              Manter rascunho
+            </button>
+            <button
+              type="button"
+              className="danger"
+              disabled={busy}
+              onClick={async () => {
+                await action("delete");
+                setConfirmDelete(false);
+              }}
+            >
+              {busy ? "Excluindo…" : "Excluir rascunho"}
+            </button>
+          </div>
+        </Dialog>
+      ) : null}
+      {copied ? <Toast message="Link copiado para a área de transferência." close={() => setCopied(false)} /> : null}
     </div>
   );
 }

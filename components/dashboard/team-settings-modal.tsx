@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import clsx from "clsx";
 import type { TeamContext, TeamRole } from "@/lib/team/types";
 import { teamRoleLabels } from "@/lib/team/types";
+import { Dialog, FieldMessage, Toast } from "@/components/projects/ui";
 
 interface TeamSettingsModalProps {
   open: boolean;
@@ -20,11 +21,11 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
   const [inviteRole, setInviteRole] = useState<TeamRole>("operator");
   const [loading, setLoading] = useState(false);
   const [contextLoading, setContextLoading] = useState(true);
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; tone: "success" | "error" } | null>(null);
+  const [teamNameError, setTeamNameError] = useState("");
+  const [inviteError, setInviteError] = useState("");
+  const [removeMemberId, setRemoveMemberId] = useState("");
 
-  const modalRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
   const loadContext = useCallback(async () => {
     const response = await fetch(`/api/team/context${teamId ? `?team_id=${encodeURIComponent(teamId)}` : ""}`, { cache: "no-store" });
     const payload = await response.json();
@@ -36,132 +37,117 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
     if (open) {
       setContext(null);
       setContextLoading(true);
-      void loadContext().catch((error) => setFeedback(error.message)).finally(() => setContextLoading(false));
+      setFeedback(null);
+      void loadContext()
+        .catch((error) => setFeedback({
+          message: `${error.message} Tente novamente ou feche esta janela e reabra as configurações.`,
+          tone: "error",
+        }))
+        .finally(() => setContextLoading(false));
     }
   }, [open, loadContext]);
-  useEffect(() => {
-    if (!open) return;
-    const previousFocus = document.activeElement as HTMLElement | null;
-    const controls = () => Array.from(modalRef.current?.querySelectorAll<HTMLElement>("button:not(:disabled),a[href],input,select,textarea") ?? []);
-    controls()[0]?.focus();
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") closeRef.current();
-      if (event.key !== "Tab") return;
-      const items = controls(), first = items[0], last = items[items.length - 1];
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
-    };
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      document.removeEventListener("keydown", onKeyDown);
-      previousFocus?.focus();
-    };
-  }, [open]);
 
   async function createTeam() {
-    setLoading(true);
-    setFeedback(null);
-
-    const response = await fetch("/api/team/create", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: teamName })
-    });
-    const payload = (await response.json()) as { error?: string };
-
-    setLoading(false);
-    if (!response.ok) {
-      setFeedback(payload.error || "Nao foi possivel criar a equipe.");
+    if (loading) return;
+    if (teamName.trim().length < 2) {
+      setTeamNameError("Informe um nome com pelo menos 2 caracteres.");
       return;
     }
-
-    setTeamName("");
-    setFeedback("Equipe criada.");
-    await loadContext();
+    setLoading(true);
+    setFeedback(null);
+    setTeamNameError("");
+    try {
+      const response = await fetch("/api/team/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: teamName })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw Error(payload.error || "Não foi possível criar a equipe.");
+      setTeamName("");
+      setFeedback({ message: "Equipe criada com sucesso.", tone: "success" });
+      await loadContext();
+    } catch (error) {
+      setFeedback({
+        message: `${error instanceof Error ? error.message : "Não foi possível criar a equipe."} Revise o nome e tente novamente.`,
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function inviteMember() {
-    setLoading(true);
-    setFeedback(null);
-
-    const response = await fetch("/api/team/invite", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: inviteEmail, role: inviteRole, team_id: teamId })
-    });
-    const payload = (await response.json()) as { error?: string; message?: string };
-
-    setLoading(false);
-    if (!response.ok) {
-      setFeedback(payload.error || "Nao foi possivel enviar o convite.");
+    if (loading) return;
+    if (!/^\S+@\S+\.\S+$/.test(inviteEmail.trim())) {
+      setInviteError("Informe um e-mail válido, como nome@empresa.com.");
       return;
     }
-
-    setInviteEmail("");
-    setInviteRole("operator");
-    setFeedback(payload.message || "Convite enviado.");
-    await loadContext();
+    setLoading(true);
+    setFeedback(null);
+    setInviteError("");
+    try {
+      const response = await fetch("/api/team/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: inviteEmail, role: inviteRole, team_id: teamId })
+      });
+      const payload = (await response.json()) as { error?: string; message?: string };
+      if (!response.ok) throw Error(payload.error || "Não foi possível enviar o convite.");
+      setInviteEmail("");
+      setInviteRole("operator");
+      setFeedback({ message: payload.message || "Convite enviado com sucesso.", tone: "success" });
+      await loadContext();
+    } catch (error) {
+      setFeedback({
+        message: `${error instanceof Error ? error.message : "Não foi possível enviar o convite."} Confirme o e-mail e tente novamente.`,
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function removeMember(memberId: string) {
+    if (loading) return;
     setLoading(true);
     setFeedback(null);
-
-    const response = await fetch("/api/team/members/remove", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ memberId, team_id: teamId })
-    });
-    const payload = (await response.json()) as { error?: string };
-
-    setLoading(false);
-    if (!response.ok) {
-      setFeedback(payload.error || "Nao foi possivel remover o membro.");
-      return;
+    try {
+      const response = await fetch("/api/team/members/remove", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ memberId, team_id: teamId })
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) throw Error(payload.error || "Não foi possível remover o membro.");
+      setRemoveMemberId("");
+      setFeedback({ message: "Membro removido da equipe.", tone: "success" });
+      await loadContext();
+    } catch (error) {
+      setFeedback({
+        message: `${error instanceof Error ? error.message : "Não foi possível remover o membro."} Atualize a equipe e tente novamente.`,
+        tone: "error",
+      });
+    } finally {
+      setLoading(false);
     }
-
-    setFeedback("Membro removido.");
-    await loadContext();
   }
 
   const canManage = context?.currentRole === "owner" || context?.currentRole === "manager";
 
+  if (!open) return null;
   return (
-    <div
-      className={clsx(
-        "pj-team-modal-overlay fixed inset-0 grid place-items-center p-4 transition-opacity duration-200",
-        open ? "pointer-events-auto opacity-100" : "pointer-events-none opacity-0"
-      )}
-      onClick={onClose}
-    >
-      <div
-        ref={modalRef}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="team-settings-title"
-        className={clsx(
-          "pj-team-modal panel w-full max-w-4xl transition duration-200",
-          open ? "scale-100 opacity-100" : "scale-95 opacity-0"
-        )}
-        onClick={(event) => event.stopPropagation()}
+    <>
+      <Dialog
+        title={context?.team?.name || "Equipe e acessos"}
+        close={onClose}
+        busy={loading}
+        wide
       >
-        <header className="pj-team-modal-header">
-          <div>
-            <div className="eyebrow mb-2">Equipe</div>
-            <h2 id="team-settings-title" className="text-2xl font-bold text-text">{context?.team?.name || "Equipe"}</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
-              Organize os membros e as permissões do workspace selecionado.
-            </p>
-          </div>
-          <button type="button" onClick={onClose} aria-label="Fechar configurações da equipe">
-            Fechar
-          </button>
-        </header>
-
         <div className="pj-team-modal-body">
+        <p className="pj-dialog-intro">
+          Organize os membros e as permissões do workspace selecionado.
+        </p>
         {contextLoading ? (
           <p className="pj-team-loading" role="status">Carregando equipe…</p>
         ) : !context?.team && teamId ? (
@@ -176,11 +162,20 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
               <label className="min-w-0 flex-1 text-sm text-muted">
                 Nome da equipe
                 <input
+                  data-autofocus
                   value={teamName}
-                  onChange={(event) => setTeamName(event.target.value)}
+                  onChange={(event) => {
+                    setTeamName(event.target.value);
+                    if (teamNameError) setTeamNameError("");
+                  }}
+                  aria-invalid={Boolean(teamNameError)}
+                  aria-describedby="team-name-help"
                   placeholder="Ex.: Agência LAOS"
                   className="mt-2 w-full rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
                 />
+                <FieldMessage id="team-name-help" error={Boolean(teamNameError)}>
+                  {teamNameError || "Use o nome pelo qual sua equipe identifica este workspace."}
+                </FieldMessage>
               </label>
               <button
                 type="button"
@@ -188,7 +183,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                 disabled={loading || !teamName.trim()}
                 className="accent rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
               >
-                Criar equipe
+                {loading ? "Criando equipe…" : "Criar equipe"}
               </button>
             </div>
           </section>
@@ -216,7 +211,8 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                         : false;
 
                   return (
-                  <div key={member.id} className="pj-team-member flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-3">
+                  <div key={member.id} className="pj-team-member rounded-lg border border-border bg-card px-3 py-3">
+                    <div className="pj-team-member-row flex items-center justify-between gap-3">
                     <div className="min-w-0">
                       <div className="truncate text-sm font-semibold text-text">{member.email || member.user_id}</div>
                       <div className="font-mono text-[11px] text-muted">{member.user_id}</div>
@@ -228,17 +224,30 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                       {canRemove ? (
                         <button
                           type="button"
-                          onClick={() => {
-                            if (window.confirm(`Remover ${member.email || "este membro"} da equipe?`)) {
-                              void removeMember(member.id);
-                            }
-                          }}
+                          onClick={() => setRemoveMemberId(member.id)}
+                          disabled={loading}
                           className="danger rounded-md border border-red/30 px-2 py-1 font-mono text-[10px] text-red transition hover:bg-red hover:text-white"
                         >
                           Remover
                         </button>
                       ) : null}
                     </div>
+                    </div>
+                    {removeMemberId === member.id ? (
+                      <div className="pj-inline-confirm" role="alert">
+                        <p>
+                          Remover {member.email || "este membro"}? A pessoa perderá o acesso da equipe.
+                        </p>
+                        <div>
+                          <button type="button" disabled={loading} onClick={() => setRemoveMemberId("")}>
+                            Manter membro
+                          </button>
+                          <button type="button" className="danger" disabled={loading} onClick={() => void removeMember(member.id)}>
+                            {loading ? "Removendo…" : "Remover membro"}
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 );
                 })}
@@ -256,12 +265,23 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                     E-mail do membro
                     <input
                       value={inviteEmail}
-                      onChange={(event) => setInviteEmail(event.target.value)}
+                      onChange={(event) => {
+                        setInviteEmail(event.target.value);
+                        if (inviteError) setInviteError("");
+                      }}
                       type="email"
                       autoComplete="email"
+                      inputMode="email"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      aria-invalid={Boolean(inviteError)}
+                      aria-describedby="invite-email-help"
                       placeholder="email@empresa.com"
                       className="mt-2 w-full rounded-lg border border-border bg-card px-3 py-3 text-sm outline-none transition focus:border-blue"
                     />
+                    <FieldMessage id="invite-email-help" error={Boolean(inviteError)}>
+                      {inviteError || "A pessoa receberá um convite para entrar no workspace."}
+                    </FieldMessage>
                   </label>
                   <div
                     className="grid grid-cols-3 gap-2"
@@ -289,7 +309,7 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
                     disabled={loading || !inviteEmail.trim()}
                     className="accent w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
                   >
-                    Enviar convite
+                    {loading ? "Enviando convite…" : "Enviar convite"}
                   </button>
                 </div>
               ) : (
@@ -313,9 +333,33 @@ export function TeamSettingsModal({ open, onClose, teamId }: TeamSettingsModalPr
           </div>
         )}
 
-        {feedback ? <div role="status" className="pj-team-feedback mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+        {feedback?.tone === "error" ? (
+          <div role="alert" className="pj-team-feedback error mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">
+            <strong>Não foi possível concluir</strong>
+            <p>{feedback.message}</p>
+            <button
+              type="button"
+              disabled={loading || contextLoading}
+              onClick={() => {
+                setContextLoading(true);
+                setFeedback(null);
+                void loadContext()
+                  .catch((error) => setFeedback({
+                    message: `${error instanceof Error ? error.message : "Não foi possível atualizar a equipe."} Tente novamente em instantes.`,
+                    tone: "error",
+                  }))
+                  .finally(() => setContextLoading(false));
+              }}
+            >
+              Atualizar equipe
+            </button>
+          </div>
+        ) : null}
         </div>
-      </div>
-    </div>
+      </Dialog>
+      {feedback?.tone === "success" ? (
+        <Toast message={feedback.message} close={() => setFeedback(null)} />
+      ) : null}
+    </>
   );
 }

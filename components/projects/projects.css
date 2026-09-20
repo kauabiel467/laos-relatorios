@@ -3237,59 +3237,8 @@
   font-weight: 700;
 }
 
-/* Team management uses the active workspace theme instead of the legacy shell. */
-.projects .pj-team-modal-overlay {
-  z-index: 400;
-  padding:
-    max(16px, env(safe-area-inset-top, 0px))
-    max(16px, env(safe-area-inset-right, 0px))
-    max(16px, env(safe-area-inset-bottom, 0px))
-    max(16px, env(safe-area-inset-left, 0px));
-  background: var(--pj-overlay);
-  backdrop-filter: blur(10px) saturate(120%);
-}
-
-.projects .pj-team-modal {
-  width: min(920px, 100%);
-  max-height: calc(100dvh - 32px);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  overflow: hidden;
-  padding: 0;
-  border: 1px solid var(--pj-border-strong);
-  border-radius: var(--pj-radius-lg);
-  background: var(--pj-surface-raised);
-  color: var(--pj-text);
-  box-shadow: var(--pj-shadow-lg);
-  transform-origin: center;
-}
-
-.pj-team-modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--pj-space-6);
-  padding: var(--pj-space-6);
-  border-bottom: 1px solid var(--pj-border);
-  background: var(--pj-surface-raised);
-}
-
-.pj-team-modal-header h2 {
-  margin: 0;
-  color: var(--pj-text) !important;
-}
-
-.projects .pj-team-modal-header p {
-  margin: var(--pj-space-2) 0 0;
-  color: var(--pj-text-muted) !important;
-}
-
 .pj-team-modal-body {
   min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding: var(--pj-space-6);
-  scrollbar-gutter: stable;
 }
 
 .projects .pj-team-section {
@@ -3305,13 +3254,13 @@
   color: var(--pj-text-secondary) !important;
 }
 
-.projects .pj-team-modal .text-text,
-.projects .pj-team-modal .font-semibold {
+.projects .pj-team-modal-body .text-text,
+.projects .pj-team-modal-body .font-semibold {
   color: var(--pj-text) !important;
 }
 
-.projects .pj-team-modal .text-muted,
-.projects .pj-team-modal .font-mono {
+.projects .pj-team-modal-body .text-muted,
+.projects .pj-team-modal-body .font-mono {
   color: var(--pj-text-muted) !important;
 }
 
@@ -3506,28 +3455,6 @@
   .pj-project-card-footer {
     align-items: flex-start;
     flex-direction: column;
-  }
-
-  .projects .pj-team-modal-overlay {
-    align-items: end;
-    padding:
-      max(8px, env(safe-area-inset-top, 0px))
-      max(8px, env(safe-area-inset-right, 0px))
-      max(8px, env(safe-area-inset-bottom, 0px))
-      max(8px, env(safe-area-inset-left, 0px));
-  }
-
-  .projects .pj-team-modal {
-    max-height: calc(100dvh - 16px);
-  }
-
-  .pj-team-modal-header,
-  .pj-team-modal-body {
-    padding: var(--pj-space-4);
-  }
-
-  .pj-team-modal-header {
-    gap: var(--pj-space-3);
   }
 
   .pj-team-member {
@@ -4273,5 +4200,345 @@
 @media (prefers-reduced-motion: reduce) {
   .projects .pj-table-skeleton span {
     animation: none;
+  }
+}
+
+/* Interaction surfaces: one modal, menu and feedback language across the workspace. */
+@media screen {
+  .projects .pj-overlay {
+    z-index: 500;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    padding:
+      max(20px, env(safe-area-inset-top, 0px))
+      max(20px, env(safe-area-inset-right, 0px))
+      max(20px, env(safe-area-inset-bottom, 0px))
+      max(20px, env(safe-area-inset-left, 0px));
+  }
+
+  .projects .pj-dialog {
+    width: min(580px, 100%);
+    max-height: calc(100dvh - max(40px, calc(env(safe-area-inset-top, 0px) + env(safe-area-inset-bottom, 0px))));
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .projects .pj-dialog.wide {
+    width: min(920px, 100%);
+  }
+
+  .projects .pj-dialog > header {
+    z-index: 2;
+    min-height: 68px;
+    align-items: center;
+    gap: var(--pj-space-4);
+    margin: 0;
+    padding: var(--pj-space-4) var(--pj-space-6);
+    border-bottom: 1px solid var(--pj-border);
+    background: var(--pj-surface-raised);
+  }
+
+  .projects .pj-dialog > header h2 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    color: var(--pj-text);
+    font-size: clamp(18px, 2vw, 22px);
+    line-height: 1.2;
+  }
+
+  .projects .pj-dialog > header .pj-icon-button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: var(--pj-radius-sm);
+    color: var(--pj-text-secondary);
+    font-size: 25px;
+    line-height: 1;
+  }
+
+  .projects .pj-dialog-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--pj-space-6);
+    scrollbar-gutter: stable;
+  }
+
+  .projects .pj-dialog-body > :first-child,
+  .projects .pj-dialog-body form > :first-child {
+    margin-top: 0;
+  }
+
+  .projects .pj-dialog-body > :last-child,
+  .projects .pj-dialog-body form > :last-child {
+    margin-bottom: 0;
+  }
+
+  .projects .pj-dialog-intro {
+    margin: 0 0 var(--pj-space-5);
+    color: var(--pj-text-secondary);
+    font-size: 14px;
+    line-height: 1.55;
+  }
+
+  .projects .pj-dialog-body form {
+    display: grid;
+    gap: var(--pj-space-4);
+  }
+
+  .projects .pj-dialog-body label {
+    color: var(--pj-text-secondary);
+    font-size: 13px;
+    font-weight: 650;
+  }
+
+  .projects .pj-field-message {
+    display: block;
+    margin-top: 6px;
+    color: var(--pj-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.45;
+  }
+
+  .projects .pj-field-message.error {
+    color: var(--pj-danger);
+  }
+
+  .projects [aria-invalid="true"] {
+    border-color: var(--pj-danger) !important;
+    box-shadow: 0 0 0 3px var(--pj-danger-soft) !important;
+  }
+
+  .projects .pj-actions {
+    position: sticky;
+    z-index: 3;
+    bottom: calc(var(--pj-space-6) * -1);
+    margin: var(--pj-space-5) calc(var(--pj-space-6) * -1) calc(var(--pj-space-6) * -1);
+    padding: var(--pj-space-4) var(--pj-space-6) max(var(--pj-space-4), env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--pj-border);
+    background: color-mix(in srgb, var(--pj-surface-raised) 96%, transparent);
+    backdrop-filter: blur(14px);
+  }
+
+  .projects .pj-toast {
+    position: fixed;
+    z-index: 700;
+    right: max(20px, env(safe-area-inset-right, 0px));
+    bottom: max(20px, env(safe-area-inset-bottom, 0px));
+    width: min(420px, calc(100vw - 40px));
+    min-height: 52px;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--pj-space-3);
+    padding: 10px 10px 10px 14px;
+    border: 1px solid var(--pj-success-border);
+    border-radius: var(--pj-radius-md);
+    background: var(--pj-surface-raised);
+    color: var(--pj-text);
+    box-shadow: var(--pj-shadow-lg);
+  }
+
+  .projects .pj-toast > span {
+    width: 24px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--pj-success-soft);
+    color: var(--pj-success);
+    font-weight: 800;
+  }
+
+  .projects .pj-toast p {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 650;
+    line-height: 1.45;
+  }
+
+  .projects .pj-toast button {
+    width: 40px;
+    min-width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--pj-text-muted);
+    font-size: 20px;
+    box-shadow: none;
+  }
+
+  .projects .pj-notice,
+  .projects .pj-team-feedback.error {
+    display: grid;
+    gap: 4px;
+    border-left: 4px solid var(--pj-warning);
+  }
+
+  .projects .pj-notice strong,
+  .projects .pj-team-feedback.error strong {
+    color: var(--pj-text);
+    font-size: 13px;
+  }
+
+  .projects .pj-notice span,
+  .projects .pj-team-feedback.error p {
+    margin: 0;
+    color: var(--pj-text-secondary);
+    line-height: 1.5;
+  }
+
+  .projects .pj-menu,
+  .projects .pj-context-menu > div {
+    max-width: min(360px, calc(100vw - 24px));
+    max-height: min(70dvh, 520px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .projects .pj-menu button,
+  .projects .pj-context-menu > div button {
+    min-height: 44px;
+    text-align: left;
+  }
+
+  .projects .pj-menu-separator {
+    height: 1px;
+    margin: var(--pj-space-2) 0;
+    background: var(--pj-border);
+  }
+
+  .projects .pj-inline-confirm {
+    display: grid;
+    gap: var(--pj-space-3);
+    margin-top: var(--pj-space-3);
+    padding: var(--pj-space-3);
+    border: 1px solid var(--pj-danger-border);
+    border-radius: var(--pj-radius-sm);
+    background: var(--pj-danger-soft);
+  }
+
+  .projects .pj-inline-confirm p {
+    margin: 0;
+    color: var(--pj-text-secondary);
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .projects .pj-inline-confirm > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: var(--pj-space-2);
+  }
+
+  .projects .pj-team-modal-body {
+    overflow: visible;
+    padding: 0;
+  }
+
+  .projects .pj-team-member-row {
+    min-width: 0;
+  }
+
+  .projects .pj-team-feedback.error {
+    border: 1px solid var(--pj-danger-border) !important;
+    border-left-width: 4px !important;
+    background: var(--pj-danger-soft) !important;
+  }
+}
+
+@media screen and (max-width: 640px) {
+  .projects .pj-overlay {
+    align-items: flex-end;
+    padding:
+      max(8px, env(safe-area-inset-top, 0px))
+      0
+      0;
+  }
+
+  .projects .pj-dialog,
+  .projects .pj-dialog.wide {
+    width: 100%;
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top, 0px)));
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 20px 20px 0 0;
+    transform-origin: bottom center;
+  }
+
+  .projects .pj-dialog > header {
+    min-height: 64px;
+    padding: 12px 16px;
+  }
+
+  .projects .pj-dialog > header::before {
+    content: "";
+    position: absolute;
+    top: 7px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    border-radius: var(--pj-radius-pill);
+    background: var(--pj-border-strong);
+    transform: translateX(-50%);
+  }
+
+  .projects .pj-dialog-body {
+    padding: 16px 16px max(16px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .projects .pj-actions {
+    bottom: calc(0px - max(16px, env(safe-area-inset-bottom, 0px)));
+    margin: var(--pj-space-4) -16px calc(0px - max(16px, env(safe-area-inset-bottom, 0px)));
+    padding: 12px 16px max(12px, env(safe-area-inset-bottom, 0px));
+  }
+
+  .projects .pj-dialog input,
+  .projects .pj-dialog select,
+  .projects .pj-dialog textarea {
+    font-size: 16px;
+  }
+
+  .projects .pj-team-member-row {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .projects .pj-team-member-row > div:last-child {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .projects .pj-toast {
+    right: max(12px, env(safe-area-inset-right, 0px));
+    bottom: max(12px, env(safe-area-inset-bottom, 0px));
+    left: max(12px, env(safe-area-inset-left, 0px));
+    width: auto;
+  }
+
+  @starting-style {
+    .projects .pj-dialog {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects .pj-dialog,
+  .projects .pj-toast {
+    transition: none !important;
   }
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   ProjectClientAccess,
   ProjectClientInvitation,
@@ -30,6 +31,19 @@ export function ProjectAccessPanel({
   onRevokeAccess: (userId: string) => Promise<void>;
   onRevokeInvitation: (invitationId: string) => Promise<void>;
 }) {
+  const [confirmAction, setConfirmAction] = useState<{
+    kind: "access" | "invitation";
+    id: string;
+    label: string;
+  } | null>(null);
+
+  const confirmRevoke = async () => {
+    if (!confirmAction || busy) return;
+    if (confirmAction.kind === "access") await onRevokeAccess(confirmAction.id);
+    else await onRevokeInvitation(confirmAction.id);
+    setConfirmAction(null);
+  };
+
   return (
     <div className="pj-access-stack">
       <section className="pj-panel" aria-labelledby="internal-team-title">
@@ -61,7 +75,11 @@ export function ProjectAccessPanel({
             </div>
           ))}
           {!members.length ? (
-            <p className="pj-muted">Nenhum membro interno foi carregado.</p>
+            <div className="pj-empty pj-empty-compact">
+              <h3>Nenhum membro interno encontrado</h3>
+              <p>Adicione gestores e operadores para dividir a operação deste projeto.</p>
+              <button type="button" onClick={onManageTeam}>Gerenciar equipe</button>
+            </div>
           ) : null}
         </div>
       </section>
@@ -133,11 +151,11 @@ export function ProjectAccessPanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm("Revogar o acesso deste cliente?")) {
-                      void onRevokeAccess(access.user_id);
-                    }
-                  }}
+                  onClick={() => setConfirmAction({
+                    kind: "access",
+                    id: access.user_id,
+                    label: access.email ?? "este cliente",
+                  })}
                   aria-label={`Revogar acesso de ${access.email ?? "cliente"}`}
                 >
                   Revogar
@@ -159,11 +177,11 @@ export function ProjectAccessPanel({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => {
-                    if (window.confirm("Cancelar este convite?")) {
-                      void onRevokeInvitation(invitation.id);
-                    }
-                  }}
+                  onClick={() => setConfirmAction({
+                    kind: "invitation",
+                    id: invitation.id,
+                    label: invitation.email,
+                  })}
                   aria-label={`Cancelar convite de ${invitation.email}`}
                 >
                   Cancelar
@@ -172,9 +190,30 @@ export function ProjectAccessPanel({
             </div>
           ))}
           {!clientAccess.length && !invitations.length ? (
-            <p className="pj-muted">Nenhum cliente convidado neste projeto.</p>
+            <div className="pj-empty pj-empty-compact">
+              <h3>O cliente ainda não tem acesso</h3>
+              <p>Convide o contato acima para que ele visualize apenas os documentos publicados deste projeto.</p>
+            </div>
           ) : null}
         </div>
+
+        {confirmAction ? (
+          <div className="pj-inline-confirm" role="alert">
+            <p>
+              {confirmAction.kind === "access"
+                ? `Revogar o acesso de ${confirmAction.label}? A pessoa deixará de ver este projeto.`
+                : `Cancelar o convite de ${confirmAction.label}? O link de entrada deixará de funcionar.`}
+            </p>
+            <div>
+              <button type="button" disabled={busy} onClick={() => setConfirmAction(null)}>
+                Manter acesso
+              </button>
+              <button type="button" className="danger" disabled={busy} onClick={() => void confirmRevoke()}>
+                {busy ? "Revogando…" : confirmAction.kind === "access" ? "Revogar acesso" : "Cancelar convite"}
+              </button>
+            </div>
+          </div>
+        ) : null}
       </section>
     </div>
   );
