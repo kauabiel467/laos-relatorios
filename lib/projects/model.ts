@@ -31,6 +31,13 @@ export type SectionKey =
   | "audience"
   | "analysis";
 export type MetricSize = "compact" | "wide" | "full";
+export type MetricGoalCadence = "weekly" | "monthly" | "quarterly" | "semiannual" | "annual";
+export interface MetricGoal {
+  type: "target" | "limit";
+  value: number;
+  cadence: MetricGoalCadence;
+  autoRenew: boolean;
+}
 export type CustomMetricFormat = MetricFormat;
 export interface CustomMetricDefinition {
   id: string;
@@ -65,6 +72,10 @@ export interface AnalysisConfig {
   custom_metrics?: CustomMetricDefinition[];
   metric_order?: string[];
   metric_sizes?: Record<string, MetricSize>;
+  metric_aliases?: Record<string, MetricKey>;
+  featured_metrics?: string[];
+  metric_goals?: Record<string, MetricGoal>;
+  metric_campaign_filters?: Record<string, string[]>;
   chart_metric?: MetricKey;
   funnel_metrics?: MetricKey[];
 }
@@ -253,6 +264,10 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
     custom_metrics: [],
     metric_order: [...t.metrics],
     metric_sizes: {},
+    metric_aliases: {},
+    featured_metrics: [],
+    metric_goals: {},
+    metric_campaign_filters: {},
     chart_metric: t.primaryMetric,
   };
 }
@@ -260,16 +275,28 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
 export function normalizeAnalysisConfig(
   value: AnalysisConfig | (Partial<AnalysisConfig> & Record<string, unknown>),
 ): AnalysisConfig {
-  if (isPrimaryKpiId(value.primary_metric) && value.metrics?.includes(value.primary_metric)) {
-    return value as AnalysisConfig;
-  }
   const template = TEMPLATES.find((item) => item.id === value.template);
   const configured = template?.primaryMetric;
   const available = value.metrics ?? [];
-  const primary = configured && available.includes(configured)
-    ? configured
-    : PRIMARY_KPI_IDS.find((id) => available.includes(id)) ?? "purchases";
-  return { ...value, primary_metric: primary } as AnalysisConfig;
+  const primary = isPrimaryKpiId(value.primary_metric) && available.includes(value.primary_metric)
+    ? value.primary_metric
+    : configured && available.includes(configured)
+      ? configured
+      : PRIMARY_KPI_IDS.find((id) => available.includes(id)) ?? "purchases";
+  const customIds = (value.custom_metrics ?? []).map((metric) => metric.id);
+  const aliasIds = Object.keys(value.metric_aliases ?? {});
+  const allowedMetricIds = new Set([...available, ...customIds, ...aliasIds]);
+  return {
+    ...value,
+    primary_metric: primary,
+    featured_metrics: (value.featured_metrics ?? []).filter((id) => allowedMetricIds.has(id)),
+    metric_goals: Object.fromEntries(
+      Object.entries(value.metric_goals ?? {}).filter(([id]) => allowedMetricIds.has(id)),
+    ),
+    metric_campaign_filters: Object.fromEntries(
+      Object.entries(value.metric_campaign_filters ?? {}).filter(([id]) => allowedMetricIds.has(id)),
+    ),
+  } as AnalysisConfig;
 }
 export function formatMetric(
   key: MetricKey,

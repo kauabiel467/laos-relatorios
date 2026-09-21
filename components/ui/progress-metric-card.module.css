@@ -26,6 +26,14 @@
     var(--pj-shadow-md, 0 16px 44px rgb(15 23 42 / 0.12));
 }
 
+.highlighted {
+  border-color: color-mix(in srgb, var(--metric-accent) 62%, var(--pj-border));
+  background: color-mix(in srgb, var(--metric-soft) 38%, var(--pj-surface-raised));
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--metric-accent) 14%, transparent),
+    var(--pj-shadow-md, 0 16px 44px rgb(15 23 42 / 0.12));
+}
+
 .glow {
   position: absolute;
   z-index: -1;
@@ -211,6 +219,41 @@
   color: var(--pj-text-muted, #788ba0);
   font-size: 12px;
   font-weight: 600;
+}
+
+.goal {
+  display: grid;
+  gap: 7px;
+  max-width: 19rem;
+  margin-top: 16px;
+}
+.goal > div:first-child {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--pj-text-muted, #788ba0);
+  font-size: 11px;
+}
+.goal > div:first-child strong {
+  color: var(--pj-text-secondary, #50657b);
+  font-size: 11px;
+}
+.goalTrack {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--pj-surface-sunken, #edf2f7);
+}
+.goalTrack span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--metric-accent);
+}
+.goal small {
+  color: var(--pj-text-muted, #788ba0);
+  font-size: 10px;
 }
 
 .chartArea {

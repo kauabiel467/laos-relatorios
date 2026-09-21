@@ -66,6 +66,25 @@ export const configSchema = z
     metric_sizes: z
       .record(z.string().max(80), z.enum(["compact", "wide", "full"]))
       .optional(),
+    metric_aliases: z
+      .record(z.string().regex(/^copy_[a-z0-9_-]{4,70}$/i), metricKey)
+      .refine((aliases) => Object.keys(aliases).length <= 12, "Use no máximo 12 cópias de métricas.")
+      .optional(),
+    featured_metrics: z.array(z.string().max(80)).max(42).optional(),
+    metric_goals: z
+      .record(
+        z.string().max(80),
+        z.object({
+          type: z.enum(["target", "limit"]),
+          value: z.number().finite().nonnegative(),
+          cadence: z.enum(["weekly", "monthly", "quarterly", "semiannual", "annual"]),
+          autoRenew: z.boolean(),
+        }),
+      )
+      .optional(),
+    metric_campaign_filters: z
+      .record(z.string().max(80), z.array(z.string().regex(/^\d+$/)).max(100))
+      .optional(),
     chart_metric: metricKey.optional(),
     funnel_metrics: z.array(metricKey).min(2).max(6).optional(),
   })
@@ -114,10 +133,19 @@ export const configSchema = z
       new Set(c.funnel_metrics).size !== c.funnel_metrics.length
     )
       ctx.addIssue({ code: "custom", message: "Remova etapas repetidas do funil." });
-    const allowedOrder = new Set([...c.metrics, ...customIds]);
+    const aliasIds = Object.keys(c.metric_aliases ?? {});
+    if (aliasIds.some((id) => c.metrics.includes(id as MetricId) || customIds.includes(id)))
+      ctx.addIssue({ code: "custom", message: "Há cópias de métricas com identificadores repetidos." });
+    const allowedOrder = new Set([...c.metrics, ...customIds, ...aliasIds]);
     if (
       c.metric_order?.some((metric) => !allowedOrder.has(metric)) ||
       (c.metric_order && new Set(c.metric_order).size !== c.metric_order.length)
     )
       ctx.addIssue({ code: "custom", message: "A ordem das métricas é inválida." });
+    if (c.featured_metrics?.some((metric) => !allowedOrder.has(metric)))
+      ctx.addIssue({ code: "custom", message: "Há destaques para métricas inexistentes." });
+    if (Object.keys(c.metric_goals ?? {}).some((metric) => !allowedOrder.has(metric)))
+      ctx.addIssue({ code: "custom", message: "Há metas para métricas inexistentes." });
+    if (Object.keys(c.metric_campaign_filters ?? {}).some((metric) => !allowedOrder.has(metric)))
+      ctx.addIssue({ code: "custom", message: "Há filtros para métricas inexistentes." });
   });

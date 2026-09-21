@@ -42,6 +42,13 @@ export interface ProgressMetricCardProps {
   dateFormatter?: (date: string) => string;
   loading?: boolean;
   featured?: boolean;
+  highlighted?: boolean;
+  goal?: {
+    label: string;
+    valueLabel: string;
+    progress: number;
+    status: string;
+  };
   controls?: ReactNode;
   className?: string;
 }
@@ -81,6 +88,8 @@ export default function ProgressMetricCard({
   dateFormatter = (date) => date,
   loading = false,
   featured = false,
+  highlighted = false,
+  goal,
   controls,
   className = "",
 }: ProgressMetricCardProps) {
@@ -126,6 +135,7 @@ export default function ProgressMetricCard({
     styles.card,
     styles[size],
     featured ? styles.featured : "",
+    highlighted ? styles.highlighted : "",
     className,
   ].filter(Boolean).join(" ");
 
@@ -169,6 +179,18 @@ export default function ProgressMetricCard({
             />
             {unitLabel ? <span>Unidade: {unitLabel}</span> : null}
           </div>
+          {goal ? (
+            <div className={styles.goal} aria-label={`${goal.label}: ${goal.status}`}>
+              <div>
+                <span>{goal.label}</span>
+                <strong>{goal.valueLabel}</strong>
+              </div>
+              <div className={styles.goalTrack} aria-hidden="true">
+                <span style={{ width: `${Math.max(0, Math.min(goal.progress, 100))}%` }} />
+              </div>
+              <small>{goal.status}</small>
+            </div>
+          ) : null}
         </div>
         <div className={styles.chartArea}>
           <div className={styles.dotPattern} aria-hidden="true" />

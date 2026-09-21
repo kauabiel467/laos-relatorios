@@ -3594,6 +3594,427 @@
   }
 }
 
+/* Visual report studio: contextual controls stay out of the client view. */
+.projects .pj-canvas-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 18px;
+}
+
+.projects .pj-canvas-actions > span {
+  color: var(--pj-text-muted);
+  font-size: 12px;
+}
+
+.projects .pj-canvas-actions > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.projects .pj-progress-metric-item {
+  position: relative;
+  min-width: 0;
+  border-radius: 24px;
+  transition: box-shadow 160ms ease, transform 160ms ease;
+}
+
+.projects .pj-progress-metric-item.is-selected {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--pj-primary) 24%, transparent);
+}
+
+.projects .pj-progress-metric-item.is-selected::before,
+.projects .pj-progress-metric-item.is-selected::after {
+  position: absolute;
+  z-index: 8;
+  bottom: 8px;
+  width: 10px;
+  height: 10px;
+  border-bottom: 2px solid var(--pj-primary);
+  content: "";
+  pointer-events: none;
+}
+
+.projects .pj-progress-metric-item.is-selected::before {
+  left: 8px;
+  border-left: 2px solid var(--pj-primary);
+}
+
+.projects .pj-progress-metric-item.is-selected::after {
+  right: 8px;
+  border-right: 2px solid var(--pj-primary);
+}
+
+.projects .pj-progress-metric-item .pj-metric-controls {
+  width: fit-content;
+  margin: 0 0 0 auto !important;
+  padding: 4px !important;
+  border: 1px solid var(--pj-primary-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--pj-surface-raised) 94%, transparent);
+  box-shadow: 0 8px 22px rgb(15 23 42 / 0.13) !important;
+}
+
+.projects .pj-progress-metric-item .pj-metric-controls button {
+  width: 31px;
+  min-width: 31px;
+  height: 31px;
+  min-height: 31px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 7px !important;
+  background: transparent !important;
+  color: var(--pj-text-secondary) !important;
+  font-size: 13px !important;
+}
+
+.projects .pj-progress-metric-item .pj-metric-controls button:hover,
+.projects .pj-progress-metric-item .pj-metric-controls button.is-active {
+  background: var(--pj-primary-soft) !important;
+  color: var(--pj-primary) !important;
+}
+
+.projects .pj-progress-metric-item .pj-metric-controls button.danger:hover {
+  background: var(--pj-danger-soft) !important;
+  color: var(--pj-danger) !important;
+}
+
+.projects .pj-metric-library {
+  position: fixed;
+  z-index: 380;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: min(390px, 92vw);
+  overflow-y: auto;
+  border-right: 1px solid var(--pj-border);
+  background: var(--pj-surface-raised);
+  box-shadow: 24px 0 60px rgb(15 23 42 / 0.18);
+}
+
+.projects .pj-metric-library > header {
+  position: sticky;
+  z-index: 2;
+  top: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 22px 22px 18px;
+  border-bottom: 1px solid var(--pj-border);
+  background: color-mix(in srgb, var(--pj-surface-raised) 94%, transparent);
+  backdrop-filter: blur(14px);
+}
+
+.projects .pj-metric-library > header small,
+.projects .pj-metric-library > header h3 {
+  display: block;
+  margin: 0;
+}
+
+.projects .pj-metric-library > header small {
+  color: var(--pj-primary);
+  font-size: 10px;
+  font-weight: 750;
+}
+
+.projects .pj-metric-library > header h3 {
+  margin-top: 3px;
+  color: var(--pj-text);
+  font-size: 17px;
+}
+
+.projects .pj-metric-library > header button {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 9px;
+  font-size: 20px;
+}
+
+.projects .pj-library-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 18px 20px 10px;
+}
+
+.projects .pj-library-tabs button {
+  min-height: 66px;
+  border-color: var(--pj-border);
+  background: var(--pj-surface);
+  color: var(--pj-text-secondary);
+  font-size: 11px;
+}
+
+.projects .pj-library-tabs button.is-active {
+  border-color: var(--pj-primary);
+  background: var(--pj-primary-soft);
+  color: var(--pj-primary);
+  box-shadow: inset 0 0 0 1px var(--pj-primary);
+}
+
+.projects .pj-library-search {
+  position: relative;
+  display: block;
+  padding: 8px 20px 12px;
+}
+
+.projects .pj-library-search > span {
+  position: absolute;
+  z-index: 1;
+  top: 21px;
+  left: 33px;
+  color: var(--pj-text-muted);
+}
+
+.projects .pj-library-search input {
+  padding-left: 38px;
+}
+
+.projects .pj-library-list,
+.projects .pj-custom-blocks {
+  display: grid;
+  gap: 8px;
+  padding: 4px 20px 24px;
+}
+
+.projects .pj-library-list > button,
+.projects .pj-custom-blocks > button {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-color: transparent;
+  background: transparent;
+  text-align: left;
+}
+
+.projects .pj-library-list > button:hover,
+.projects .pj-custom-blocks > button:hover {
+  border-color: var(--pj-border);
+  background: var(--pj-surface-hover);
+}
+
+.projects .pj-library-list > button > span {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.projects .pj-library-list strong,
+.projects .pj-custom-blocks b {
+  color: var(--pj-text);
+  font-size: 12px;
+}
+
+.projects .pj-library-list small,
+.projects .pj-custom-blocks small {
+  color: var(--pj-text-muted);
+  font-size: 10px;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.projects .pj-library-list b {
+  flex: 0 0 auto;
+  color: var(--pj-primary);
+  font-size: 10px;
+}
+
+.projects .pj-custom-blocks > p {
+  margin: 8px 2px 10px;
+  color: var(--pj-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.projects .pj-custom-blocks > button {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  justify-content: initial;
+}
+
+.projects .pj-custom-blocks > button > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  grid-row: span 2;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--pj-primary-soft);
+  color: var(--pj-primary);
+}
+
+.projects .pj-inline-analysis.is-editing {
+  border-color: var(--pj-primary-border);
+  box-shadow: 0 0 0 2px var(--pj-primary-soft);
+}
+
+.projects .pj-prose-button {
+  width: 100%;
+  min-height: 100px;
+  justify-content: flex-start;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.projects .pj-prose-button:not(:disabled):hover {
+  background: var(--pj-surface-hover);
+}
+
+.projects .pj-inline-analysis-editor textarea {
+  min-height: 180px;
+  resize: vertical;
+}
+
+.projects .pj-inline-analysis-editor > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.projects .pj-inline-analysis-editor small,
+.projects .pj-dialog-intro {
+  color: var(--pj-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.projects .pj-goal-kind {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.projects .pj-goal-kind > button {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-height: 78px;
+  padding: 14px;
+  text-align: left;
+}
+
+.projects .pj-goal-kind > button.is-active {
+  border-color: var(--pj-primary);
+  background: var(--pj-primary-soft);
+  color: var(--pj-primary);
+  box-shadow: inset 0 0 0 1px var(--pj-primary);
+}
+
+.projects .pj-goal-kind span {
+  color: var(--pj-text-muted);
+  font-size: 10px;
+}
+
+.projects .pj-goal-preview {
+  display: grid;
+  gap: 5px;
+  padding: 16px;
+  border: 1px solid var(--pj-border);
+  border-radius: 11px;
+  background: var(--pj-surface);
+}
+
+.projects .pj-goal-preview span {
+  color: var(--pj-text-muted);
+  font-size: 10px;
+}
+
+.projects .pj-goal-preview strong {
+  color: var(--pj-text);
+  font-size: 13px;
+}
+
+.projects .pj-goal-preview small {
+  color: var(--pj-text-muted);
+  font-size: 10px;
+}
+
+.projects .pj-actions-between {
+  justify-content: space-between;
+}
+
+.projects .pj-campaign-filter-list {
+  display: grid;
+  gap: 6px;
+  max-height: 310px;
+  overflow-y: auto;
+  padding: 2px;
+}
+
+.projects .pj-campaign-filter-list > label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--pj-border);
+  border-radius: 10px;
+  background: var(--pj-surface-raised);
+}
+
+.projects .pj-campaign-filter-list > label > span {
+  display: grid;
+  gap: 3px;
+}
+
+.projects .pj-campaign-filter-list strong {
+  color: var(--pj-text);
+  font-size: 11px;
+}
+
+.projects .pj-campaign-filter-list small {
+  color: var(--pj-text-muted);
+  font-size: 10px;
+}
+
+@media (max-width: 720px) {
+  .projects .pj-canvas-actions,
+  .projects .pj-inline-analysis-editor > div {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .projects .pj-canvas-actions > div,
+  .projects .pj-canvas-actions button {
+    width: 100%;
+  }
+
+  .projects .pj-progress-metric-item .pj-metric-controls {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .projects .pj-analysis-layout.editing .pj-editor {
+    max-height: 42vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .projects .pj-goal-kind {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .projects .pj-canvas-actions,
+  .projects .pj-metric-library,
+  .projects .pj-metric-controls {
+    display: none !important;
+  }
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .projects .pj-topnav,
   .projects .pj-page-heading,

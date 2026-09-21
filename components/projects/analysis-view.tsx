@@ -18,6 +18,8 @@ import {
   type MetricKey,
   type CustomMetricDefinition,
   type MetricSize,
+  type MetricGoal,
+  type MetricValues,
 } from "@/lib/projects/model";
 import { PRIMARY_KPI_IDS, isPrimaryKpiId, type MetricUnit, type PrimaryKpiId } from "@/lib/metrics/catalog";
 import { inferCalculationFormat } from "@/lib/metrics/engine";
@@ -52,6 +54,41 @@ const metricUnitLabel = (unit: MetricUnit | undefined, currency: string) => {
   if (unit === "ratio") return "índice";
   return "contagem";
 };
+
+const safeRatio = (numerator: number | null, denominator: number | null, multiplier = 1) =>
+  numerator != null && denominator != null && denominator !== 0
+    ? numerator / denominator * multiplier
+    : null;
+
+function aggregateCampaignMetrics(
+  campaigns: Array<{ metrics: MetricValues }>,
+): MetricValues {
+  const values = Object.fromEntries(
+    (Object.keys(METRICS) as MetricKey[]).map((metric) => [metric, null]),
+  ) as MetricValues;
+  for (const metric of Object.keys(METRICS) as MetricKey[]) {
+    if (METRICS[metric].aggregation !== "sum") continue;
+    values[metric] = campaigns.reduce((sum, campaign) => sum + (campaign.metrics[metric] ?? 0), 0);
+  }
+  values.ctr = safeRatio(values.link_clicks, values.impressions, 100);
+  values.cpc = safeRatio(values.spend, values.link_clicks);
+  values.cpm = safeRatio(values.spend, values.impressions, 1000);
+  values.roas = safeRatio(values.revenue, values.spend);
+  values.cpa = safeRatio(values.spend, values.purchases);
+  values.cost_message = safeRatio(values.spend, values.messages);
+  values.cpl = safeRatio(values.spend, values.leads);
+  // Alcance é único no nível da conta e não pode ser somado entre campanhas.
+  values.reach = null;
+  values.frequency = null;
+  return values;
+}
+
+const defaultMetricGoal = (): MetricGoal => ({
+  type: "target",
+  value: 0,
+  cadence: "monthly",
+  autoRenew: true,
+});
 
 function SectionHeading({
   title,
@@ -108,7 +145,18 @@ export function AnalysisView({
     [customMetricOpen, setCustomMetricOpen] = useState(false),
     [editingCustomId, setEditingCustomId] = useState(""),
     [customMetric, setCustomMetric] = useState(defaultCustomMetric()),
-    [customMetricError, setCustomMetricError] = useState("");
+    [customMetricError, setCustomMetricError] = useState(""),
+    [selectedMetric, setSelectedMetric] = useState(""),
+    [metricLibraryOpen, setMetricLibraryOpen] = useState(false),
+    [metricLibraryTab, setMetricLibraryTab] = useState<"predefined" | "custom">("predefined"),
+    [metricSearch, setMetricSearch] = useState(""),
+    [replacingMetric, setReplacingMetric] = useState(""),
+    [goalMetric, setGoalMetric] = useState(""),
+    [goalDraft, setGoalDraft] = useState<MetricGoal>(defaultMetricGoal()),
+    [filterMetric, setFilterMetric] = useState(""),
+    [campaignSearch, setCampaignSearch] = useState(""),
+    [campaignSelection, setCampaignSelection] = useState<string[]>([]),
+    [inlineAnalysis, setInlineAnalysis] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -168,9 +216,11 @@ export function AnalysisView({
   const patch = (value: Partial<AnalysisConfig>) =>
     setConfig((c) => ({ ...c, ...value }));
   const customMetrics = config.custom_metrics ?? [];
+  const metricAliases = config.metric_aliases ?? {};
   const availableMetricIds = [
     ...config.metrics,
     ...customMetrics.map((metric) => metric.id),
+    ...Object.keys(metricAliases),
   ];
   const metricOrder = [
     ...(config.metric_order ?? []).filter((id) =>
@@ -195,6 +245,12 @@ export function AnalysisView({
       sizes[next] = sizes[current];
       delete sizes[current];
     }
+    const moveRecordKey = <T,>(record: Record<string, T> | undefined) => {
+      if (!record?.[current]) return record ?? {};
+      const moved = { ...record, [next]: record[current] };
+      delete moved[current];
+      return moved;
+    };
     patch({
       metrics: config.metrics.map((metric) =>
         metric === current ? next : metric,
@@ -203,6 +259,9 @@ export function AnalysisView({
         metric === current ? next : metric,
       ),
       metric_sizes: sizes,
+      featured_metrics: (config.featured_metrics ?? []).map((metric) => metric === current ? next : metric),
+      metric_goals: moveRecordKey(config.metric_goals),
+      metric_campaign_filters: moveRecordKey(config.metric_campaign_filters),
       chart_metric: config.chart_metric === current ? next : config.chart_metric,
       primary_metric: config.primary_metric === current
         ? next as PrimaryKpiId
@@ -220,6 +279,7 @@ export function AnalysisView({
   };
   const removeMetric = (id: string) => {
     const builtIn = id in METRICS;
+    const alias = id in metricAliases;
     if (builtIn && config.metrics.length <= 1) return;
     const remaining = builtIn
       ? config.metrics.filter((metric) => metric !== id)
@@ -233,11 +293,54 @@ export function AnalysisView({
       custom_metrics: builtIn
         ? customMetrics
         : customMetrics.filter((metric) => metric.id !== id),
+      metric_aliases: Object.fromEntries(
+        Object.entries(metricAliases).filter(([metric]) => metric !== id),
+      ),
       metric_order: metricOrder.filter((metric) => metric !== id),
       metric_sizes: Object.fromEntries(
         Object.entries(config.metric_sizes ?? {}).filter(([metric]) => metric !== id),
       ),
+      featured_metrics: (config.featured_metrics ?? []).filter((metric) => metric !== id),
+      metric_goals: Object.fromEntries(
+        Object.entries(config.metric_goals ?? {}).filter(([metric]) => metric !== id),
+      ),
+      metric_campaign_filters: Object.fromEntries(
+        Object.entries(config.metric_campaign_filters ?? {}).filter(([metric]) => metric !== id),
+      ),
     });
+    if (alias || selectedMetric === id) setSelectedMetric("");
+  };
+  const duplicateMetric = (id: string, metric: MetricKey) => {
+    const copyId = `copy_${metric}_${Date.now().toString(36)}`;
+    const index = metricOrder.indexOf(id);
+    const nextOrder = [...metricOrder];
+    nextOrder.splice(index + 1, 0, copyId);
+    patch({
+      metric_aliases: { ...metricAliases, [copyId]: metric },
+      metric_order: nextOrder,
+      metric_sizes: {
+        ...(config.metric_sizes ?? {}),
+        [copyId]: config.metric_sizes?.[id] ?? "compact",
+      },
+    });
+    setSelectedMetric(copyId);
+  };
+  const toggleFeatured = (id: string) => {
+    const featured = config.featured_metrics ?? [];
+    patch({
+      featured_metrics: featured.includes(id)
+        ? featured.filter((metric) => metric !== id)
+        : [...featured, id],
+    });
+  };
+  const openMetricGoal = (id: string) => {
+    setGoalMetric(id);
+    setGoalDraft(config.metric_goals?.[id] ?? defaultMetricGoal());
+  };
+  const openCampaignFilter = (id: string) => {
+    setFilterMetric(id);
+    setCampaignSearch("");
+    setCampaignSelection(config.metric_campaign_filters?.[id] ?? []);
   };
   const reorderMetric = (target: string) => {
     if (!draggedMetric || draggedMetric === target) return;
@@ -253,6 +356,37 @@ export function AnalysisView({
     patch({
       metric_sizes: { ...(config.metric_sizes ?? {}), [id]: next },
     });
+  };
+  const addBuiltInMetric = (metric: MetricKey) => {
+    if (replacingMetric) {
+      if (replacingMetric in metricAliases) {
+        patch({ metric_aliases: { ...metricAliases, [replacingMetric]: metric } });
+      } else if (replacingMetric in METRICS) {
+        replaceMetric(replacingMetric as MetricKey, metric);
+        setSelectedMetric(metric);
+      }
+      setReplacingMetric("");
+      setMetricLibraryOpen(false);
+      return;
+    }
+    if (config.metrics.includes(metric)) {
+      setSelectedMetric(metric);
+      setMetricLibraryOpen(false);
+      return;
+    }
+    patch({
+      metrics: [...config.metrics, metric],
+      metric_order: [...metricOrder, metric],
+    });
+    setSelectedMetric(metric);
+    setMetricLibraryOpen(false);
+  };
+  const addSection = (section: SectionKey) => {
+    if (!config.sections.includes(section)) {
+      patch({ sections: [...config.sections, section] });
+    }
+    if (section === "analysis") setInlineAnalysis(true);
+    setMetricLibraryOpen(false);
   };
   const saveCustomMetric = () => {
     const id = editingCustomId || `custom_${Date.now().toString(36)}`;
@@ -443,14 +577,24 @@ export function AnalysisView({
           <div className="pj-metric-grid">
             {metricOrder.map((id) => {
               const custom = customMetrics.find((metric) => metric.id === id);
-              const builtIn = id in METRICS ? (id as MetricKey) : null;
+              const builtIn = id in METRICS
+                ? (id as MetricKey)
+                : metricAliases[id] ?? null;
               if (!custom && !builtIn) return null;
               const definition = builtIn ? METRICS[builtIn] : custom!;
+              const campaignIds = config.metric_campaign_filters?.[id] ?? [];
+              const filteredValues = campaignIds.length
+                ? aggregateCampaignMetrics(
+                    data.campaigns.filter((campaign) => campaignIds.includes(campaign.id)),
+                  )
+                : null;
               const value = builtIn
-                ? data.current[builtIn]
-                : customMetricValue(custom!, data.current);
-              const previous = builtIn
-                ? data.previous?.[builtIn]
+                ? filteredValues?.[builtIn] ?? (campaignIds.length ? null : data.current[builtIn])
+                : customMetricValue(custom!, filteredValues ?? data.current);
+              const previous = campaignIds.length
+                ? null
+                : builtIn
+                  ? data.previous?.[builtIn]
                 : custom?.kind === "calculated"
                   ? customMetricValue(custom, data.previous)
                   : null;
@@ -462,7 +606,7 @@ export function AnalysisView({
               const formattedPrevious = builtIn
                 ? formatMetric(builtIn, previous, currency)
                 : formatCustomMetric(custom!, previous, currency);
-              const seriesData: SeriesPoint[] = data.daily.flatMap((day) => {
+              const seriesData: SeriesPoint[] = campaignIds.length ? [] : data.daily.flatMap((day) => {
                 const pointValue = builtIn
                   ? day.metrics[builtIn]
                   : custom?.kind === "calculated"
@@ -497,13 +641,17 @@ export function AnalysisView({
                 : "Período atual";
               const comparisonLabel = !data.previous
                 ? "Comparação desativada"
+                : campaignIds.length
+                  ? `${campaignIds.length} campanha${campaignIds.length === 1 ? "" : "s"} neste indicador`
                 : previous === 0 && value != null
                   ? "O período anterior terminou em zero"
                   : previous != null
                     ? `${formattedPrevious} no período anterior`
                     : "Sem dado no período anterior";
               const statusLabel = delta == null
-                ? data.previous
+                ? campaignIds.length
+                  ? "Filtro por campanha"
+                  : data.previous
                   ? "Sem base comparável"
                   : "Sem comparação"
                 : delta === 0
@@ -515,8 +663,13 @@ export function AnalysisView({
                       : "Piora";
               return (
                 <div
-                  className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""}`}
+                  className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""} ${selectedMetric === id ? "is-selected" : ""}`}
                   key={id}
+                  onClick={(event) => {
+                    if (!editor || preview) return;
+                    if ((event.target as HTMLElement).closest("button, select, input, a")) return;
+                    setSelectedMetric(id);
+                  }}
                   onDragOver={(event) => {
                     if (editor && !preview) event.preventDefault();
                   }}
@@ -536,6 +689,22 @@ export function AnalysisView({
                     data={seriesData}
                     size={cardSize}
                     featured={id === config.primary_metric}
+                    highlighted={(config.featured_metrics ?? []).includes(id)}
+                    goal={config.metric_goals?.[id] && value != null ? (() => {
+                      const goal = config.metric_goals![id];
+                      const progress = goal.value > 0 ? value / goal.value * 100 : 0;
+                      const reached = goal.type === "target" ? value >= goal.value : value <= goal.value;
+                      return {
+                        label: goal.type === "target" ? "Meta" : "Limite",
+                        valueLabel: builtIn
+                          ? formatMetric(builtIn, goal.value, currency)
+                          : formatCustomMetric(custom!, goal.value, currency),
+                        progress,
+                        status: reached
+                          ? goal.type === "target" ? "Meta atingida" : "Dentro do limite"
+                          : `${Math.min(Math.round(progress), 999)}% alcançado`,
+                      };
+                    })() : undefined}
                     defaultIndex={Math.max(seriesData.length - 1, 0)}
                     dateFormatter={shortDate}
                     valueFormatter={(pointValue) =>
@@ -543,8 +712,8 @@ export function AnalysisView({
                         ? formatMetric(builtIn, pointValue, currency)
                         : formatCustomMetric(custom!, pointValue, currency)
                     }
-                    controls={editor && !preview ? (
-                      <div className="pj-metric-controls">
+                    controls={editor && !preview && selectedMetric === id ? (
+                      <div className="pj-metric-controls" role="toolbar" aria-label={`Editar ${definition.label}`}>
                         <button
                           className="pj-drag-handle"
                           draggable
@@ -555,25 +724,41 @@ export function AnalysisView({
                         >
                           ⠿
                         </button>
+                        <button
+                          className={(config.featured_metrics ?? []).includes(id) ? "is-active" : ""}
+                          aria-label={`${(config.featured_metrics ?? []).includes(id) ? "Remover destaque de" : "Destacar"} ${definition.label}`}
+                          title="Destacar"
+                          onClick={() => toggleFeatured(id)}
+                        >
+                          {(config.featured_metrics ?? []).includes(id) ? "★" : "☆"}
+                        </button>
                         {builtIn ? (
-                          <select
+                          <button aria-label={`Duplicar ${definition.label}`} title="Duplicar" onClick={() => duplicateMetric(id, builtIn)}>⧉</button>
+                        ) : null}
+                        {builtIn ? (
+                          <button
                             aria-label={`Trocar ${definition.label}`}
-                            value={builtIn}
-                            onChange={(event) => replaceMetric(builtIn, event.target.value as MetricKey)}
+                            title="Trocar métrica"
+                            onClick={() => {
+                              setReplacingMetric(id);
+                              setMetricLibraryTab("predefined");
+                              setMetricSearch("");
+                              setMetricLibraryOpen(true);
+                            }}
                           >
-                            {(Object.keys(METRICS) as MetricKey[]).map((metric) => (
-                              <option
-                                key={metric}
-                                value={metric}
-                                disabled={
-                                  (metric !== builtIn && config.metrics.includes(metric)) ||
-                                  (builtIn === config.primary_metric && !isPrimaryKpiId(metric))
-                                }
-                              >
-                                {METRICS[metric].label}
-                              </option>
-                            ))}
-                          </select>
+                            ⚙
+                          </button>
+                        ) : null}
+                        <button aria-label={`Definir meta para ${definition.label}`} title="Meta ou limite" onClick={() => openMetricGoal(id)}>◎</button>
+                        {builtIn ? (
+                          <button
+                            className={campaignIds.length ? "is-active" : ""}
+                            aria-label={`Filtrar ${definition.label} por campanha`}
+                            title="Filtrar por campanha"
+                            onClick={() => openCampaignFilter(id)}
+                          >
+                            ⌕
+                          </button>
                         ) : null}
                         <button
                           aria-label={`Alterar tamanho de ${definition.label}`}
@@ -753,11 +938,32 @@ export function AnalysisView({
         );
       case "analysis":
         return (
-          <section className="pj-block">
+          <section className={`pj-block pj-inline-analysis ${inlineAnalysis && editor && !preview ? "is-editing" : ""}`}>
             <SectionHeading title="Análise e próximos passos" description="Contexto, pontos de atenção e recomendações registrados pelo gestor." />
-            <p className="pj-prose">
-              {config.analysis || "Nenhuma análise adicionada pelo gestor."}
-            </p>
+            {inlineAnalysis && editor && !preview ? (
+              <div className="pj-inline-analysis-editor">
+                <textarea
+                  data-autofocus
+                  rows={8}
+                  value={config.analysis}
+                  placeholder="Escreva a leitura dos resultados, os aprendizados e os próximos passos…"
+                  onChange={(event) => patch({ analysis: event.target.value })}
+                />
+                <div>
+                  <button type="button" onClick={() => setInlineAnalysis(false)}>Concluir edição</button>
+                  <small>{config.analysis.length.toLocaleString("pt-BR")} de 20.000 caracteres</small>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="pj-prose pj-prose-button"
+                disabled={!editor || preview}
+                onClick={() => setInlineAnalysis(true)}
+              >
+                {config.analysis || "Clique para adicionar a análise do gestor."}
+              </button>
+            )}
           </section>
         );
     }
@@ -967,6 +1173,111 @@ export function AnalysisView({
           "pj-analysis-layout " + (editor && !preview ? "editing" : "")
         }
       >
+        {metricLibraryOpen && editor && !preview ? (
+          <aside className="pj-metric-library" aria-label="Catálogo de métricas e blocos">
+            <header>
+              <div>
+                <small>Meta Ads</small>
+                <h3>{replacingMetric ? "Trocar métrica" : "Adicionar ao relatório"}</h3>
+              </div>
+              <button
+                type="button"
+                aria-label="Fechar catálogo"
+                onClick={() => {
+                  setMetricLibraryOpen(false);
+                  setReplacingMetric("");
+                }}
+              >
+                ×
+              </button>
+            </header>
+            <div className="pj-library-tabs" role="tablist" aria-label="Tipo de conteúdo">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={metricLibraryTab === "predefined"}
+                className={metricLibraryTab === "predefined" ? "is-active" : ""}
+                onClick={() => setMetricLibraryTab("predefined")}
+              >
+                Métricas prontas
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={metricLibraryTab === "custom"}
+                className={metricLibraryTab === "custom" ? "is-active" : ""}
+                onClick={() => setMetricLibraryTab("custom")}
+              >
+                Personalizados
+              </button>
+            </div>
+            {metricLibraryTab === "predefined" ? (
+              <>
+                <label className="pj-library-search">
+                  <span aria-hidden="true">⌕</span>
+                  <input
+                    data-autofocus
+                    value={metricSearch}
+                    placeholder="Buscar métrica…"
+                    onChange={(event) => setMetricSearch(event.target.value)}
+                  />
+                </label>
+                <div className="pj-library-list">
+                  {(Object.keys(METRICS) as MetricKey[])
+                    .filter((metric) => {
+                      const term = metricSearch.trim().toLocaleLowerCase("pt-BR");
+                      return !term || `${METRICS[metric].label} ${METRICS[metric].description}`.toLocaleLowerCase("pt-BR").includes(term);
+                    })
+                    .map((metric) => {
+                      const alreadyAdded = config.metrics.includes(metric);
+                      const replacingBuiltIn = replacingMetric in METRICS;
+                      return (
+                        <button
+                          type="button"
+                          key={metric}
+                          disabled={alreadyAdded && replacingBuiltIn && replacingMetric !== metric}
+                          onClick={() => addBuiltInMetric(metric)}
+                        >
+                          <span>
+                            <strong>{METRICS[metric].label}</strong>
+                            <small>{METRICS[metric].description}</small>
+                          </span>
+                          <b>{alreadyAdded && !replacingMetric ? "No relatório" : replacingMetric ? "Trocar" : "Adicionar"}</b>
+                        </button>
+                      );
+                    })}
+                </div>
+              </>
+            ) : (
+              <div className="pj-custom-blocks">
+                <p>Crie blocos para explicar os resultados ou montar indicadores próprios.</p>
+                <button type="button" onClick={() => addSection("analysis")}><span>▤</span><b>Análise</b><small>Texto com aprendizados e próximos passos</small></button>
+                <button type="button" onClick={() => addSection("funnel")}><span>▽</span><b>Funil</b><small>Conversão entre as etapas escolhidas</small></button>
+                <button type="button" onClick={() => addSection("results")}><span>↗</span><b>Gráfico</b><small>Evolução do indicador principal</small></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMetricLibraryOpen(false);
+                    setEditingCustomId("");
+                    setCustomMetricError("");
+                    setCustomMetric({ ...defaultCustomMetric(), kind: "calculated", format: "ratio" });
+                    setCustomMetricOpen(true);
+                  }}
+                ><span>⌗</span><b>Métrica calculada</b><small>Combine duas métricas do catálogo</small></button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMetricLibraryOpen(false);
+                    setEditingCustomId("");
+                    setCustomMetricError("");
+                    setCustomMetric(defaultCustomMetric());
+                    setCustomMetricOpen(true);
+                  }}
+                ><span>✎</span><b>Métrica manual</b><small>Informe um valor próprio</small></button>
+              </div>
+            )}
+          </aside>
+        ) : null}
         {editor && !preview && (
           <aside className="pj-editor">
             <h3>Personalizar apresentação</h3>
@@ -1181,6 +1492,26 @@ export function AnalysisView({
               <span>LAOS · Resultados com contexto</span>
             </header>
           )}
+          {editor && !preview ? (
+            <div className="pj-canvas-actions">
+              <span>Edite o relatório diretamente no canvas</span>
+              <div>
+                <button type="button" onClick={() => addSection("analysis")}>＋ Adicionar análise</button>
+                <button
+                  type="button"
+                  className="primary"
+                  onClick={() => {
+                    setReplacingMetric("");
+                    setMetricLibraryTab("predefined");
+                    setMetricSearch("");
+                    setMetricLibraryOpen(true);
+                  }}
+                >
+                  ＋ Adicionar métricas
+                </button>
+              </div>
+            </div>
+          ) : null}
           <div className="pj-document-heading">
             <MetaMark />
             <div>
@@ -1224,6 +1555,170 @@ export function AnalysisView({
           </footer>
         </article>
       </div>
+      {goalMetric ? (
+        <Dialog title="Meta do indicador" close={() => setGoalMetric("")}>
+          <p className="pj-dialog-intro">
+            Defina quando este indicador será considerado saudável. O progresso aparece no card e é ocultado quando não houver uma meta.
+          </p>
+          <div className="pj-goal-kind">
+            <button
+              type="button"
+              className={goalDraft.type === "target" ? "is-active" : ""}
+              onClick={() => setGoalDraft((goal) => ({ ...goal, type: "target" }))}
+            >
+              <strong>Meta</strong>
+              <span>Valor que deseja atingir</span>
+            </button>
+            <button
+              type="button"
+              className={goalDraft.type === "limit" ? "is-active" : ""}
+              onClick={() => setGoalDraft((goal) => ({ ...goal, type: "limit" }))}
+            >
+              <strong>Limite</strong>
+              <span>Valor que não deseja exceder</span>
+            </button>
+          </div>
+          <label>
+            Frequência
+            <select
+              value={goalDraft.cadence}
+              onChange={(event) => setGoalDraft((goal) => ({ ...goal, cadence: event.target.value as MetricGoal["cadence"] }))}
+            >
+              <option value="weekly">Semanal</option>
+              <option value="monthly">Mensal</option>
+              <option value="quarterly">Trimestral</option>
+              <option value="semiannual">Semestral</option>
+              <option value="annual">Anual</option>
+            </select>
+          </label>
+          <label>
+            Valor da {goalDraft.type === "target" ? "meta" : "limite"}
+            <input
+              data-autofocus
+              type="number"
+              min="0"
+              step="any"
+              value={goalDraft.value || ""}
+              placeholder="Informe o valor"
+              onChange={(event) => setGoalDraft((goal) => ({ ...goal, value: Number(event.target.value) }))}
+            />
+          </label>
+          <label className="pj-check">
+            <input
+              type="checkbox"
+              checked={goalDraft.autoRenew}
+              onChange={(event) => setGoalDraft((goal) => ({ ...goal, autoRenew: event.target.checked }))}
+            />
+            Renovar automaticamente ao fim do período
+          </label>
+          <div className="pj-goal-preview">
+            <span>Pré-visualização</span>
+            <strong>{goalDraft.type === "target" ? "Meta recorrente" : "Limite recorrente"}</strong>
+            <small>O acompanhamento usa o valor já validado pelo motor de métricas.</small>
+          </div>
+          <div className="pj-actions pj-actions-between">
+            <button
+              type="button"
+              className="danger"
+              disabled={!config.metric_goals?.[goalMetric]}
+              onClick={() => {
+                patch({
+                  metric_goals: Object.fromEntries(
+                    Object.entries(config.metric_goals ?? {}).filter(([metric]) => metric !== goalMetric),
+                  ),
+                });
+                setGoalMetric("");
+              }}
+            >
+              Remover meta
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!Number.isFinite(goalDraft.value) || goalDraft.value <= 0}
+              onClick={() => {
+                patch({ metric_goals: { ...(config.metric_goals ?? {}), [goalMetric]: goalDraft } });
+                setGoalMetric("");
+              }}
+            >
+              Salvar meta
+            </button>
+          </div>
+        </Dialog>
+      ) : null}
+      {filterMetric ? (
+        <Dialog title="Filtrar indicador por campanha" close={() => setFilterMetric("")}>
+          <p className="pj-dialog-intro">
+            O filtro vale somente para este card. Os demais indicadores continuam mostrando toda a conta.
+          </p>
+          {(() => {
+            const metric = filterMetric in METRICS
+              ? filterMetric as MetricKey
+              : metricAliases[filterMetric];
+            return metric && METRICS[metric].aggregation === "account_unique" ? (
+              <p className="pj-warning">{METRICS[metric].label} não pode ser somado entre campanhas. Com filtro aplicado, o card exibirá “Sem dado” para evitar uma totalização incorreta.</p>
+            ) : null;
+          })()}
+          <label className="pj-library-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              data-autofocus
+              value={campaignSearch}
+              placeholder="Buscar campanha…"
+              onChange={(event) => setCampaignSearch(event.target.value)}
+            />
+          </label>
+          <div className="pj-campaign-filter-list">
+            {(data?.campaigns ?? [])
+              .filter((campaign) => campaign.name.toLocaleLowerCase("pt-BR").includes(campaignSearch.trim().toLocaleLowerCase("pt-BR")))
+              .map((campaign) => (
+                <label key={campaign.id}>
+                  <input
+                    type="checkbox"
+                    checked={campaignSelection.includes(campaign.id)}
+                    onChange={(event) => setCampaignSelection((selected) => event.target.checked
+                      ? [...selected, campaign.id]
+                      : selected.filter((id) => id !== campaign.id))}
+                  />
+                  <span><strong>{campaign.name}</strong><small>{formatMetric("spend", campaign.metrics.spend, currency)} investidos</small></span>
+                </label>
+              ))}
+          </div>
+          {!data?.campaigns.length ? <p className="pj-muted">Atualize os dados para carregar as campanhas disponíveis.</p> : null}
+          <div className="pj-actions pj-actions-between">
+            <button
+              type="button"
+              disabled={!config.metric_campaign_filters?.[filterMetric]?.length}
+              onClick={() => {
+                patch({
+                  metric_campaign_filters: Object.fromEntries(
+                    Object.entries(config.metric_campaign_filters ?? {}).filter(([metric]) => metric !== filterMetric),
+                  ),
+                });
+                setFilterMetric("");
+              }}
+            >
+              Limpar filtro
+            </button>
+            <button
+              type="button"
+              className="primary"
+              disabled={!campaignSelection.length}
+              onClick={() => {
+                patch({
+                  metric_campaign_filters: {
+                    ...(config.metric_campaign_filters ?? {}),
+                    [filterMetric]: campaignSelection,
+                  },
+                });
+                setFilterMetric("");
+              }}
+            >
+              Aplicar filtro
+            </button>
+          </div>
+        </Dialog>
+      ) : null}
       {dates && (
         <Dialog title="Período da análise" close={() => setDates(false)} busy={busy}>
           <label>

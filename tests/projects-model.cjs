@@ -29,6 +29,16 @@ try {
   assert.equal(configSchema.safeParse(config).success, true);
   assert.equal(configSchema.safeParse({ ...config, primary_metric: "purchases" }).success, false);
   assert.equal(configSchema.safeParse({ ...config, metrics: ["spend", "spend"] }).success, false);
+  const configured = {
+    ...config,
+    featured_metrics: ["messages"],
+    metric_goals: { messages: { type: "target", value: 80, cadence: "monthly", autoRenew: true } },
+    metric_campaign_filters: { messages: ["123456"] },
+    metric_aliases: { copy_messages_demo: "messages" },
+    metric_order: [...config.metric_order, "copy_messages_demo"],
+  };
+  assert.equal(configSchema.safeParse(configured).success, true);
+  assert.equal(configSchema.safeParse({ ...configured, featured_metrics: ["missing"] }).success, false);
   console.log("PASS: configuração explícita de KPI, períodos e validação do documento");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
