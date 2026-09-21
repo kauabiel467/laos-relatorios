@@ -37,6 +37,7 @@ export interface ProgressMetricCardProps {
   series?: MetricSeries[];
   defaultIndex?: number;
   size?: CardSize;
+  showChart?: boolean;
   showStats?: boolean;
   valueFormatter?: (value: number) => string;
   dateFormatter?: (date: string) => string;
@@ -83,6 +84,7 @@ export default function ProgressMetricCard({
   series,
   defaultIndex,
   size = "sm",
+  showChart = true,
   showStats = true,
   valueFormatter = formatCompact,
   dateFormatter = (date) => date,
@@ -134,6 +136,7 @@ export default function ProgressMetricCard({
   const classNames = [
     styles.card,
     styles[size],
+    !showChart ? styles.chartless : "",
     featured ? styles.featured : "",
     highlighted ? styles.highlighted : "",
     className,
@@ -192,20 +195,22 @@ export default function ProgressMetricCard({
             </div>
           ) : null}
         </div>
-        <div className={styles.chartArea}>
-          <div className={styles.dotPattern} aria-hidden="true" />
-          <div className={styles.chartHeader}>
-            <span><i aria-hidden="true" /> Evolução diária</span>
-            <ViewToggle value={view} onChange={setView} />
+        {showChart ? (
+          <div className={styles.chartArea}>
+            <div className={styles.dotPattern} aria-hidden="true" />
+            <div className={styles.chartHeader}>
+              <span><i aria-hidden="true" /> Evolução diária</span>
+              <ViewToggle value={view} onChange={setView} />
+            </div>
+            <MetricChart
+              series={chartSeries}
+              view={view}
+              defaultIndex={defaultIndex}
+              valueFormatter={valueFormatter}
+              dateFormatter={dateFormatter}
+            />
           </div>
-          <MetricChart
-            series={chartSeries}
-            view={view}
-            defaultIndex={defaultIndex}
-            valueFormatter={valueFormatter}
-            dateFormatter={dateFormatter}
-          />
-        </div>
+        ) : null}
       </div>
 
       <footer className={styles.footer}>

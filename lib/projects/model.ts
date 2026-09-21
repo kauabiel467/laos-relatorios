@@ -72,6 +72,7 @@ export interface AnalysisConfig {
   custom_metrics?: CustomMetricDefinition[];
   metric_order?: string[];
   metric_sizes?: Record<string, MetricSize>;
+  metric_charts?: Record<string, boolean>;
   metric_aliases?: Record<string, MetricKey>;
   featured_metrics?: string[];
   metric_goals?: Record<string, MetricGoal>;
@@ -264,6 +265,7 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
     custom_metrics: [],
     metric_order: [...t.metrics],
     metric_sizes: {},
+    metric_charts: {},
     metric_aliases: {},
     featured_metrics: [],
     metric_goals: {},
@@ -290,6 +292,9 @@ export function normalizeAnalysisConfig(
     ...value,
     primary_metric: primary,
     featured_metrics: (value.featured_metrics ?? []).filter((id) => allowedMetricIds.has(id)),
+    metric_charts: Object.fromEntries(
+      Object.entries(value.metric_charts ?? {}).filter(([id]) => allowedMetricIds.has(id)),
+    ),
     metric_goals: Object.fromEntries(
       Object.entries(value.metric_goals ?? {}).filter(([id]) => allowedMetricIds.has(id)),
     ),

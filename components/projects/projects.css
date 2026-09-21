@@ -3672,6 +3672,16 @@
   font-size: 13px !important;
 }
 
+.projects .pj-progress-metric-item .pj-metric-controls button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
 .projects .pj-progress-metric-item .pj-metric-controls button:hover,
 .projects .pj-progress-metric-item .pj-metric-controls button.is-active {
   background: var(--pj-primary-soft) !important;
@@ -4038,6 +4048,7 @@
 /* Rich metric cards used by dashboards and client reports. */
 .projects .pj-metric-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: var(--pj-space-5);
 }
 
@@ -5609,6 +5620,7 @@
 
 .projects .pj-analysis-layout.editing .pj-metric-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
+  align-items: start;
 }
 
 .projects .pj-analysis-layout.editing .pj-progress-metric-item.size-wide {

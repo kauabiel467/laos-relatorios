@@ -66,6 +66,7 @@ export const configSchema = z
     metric_sizes: z
       .record(z.string().max(80), z.enum(["compact", "wide", "full"]))
       .optional(),
+    metric_charts: z.record(z.string().max(80), z.boolean()).optional(),
     metric_aliases: z
       .record(z.string().regex(/^copy_[a-z0-9_-]{4,70}$/i), metricKey)
       .refine((aliases) => Object.keys(aliases).length <= 12, "Use no máximo 12 cópias de métricas.")
@@ -144,6 +145,8 @@ export const configSchema = z
       ctx.addIssue({ code: "custom", message: "A ordem das métricas é inválida." });
     if (c.featured_metrics?.some((metric) => !allowedOrder.has(metric)))
       ctx.addIssue({ code: "custom", message: "Há destaques para métricas inexistentes." });
+    if (Object.keys(c.metric_charts ?? {}).some((metric) => !allowedOrder.has(metric)))
+      ctx.addIssue({ code: "custom", message: "Há preferências de gráfico para métricas inexistentes." });
     if (Object.keys(c.metric_goals ?? {}).some((metric) => !allowedOrder.has(metric)))
       ctx.addIssue({ code: "custom", message: "Há metas para métricas inexistentes." });
     if (Object.keys(c.metric_campaign_filters ?? {}).some((metric) => !allowedOrder.has(metric)))

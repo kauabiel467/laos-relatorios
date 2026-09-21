@@ -19,6 +19,12 @@
 .md { min-height: 340px; }
 .lg { min-height: 390px; }
 
+.card.chartless,
+.chartless.md,
+.chartless.lg {
+  min-height: 300px;
+}
+
 .featured {
   border-color: color-mix(in srgb, var(--metric-accent) 48%, var(--pj-border));
   box-shadow:
@@ -160,6 +166,19 @@
 .sm .body { grid-template-columns: minmax(220px, 0.95fr) minmax(220px, 1.05fr); }
 .md .body { grid-template-columns: minmax(190px, 0.72fr) minmax(280px, 1.28fr); padding-left: 28px; }
 .lg .body { grid-template-columns: minmax(220px, 0.68fr) minmax(340px, 1.32fr); padding-left: 32px; }
+
+.chartless .body,
+.chartless.sm .body,
+.chartless.md .body,
+.chartless.lg .body {
+  grid-template-columns: minmax(0, 1fr);
+  padding: 0 24px;
+}
+
+.chartless .valueArea {
+  justify-content: flex-start;
+  padding: 26px 0 22px;
+}
 
 .valueArea {
   position: relative;
@@ -427,6 +446,12 @@
     min-height: 500px;
   }
 
+  .card.chartless,
+  .chartless.md,
+  .chartless.lg {
+    min-height: 320px;
+  }
+
   .body,
   .sm .body,
   .md .body,
@@ -434,6 +459,14 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto minmax(190px, 1fr);
     padding: 8px 0 0;
+  }
+
+  .chartless .body,
+  .chartless.sm .body,
+  .chartless.md .body,
+  .chartless.lg .body {
+    grid-template-rows: auto;
+    padding: 0 20px;
   }
 
   .valueArea {

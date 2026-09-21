@@ -250,7 +250,7 @@ export function AnalysisView({
       delete sizes[current];
     }
     const moveRecordKey = <T,>(record: Record<string, T> | undefined) => {
-      if (!record?.[current]) return record ?? {};
+      if (!record || !Object.prototype.hasOwnProperty.call(record, current)) return record ?? {};
       const moved = { ...record, [next]: record[current] };
       delete moved[current];
       return moved;
@@ -263,6 +263,7 @@ export function AnalysisView({
         metric === current ? next : metric,
       ),
       metric_sizes: sizes,
+      metric_charts: moveRecordKey(config.metric_charts),
       featured_metrics: (config.featured_metrics ?? []).map((metric) => metric === current ? next : metric),
       metric_goals: moveRecordKey(config.metric_goals),
       metric_campaign_filters: moveRecordKey(config.metric_campaign_filters),
@@ -304,6 +305,9 @@ export function AnalysisView({
       metric_sizes: Object.fromEntries(
         Object.entries(config.metric_sizes ?? {}).filter(([metric]) => metric !== id),
       ),
+      metric_charts: Object.fromEntries(
+        Object.entries(config.metric_charts ?? {}).filter(([metric]) => metric !== id),
+      ),
       featured_metrics: (config.featured_metrics ?? []).filter((metric) => metric !== id),
       metric_goals: Object.fromEntries(
         Object.entries(config.metric_goals ?? {}).filter(([metric]) => metric !== id),
@@ -326,6 +330,10 @@ export function AnalysisView({
         ...(config.metric_sizes ?? {}),
         [copyId]: config.metric_sizes?.[id] ?? "compact",
       },
+      metric_charts: {
+        ...(config.metric_charts ?? {}),
+        [copyId]: config.metric_charts?.[id] ?? true,
+      },
     });
     setSelectedMetric(copyId);
   };
@@ -336,6 +344,12 @@ export function AnalysisView({
         ? featured.filter((metric) => metric !== id)
         : [...featured, id],
     });
+  };
+  const toggleMetricChart = (id: string) => {
+    const charts = { ...(config.metric_charts ?? {}) };
+    if (charts[id] === false) delete charts[id];
+    else charts[id] = false;
+    patch({ metric_charts: charts });
   };
   const openMetricGoal = (id: string) => {
     setGoalMetric(id);
@@ -767,6 +781,7 @@ export function AnalysisView({
               const delta = metricChange(value, previous);
               const savedSize = config.metric_sizes?.[id] ?? "compact";
               const size = resizePreview?.id === id ? resizePreview.size : savedSize;
+              const showChart = config.metric_charts?.[id] !== false;
               const formatted = builtIn
                 ? formatMetric(builtIn, value, currency)
                 : formatCustomMetric(custom!, value, currency);
@@ -870,6 +885,7 @@ export function AnalysisView({
                     accent={accent}
                     data={seriesData}
                     size={cardSize}
+                    showChart={showChart}
                     featured={id === config.primary_metric}
                     highlighted={(config.featured_metrics ?? []).includes(id)}
                     goal={config.metric_goals?.[id] && value != null ? (() => {
@@ -940,6 +956,19 @@ export function AnalysisView({
                             ⌕
                           </button>
                         ) : null}
+                        <button
+                          className={showChart ? "is-active" : ""}
+                          aria-label={`${showChart ? "Ocultar" : "Exibir"} gráfico de ${definition.label}`}
+                          aria-pressed={showChart}
+                          title={showChart ? "Ocultar gráfico" : "Exibir gráfico"}
+                          onClick={() => toggleMetricChart(id)}
+                        >
+                          <svg viewBox="0 0 20 20" aria-hidden="true">
+                            <path d="M3 16V4m0 12h14" />
+                            <path d="m5 12 3-4 3 3 4-6" />
+                            {!showChart ? <path d="M3 3l14 14" /> : null}
+                          </svg>
+                        </button>
                         <button
                           aria-label={`Alterar tamanho de ${definition.label}`}
                           title="Alternar entre compacto, largo e largura total"

@@ -32,6 +32,7 @@ try {
   const configured = {
     ...config,
     featured_metrics: ["messages"],
+    metric_charts: { messages: false },
     metric_goals: { messages: { type: "target", value: 80, cadence: "monthly", autoRenew: true } },
     metric_campaign_filters: { messages: ["123456"] },
     metric_aliases: { copy_messages_demo: "messages" },
@@ -39,6 +40,8 @@ try {
   };
   assert.equal(configSchema.safeParse(configured).success, true);
   assert.equal(configSchema.safeParse({ ...configured, featured_metrics: ["missing"] }).success, false);
+  assert.equal(configSchema.safeParse({ ...configured, metric_charts: { missing: false } }).success, false);
+  assert.deepEqual(model.normalizeAnalysisConfig({ ...configured, metric_charts: { messages: false, missing: false } }).metric_charts, { messages: false });
   console.log("PASS: configuração explícita de KPI, períodos e validação do documento");
 } finally {
   fs.rmSync(dir, { recursive: true, force: true });
