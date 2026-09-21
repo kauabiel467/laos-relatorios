@@ -5578,3 +5578,150 @@
     transition: none;
   }
 }
+
+/* Keep the report canvas bounded while the visual editor is open. */
+.projects .pj-analysis {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.projects .pj-analysis-layout,
+.projects .pj-analysis-layout.editing {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.projects .pj-analysis-layout.editing {
+  grid-template-columns: minmax(220px, 260px) minmax(0, 1fr);
+  align-items: start;
+}
+
+.projects .pj-analysis-layout.editing .pj-document,
+.projects .pj-analysis-layout.editing .pj-section,
+.projects .pj-analysis-layout.editing .pj-metric-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.projects .pj-analysis-layout.editing .pj-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
+}
+
+.projects .pj-progress-metric-item.is-dragging {
+  opacity: 0.48;
+  transform: scale(0.985);
+}
+
+.projects .pj-drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.projects .pj-progress-metric-item.is-dragging .pj-drag-handle {
+  cursor: grabbing;
+}
+
+.projects .pj-progress-metric-item.is-drop-target {
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--pj-primary) 42%, transparent),
+    0 18px 42px color-mix(in srgb, var(--pj-primary) 14%, transparent);
+}
+
+.projects .pj-progress-metric-item.is-drop-target::before {
+  position: absolute;
+  z-index: 20;
+  top: -8px;
+  right: 12px;
+  left: 12px;
+  height: 4px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pj-primary);
+  content: "";
+}
+
+.projects .pj-resize-handle {
+  position: absolute;
+  z-index: 12;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--pj-surface-raised) 90%, transparent);
+  color: var(--pj-primary);
+  box-shadow: 0 4px 14px rgb(15 23 42 / 0.14);
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.projects .pj-resize-handle:hover,
+.projects .pj-progress-metric-item.is-resizing .pj-resize-handle {
+  background: var(--pj-primary);
+  color: white;
+}
+
+.projects .pj-progress-metric-item[data-resize-preview="wide"],
+.projects .pj-progress-metric-item[data-resize-preview="full"] {
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pj-primary) 28%, transparent);
+}
+
+.projects .pj-progress-metric-item[data-resize-preview]::after {
+  position: absolute;
+  z-index: 14;
+  right: 44px;
+  bottom: 7px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--pj-text);
+  color: var(--pj-surface-raised);
+  content: "Tamanho " attr(data-resize-preview);
+  font-size: 9px;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+.projects .pj-progress-metric-item .pj-metric-controls {
+  max-width: calc(100% - 8px);
+  overflow-x: auto;
+  overscroll-behavior-inline: contain;
+  scrollbar-width: thin;
+}
+
+@media (max-width: 1400px) {
+  .projects .pj-analysis-layout.editing .pj-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .projects .pj-analysis-layout.editing .pj-progress-metric-item,
+  .projects .pj-analysis-layout.editing .pj-progress-metric-item.size-wide,
+  .projects .pj-analysis-layout.editing .pj-progress-metric-item.size-full {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 900px) {
+  .projects .pj-analysis-layout.editing {
+    display: block;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects .pj-progress-metric-item {
+    transition: none;
+  }
+}
+
+@media print {
+  .projects .pj-resize-handle {
+    display: none !important;
+  }
+}

@@ -418,6 +418,49 @@
   .chartTooltip { background: var(--pj-surface-raised, #fff); backdrop-filter: none; }
 }
 
+@container (max-width: 620px) {
+  .card,
+  .md,
+  .lg {
+    min-height: 500px;
+  }
+
+  .body,
+  .sm .body,
+  .md .body,
+  .lg .body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(190px, 1fr);
+    padding: 8px 0 0;
+  }
+
+  .valueArea {
+    padding: 18px 20px 10px;
+  }
+
+  .total,
+  .sm .total,
+  .lg .total {
+    font-size: clamp(2.5rem, 13cqi, 4.6rem);
+  }
+
+  .chartArea {
+    min-height: 190px;
+  }
+
+  .footer,
+  .md .footer,
+  .lg .footer {
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 12px 20px;
+  }
+
+  .stats {
+    justify-content: flex-start;
+  }
+}
+
 @media print {
   .card,
   .md,

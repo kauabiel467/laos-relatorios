@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import {
   METRICS,
   SECTIONS,
@@ -142,6 +142,8 @@ export function AnalysisView({
     [copyError, setCopyError] = useState(""),
     [link, setLink] = useState(""),
     [draggedMetric, setDraggedMetric] = useState(""),
+    [dropTargetMetric, setDropTargetMetric] = useState(""),
+    [resizingMetric, setResizingMetric] = useState(""),
     [customMetricOpen, setCustomMetricOpen] = useState(false),
     [editingCustomId, setEditingCustomId] = useState(""),
     [customMetric, setCustomMetric] = useState(defaultCustomMetric()),
@@ -342,12 +344,15 @@ export function AnalysisView({
     setCampaignSearch("");
     setCampaignSelection(config.metric_campaign_filters?.[id] ?? []);
   };
-  const reorderMetric = (target: string) => {
-    if (!draggedMetric || draggedMetric === target) return;
-    const next = metricOrder.filter((metric) => metric !== draggedMetric);
-    next.splice(next.indexOf(target), 0, draggedMetric);
+  const reorderMetric = (target: string, source = draggedMetric) => {
+    if (!source || source === target) return;
+    const targetIndex = metricOrder.indexOf(target);
+    if (targetIndex < 0) return;
+    const next = metricOrder.filter((metric) => metric !== source);
+    next.splice(targetIndex, 0, source);
     patch({ metric_order: next });
     setDraggedMetric("");
+    setDropTargetMetric("");
   };
   const resizeMetric = (id: string) => {
     const current = config.metric_sizes?.[id] ?? "compact";
@@ -356,6 +361,83 @@ export function AnalysisView({
     patch({
       metric_sizes: { ...(config.metric_sizes ?? {}), [id]: next },
     });
+  };
+  const startMetricDrag = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    id: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    let active = false;
+    let target = "";
+    setSelectedMetric(id);
+    const onMove = (pointerEvent: PointerEvent) => {
+      const distance = Math.hypot(
+        pointerEvent.clientX - startX,
+        pointerEvent.clientY - startY,
+      );
+      if (!active && distance < 6) return;
+      active = true;
+      pointerEvent.preventDefault();
+      setDraggedMetric(id);
+      const targetCard = document
+        .elementFromPoint(pointerEvent.clientX, pointerEvent.clientY)
+        ?.closest<HTMLElement>("[data-metric-id]");
+      const nextTarget = targetCard?.dataset.metricId ?? "";
+      target = nextTarget && nextTarget !== id ? nextTarget : "";
+      setDropTargetMetric(target);
+    };
+    const finish = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      if (active && target) reorderMetric(target, id);
+      else {
+        setDraggedMetric("");
+        setDropTargetMetric("");
+      }
+    };
+    window.addEventListener("pointermove", onMove, { passive: false });
+    window.addEventListener("pointerup", finish, { once: true });
+    window.addEventListener("pointercancel", finish, { once: true });
+  };
+  const startMetricResize = (
+    event: ReactPointerEvent<HTMLButtonElement>,
+    id: string,
+  ) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const startX = event.clientX;
+    const wrapper = event.currentTarget.closest<HTMLElement>(".pj-progress-metric-item");
+    const sizes: MetricSize[] = ["compact", "wide", "full"];
+    const current = config.metric_sizes?.[id] ?? "compact";
+    const currentIndex = sizes.indexOf(current);
+    let preview = current;
+    setSelectedMetric(id);
+    setResizingMetric(id);
+    const onMove = (pointerEvent: PointerEvent) => {
+      const delta = pointerEvent.clientX - startX;
+      const step = delta > 24 ? 1 : delta < -24 ? -1 : 0;
+      preview = sizes[Math.max(0, Math.min(sizes.length - 1, currentIndex + step))];
+      if (wrapper) wrapper.dataset.resizePreview = preview;
+    };
+    const finish = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", finish);
+      if (wrapper) delete wrapper.dataset.resizePreview;
+      setResizingMetric("");
+      if (preview !== current) {
+        patch({
+          metric_sizes: { ...(config.metric_sizes ?? {}), [id]: preview },
+        });
+      }
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", finish, { once: true });
+    window.addEventListener("pointercancel", finish, { once: true });
   };
   const addBuiltInMetric = (metric: MetricKey) => {
     if (replacingMetric) {
@@ -663,17 +745,32 @@ export function AnalysisView({
                       : "Piora";
               return (
                 <div
-                  className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""} ${selectedMetric === id ? "is-selected" : ""}`}
+                  className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""} ${selectedMetric === id ? "is-selected" : ""} ${draggedMetric === id ? "is-dragging" : ""} ${dropTargetMetric === id ? "is-drop-target" : ""} ${resizingMetric === id ? "is-resizing" : ""}`}
                   key={id}
+                  data-metric-id={id}
+                  data-size={size}
                   onClick={(event) => {
                     if (!editor || preview) return;
                     if ((event.target as HTMLElement).closest("button, select, input, a")) return;
                     setSelectedMetric(id);
                   }}
                   onDragOver={(event) => {
-                    if (editor && !preview) event.preventDefault();
+                    if (editor && !preview && draggedMetric && draggedMetric !== id) {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setDropTargetMetric(id);
+                    }
                   }}
-                  onDrop={() => reorderMetric(id)}
+                  onDragLeave={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node)) {
+                      setDropTargetMetric((current) => current === id ? "" : current);
+                    }
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const source = event.dataTransfer.getData("application/x-laos-metric") || draggedMetric;
+                    reorderMetric(id, source);
+                  }}
                 >
                   <ProgressMetricCard
                     title={definition.label}
@@ -716,11 +813,9 @@ export function AnalysisView({
                       <div className="pj-metric-controls" role="toolbar" aria-label={`Editar ${definition.label}`}>
                         <button
                           className="pj-drag-handle"
-                          draggable
                           aria-label={`Arrastar ${definition.label}`}
                           title="Segure e arraste para reordenar"
-                          onDragStart={() => setDraggedMetric(id)}
-                          onDragEnd={() => setDraggedMetric("")}
+                          onPointerDown={(event) => startMetricDrag(event, id)}
                         >
                           ⠿
                         </button>
@@ -778,6 +873,17 @@ export function AnalysisView({
                       </div>
                     ) : undefined}
                   />
+                  {editor && !preview && selectedMetric === id ? (
+                    <button
+                      type="button"
+                      className="pj-resize-handle"
+                      aria-label={`Redimensionar ${definition.label}`}
+                      title="Arraste para a esquerda ou direita para alterar o tamanho"
+                      onPointerDown={(event) => startMetricResize(event, id)}
+                    >
+                      <span aria-hidden="true">↘</span>
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
