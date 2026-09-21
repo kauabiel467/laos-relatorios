@@ -21,6 +21,7 @@ import { ProjectAccessPanel } from "./project-access-panel";
 import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
 import { Dialog, Empty, FieldMessage, LoadingState, MetaMark, Toast, shortDate } from "./ui";
+import { WorkspaceNavIcon, type WorkspaceNavIconName } from "./workspace-nav-icon";
 import "./projects.css";
 const viewLabels: Record<WorkspaceView, string> = {
   projects: "Projetos",
@@ -94,6 +95,7 @@ export function ProjectsWorkspace({
     [accountSearch, setAccountSearch] = useState(""),
     [account, setAccount] = useState(""),
     [goalId, setGoalId] = useState(""),
+    [sidebarOpen, setSidebarOpen] = useState(false),
     [theme, setTheme] = useState<"dark" | "light">("dark");
   const busyRef = useRef(false);
   const createMenuRef = useRef<HTMLDetailsElement>(null);
@@ -230,6 +232,7 @@ export function ProjectsWorkspace({
     setSearch("");
     setNotice("");
     setFormError("");
+    setSidebarOpen(false);
   };
   useEffect(() => setActiveView(initialView), [initialView]);
   useEffect(() => {
@@ -641,78 +644,146 @@ export function ProjectsWorkspace({
     data.projectMetaConnection?.connection_status === "connected" &&
     ["overview", "dashboards", "reports"].includes(view);
   const primaryDocumentKind = view === "reports" ? "report" : "dashboard";
+  const globalNavigation: Array<{
+    label: string;
+    icon: WorkspaceNavIconName;
+    active: boolean;
+    values: Record<string, string>;
+    visible?: boolean;
+  }> = [
+    { label: "Visão geral", icon: "overview", active: !cid && view === "overview", values: { view: "overview" } },
+    { label: "Projetos", icon: "projects", active: view === "projects" || (Boolean(cid) && view !== "templates"), values: {} },
+    { label: "Templates", icon: "templates", active: view === "templates", values: { view: "templates" }, visible: data.isStaff },
+    { label: "Equipe", icon: "team", active: !cid && view === "team", values: { view: "team" }, visible: data.isStaff },
+  ];
+  const projectNavigation: Array<{
+    label: string;
+    icon: WorkspaceNavIconName;
+    view: WorkspaceView;
+    visible?: boolean;
+  }> = [
+    { label: "Visão geral", icon: "overview", view: "overview" },
+    { label: "Dashboards", icon: "dashboards", view: "dashboards" },
+    { label: "Relatórios", icon: "reports", view: "reports" },
+    { label: "Integrações", icon: "integrations", view: "integrations", visible: staff },
+    { label: "Linha do tempo", icon: "timeline", view: "timeline" },
+    { label: "Metas", icon: "goals", view: "goals" },
+    { label: "Dados do projeto", icon: "settings", view: "settings", visible: staff },
+    { label: "Equipe e acesso", icon: "access", view: "access", visible: staff },
+  ];
   return (
-    <div className={`projects theme-${theme}`}>
+    <div className={`projects pj-mosaic-shell theme-${theme}`}>
       {isNavigating ? (
         <div className="pj-route-progress" role="status" aria-label="Carregando próxima tela">
           <span aria-hidden="true" />
         </div>
       ) : null}
-      <header className="pj-topnav">
+      <a className="pj-skip-link" href="#workspace-main">Pular para o conteúdo</a>
+      {sidebarOpen ? (
         <button
-          className="pj-brand"
-          aria-label="Ir para meus projetos"
-          onClick={() => navigate({})}
-        >
-          laos
-          <span className="pj-brand-sub">relatórios</span>
-        </button>
-        <nav className="pj-global-nav" aria-label="Navegação global">
-          <button
-            className={
-              view === "projects" || (Boolean(cid) && view !== "templates")
-                ? "active"
-                : ""
-            }
-            aria-current={
-              view === "projects" || (Boolean(cid) && view !== "templates")
-                ? "page"
-                : undefined
-            }
-            onClick={() => navigate({})}
-          >
-            Projetos
-          </button>
-          <button
-            className={!cid && view === "overview" ? "active" : ""}
-            aria-current={!cid && view === "overview" ? "page" : undefined}
-            onClick={() => navigate({ view: "overview" })}
-          >
-            Overview
-          </button>
-          {data.isStaff && (
-            <button
-              className={view === "templates" ? "active" : ""}
-              aria-current={view === "templates" ? "page" : undefined}
-              onClick={() => navigate({ view: "templates" })}
-            >
-              Templates
-            </button>
-          )}
-          {data.isStaff && (
-            <button
-              className={!cid && view === "team" ? "active" : ""}
-              aria-current={!cid && view === "team" ? "page" : undefined}
-              onClick={() => navigate({ view: "team" })}
-            >
-              Equipe
-            </button>
-          )}
-        </nav>
-        {project ? (
-          <button
-            className="pj-active-project"
-            title={`Abrir visão geral de ${project.name}`}
-            aria-label={`Projeto ativo: ${project.name}. Abrir visão geral.`}
-            onClick={() => navigate({ project: cid })}
-          >
-            <span className="pj-active-project-dot" aria-hidden="true" />
-            <span>
-              <small>Projeto ativo</small>
-              <strong>{project.name}</strong>
+          className="pj-sidebar-backdrop"
+          aria-label="Fechar menu"
+          onClick={() => setSidebarOpen(false)}
+        />
+      ) : null}
+      <aside
+        id="workspace-sidebar"
+        className={`pj-sidebar ${sidebarOpen ? "is-open" : ""}`}
+        aria-label="Navegação principal"
+      >
+        <div className="pj-sidebar-header">
+          <button className="pj-brand" aria-label="Ir para meus projetos" onClick={() => navigate({})}>
+            <span className="pj-brand-mark" aria-hidden="true">L</span>
+            <span className="pj-brand-copy">
+              <strong>laos</strong>
+              <small>relatórios</small>
             </span>
           </button>
-        ) : null}
+          <button
+            className="pj-sidebar-close"
+            aria-label="Fechar menu"
+            onClick={() => setSidebarOpen(false)}
+          >
+            <WorkspaceNavIcon name="close" />
+          </button>
+        </div>
+
+        <div className="pj-sidebar-scroll">
+          <span className="pj-sidebar-label">Workspace</span>
+          <nav className="pj-global-nav" aria-label="Navegação do workspace">
+            {globalNavigation
+              .filter((item) => item.visible !== false)
+              .map((item) => (
+                <button
+                  key={item.label}
+                  className={item.active ? "active" : ""}
+                  aria-current={item.active ? "page" : undefined}
+                  onClick={() => navigate(item.values)}
+                >
+                  <WorkspaceNavIcon name={item.icon} />
+                  <span>{item.label}</span>
+                </button>
+              ))}
+          </nav>
+
+          {project ? (
+            <div className="pj-sidebar-project">
+              <span className="pj-sidebar-label">Projeto ativo</span>
+              <button
+                className="pj-active-project"
+                title={`Abrir visão geral de ${project.name}`}
+                aria-label={`Projeto ativo: ${project.name}. Abrir visão geral.`}
+                onClick={() => navigate({ project: cid })}
+              >
+                <span className="pj-project-avatar" aria-hidden="true">
+                  {project.logo_url ? <img src={project.logo_url} alt="" /> : project.name.slice(0, 1).toUpperCase()}
+                </span>
+                <span>
+                  <strong>{project.name}</strong>
+                  <small>{project.segment || "Projeto de mídia"}</small>
+                </span>
+              </button>
+              <nav className="pj-sidebar-project-nav" aria-label={`Áreas de ${project.name}`}>
+                {projectNavigation
+                  .filter((item) => item.visible !== false)
+                  .map((item) => (
+                    <button
+                      key={item.view}
+                      className={view === item.view ? "active" : ""}
+                      aria-current={view === item.view ? "page" : undefined}
+                      onClick={() => navigate({ project: cid, view: item.view })}
+                    >
+                      <WorkspaceNavIcon name={item.icon} />
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+              </nav>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="pj-sidebar-footer">
+          <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
+          <span className="pj-sidebar-user">
+            <strong>{data.userName || "Minha conta"}</strong>
+            <small>{workspaceLabel}</small>
+          </span>
+        </div>
+      </aside>
+      <header className="pj-topnav">
+        <button
+          className="pj-mobile-menu"
+          aria-label="Abrir menu"
+          aria-controls="workspace-sidebar"
+          aria-expanded={sidebarOpen}
+          onClick={() => setSidebarOpen(true)}
+        >
+          <WorkspaceNavIcon name="menu" />
+        </button>
+        <div className="pj-topbar-context">
+          <strong>{pageTitle}</strong>
+          <span>{pageContext}</span>
+        </div>
         <div className="pj-account">
           <button
             className="pj-theme-toggle"
@@ -726,9 +797,6 @@ export function ProjectsWorkspace({
               {theme === "dark" ? "Tema claro" : "Tema escuro"}
             </span>
           </button>
-          <span className="pj-small-avatar">
-            {data.userName.slice(0, 1).toUpperCase() || "L"}
-          </span>
           <span className="pj-workspace-name" title={`Workspace: ${workspaceLabel}`}>
             {workspaceLabel}
           </span>
@@ -746,6 +814,7 @@ export function ProjectsWorkspace({
           </button>
         </div>
       </header>
+      <div id="workspace-main" className="pj-main-slot">
       {notice && creating !== "project" && !onboardingValue && (
         <div className="pj-notice" role="alert">
           <div>
@@ -1610,6 +1679,7 @@ export function ProjectsWorkspace({
       <footer className="pj-footer">
         LAOS · Projetos, resultados e decisões.
       </footer>
+      </div>
       {team && <TeamSettingsModal
         open={team}
         teamId={selectedTeamId}

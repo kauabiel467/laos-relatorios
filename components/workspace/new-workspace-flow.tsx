@@ -63,17 +63,17 @@ export function NewWorkspaceFlow() {
   }
 
   return (
-    <div className="panel w-full max-w-3xl p-6 lg:p-8">
-      <div className="mb-8">
-        <div className="eyebrow mb-2">New Workspace</div>
-        <h1 className="text-3xl font-bold text-text">Crie sua equipe</h1>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">
+    <div className="onboarding-card">
+      <div className="onboarding-heading">
+        <div className="eyebrow">Novo workspace</div>
+        <h1>Crie sua equipe</h1>
+        <p>
           Configure o workspace inicial e convide as pessoas certas logo no primeiro acesso.
         </p>
       </div>
 
       {!teamCreated ? (
-        <section className="rounded-xl border border-border bg-bg p-5">
+        <section className="onboarding-section">
           <div className="mb-2 text-lg font-semibold text-text">Criar do zero</div>
           <p className="mb-4 text-sm leading-6 text-muted">
             Escolha um nome para o workspace da sua equipe e siga para os convites.
@@ -96,7 +96,7 @@ export function NewWorkspaceFlow() {
               disabled={loading || teamName.trim().length < 2}
               className="rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
             >
-              {loading ? "Criando..." : "Criar workspace"}
+              {loading ? "Criando…" : "Criar workspace"}
             </button>
           </div>
           <div className="mt-3 flex justify-end">
@@ -111,7 +111,7 @@ export function NewWorkspaceFlow() {
         </section>
       ) : (
         <div className="grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-          <section className="rounded-xl border border-border bg-bg p-5">
+          <section className="onboarding-section">
             <div className="mb-4 text-lg font-semibold text-text">Convide por e-mail</div>
             <div className="space-y-3">
               <label className="block text-sm text-muted">
@@ -152,7 +152,7 @@ export function NewWorkspaceFlow() {
                 disabled={loading || !inviteEmail.trim()}
                 className="w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:opacity-60"
               >
-                {loading ? "Enviando..." : "Enviar convite"}
+                {loading ? "Enviando…" : "Enviar convite"}
               </button>
               <button
                 type="button"
@@ -164,7 +164,7 @@ export function NewWorkspaceFlow() {
             </div>
           </section>
 
-          <section className="rounded-xl border border-border bg-bg p-5">
+          <section className="onboarding-section">
             <div className="mb-4 text-lg font-semibold text-text">Convites enviados</div>
             <div className="space-y-2">
               {invites.length ? (

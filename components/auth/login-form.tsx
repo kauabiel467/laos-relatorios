@@ -97,22 +97,22 @@ export function LoginForm({ supabaseReady, returnTo="/" }: LoginFormProps) {
   }
 
   return (
-    <div className="panel w-full max-w-md p-6">
-      <div className="mb-6">
-        <div className="eyebrow mb-2">LAOS Dashboard</div>
-        <h1 className="text-2xl font-bold text-text">Acesse sua conta</h1>
-        <p className="mt-2 text-sm leading-6 text-muted">
+    <div className="auth-card">
+      <div className="auth-card-heading">
+        <div className="eyebrow">Área segura</div>
+        <h1>Acesse sua conta</h1>
+        <p>
           Entre para gerenciar clientes, contas Meta e membros da equipe.
         </p>
       </div>
 
       {!supabaseReady ? (
-        <div className="mb-4 rounded-xl border border-yellow/30 bg-yellow/10 p-3 text-sm text-yellow-100">
-          Configure as variaveis do Supabase para ativar login.
+        <div className="auth-alert" role="alert">
+          Configure as variáveis do Supabase para ativar o login.
         </div>
       ) : null}
 
-      <div className="mb-4 grid grid-cols-2 rounded-xl border border-border bg-bg p-1">
+      <div className="auth-segmented" aria-label="Tipo de acesso">
         {[
           { key: "login", label: "Entrar" },
           { key: "signup", label: "Criar conta" }
@@ -122,8 +122,8 @@ export function LoginForm({ supabaseReady, returnTo="/" }: LoginFormProps) {
             type="button"
             onClick={() => setMode(item.key as "login" | "signup")}
             className={clsx(
-              "rounded-lg px-3 py-2 text-sm font-semibold transition",
-              mode === item.key ? "bg-blue text-white" : "text-muted hover:text-text"
+              "auth-segment",
+              mode === item.key && "active"
             )}
           >
             {item.label}
@@ -131,44 +131,53 @@ export function LoginForm({ supabaseReady, returnTo="/" }: LoginFormProps) {
         ))}
       </div>
 
-      <div className="space-y-3">
-        <input
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-          type="email"
-          placeholder="email@empresa.com"
-          className="w-full rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text outline-none transition focus:border-blue"
-        />
-        <input
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-          type="password"
-          placeholder={mode === "login" ? "Senha" : "Crie uma senha"}
-          className="w-full rounded-lg border border-border bg-bg px-3 py-3 text-sm text-text outline-none transition focus:border-blue"
-        />
+      <div className="auth-fields">
+        <label className="auth-field">
+          <span>E-mail</span>
+          <input
+            name="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            type="email"
+            autoComplete="email"
+            spellCheck={false}
+            placeholder="nome@empresa.com"
+          />
+        </label>
+        <label className="auth-field">
+          <span>Senha</span>
+          <input
+            name="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            type="password"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
+            placeholder={mode === "login" ? "Digite sua senha" : "Crie uma senha segura"}
+          />
+        </label>
         <button
           type="button"
           onClick={handlePasswordSubmit}
           disabled={loading || !email || !password || !supabaseReady}
-          className="w-full rounded-lg bg-blue px-4 py-3 text-sm font-semibold text-white transition hover:bg-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
+          className="auth-primary"
         >
-          {loading ? "Aguarde..." : mode === "login" ? "Entrar com senha" : "Criar conta"}
+          {loading ? "Aguarde…" : mode === "login" ? "Entrar com senha" : "Criar conta"}
         </button>
         <button
           type="button"
           onClick={handleEmailLink}
           disabled={loading || !email || !supabaseReady}
-          className="w-full rounded-lg border border-border px-4 py-3 text-sm font-semibold text-text transition hover:border-blue hover:text-text disabled:cursor-not-allowed disabled:opacity-60"
+          className="auth-secondary"
         >
           {mode === "login" ? "Entrar por e-mail" : "Criar acesso por e-mail"}
         </button>
       </div>
 
-      {feedback ? <div className="mt-4 rounded-xl border border-border bg-bg p-3 text-sm text-muted">{feedback}</div> : null}
+      {feedback ? <div className="auth-feedback" role="status" aria-live="polite">{feedback}</div> : null}
 
-      <div className="mt-4 rounded-xl border border-border bg-bg p-3 text-xs leading-5 text-muted">
-        Se aparecer limite de e-mail do Supabase, a correcao e feita no painel do projeto em Auth &gt; Email com um SMTP proprio. O login com senha continua sendo o caminho mais estavel no dia a dia.
-      </div>
+      <p className="auth-support-note">
+        Se o envio por e-mail atingir o limite do Supabase, o acesso com senha continua disponível.
+      </p>
     </div>
   );
 }
