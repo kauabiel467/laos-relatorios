@@ -3618,7 +3618,9 @@
   position: relative;
   min-width: 0;
   border-radius: 24px;
-  transition: box-shadow 160ms ease, transform 160ms ease;
+  transition:
+    box-shadow 160ms var(--pj-ease-out),
+    opacity 160ms var(--pj-ease-out);
 }
 
 .projects .pj-progress-metric-item.is-selected {
@@ -5609,9 +5611,20 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr));
 }
 
+.projects .pj-analysis-layout.editing .pj-progress-metric-item.size-wide {
+  grid-column: span 2;
+}
+
+.projects .pj-analysis-layout.editing .pj-progress-metric-item.size-full {
+  grid-column: 1 / -1;
+}
+
 .projects .pj-progress-metric-item.is-dragging {
-  opacity: 0.48;
-  transform: scale(0.985);
+  opacity: 0.94;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--pj-primary) 32%, transparent),
+    0 28px 64px rgb(15 23 42 / 0.24);
 }
 
 .projects .pj-drag-handle {
@@ -5642,6 +5655,26 @@
   content: "";
 }
 
+.projects .pj-progress-metric-item.is-drop-target::after {
+  position: absolute;
+  z-index: 21;
+  top: 12px;
+  right: 12px;
+  bottom: auto;
+  width: auto;
+  height: auto;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--pj-primary);
+  color: white;
+  content: "Soltar aqui";
+  font-size: 10px;
+  font-weight: 750;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .projects .pj-resize-handle {
   position: absolute;
   z-index: 12;
@@ -5669,9 +5702,11 @@
   color: white;
 }
 
-.projects .pj-progress-metric-item[data-resize-preview="wide"],
-.projects .pj-progress-metric-item[data-resize-preview="full"] {
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--pj-primary) 28%, transparent);
+.projects .pj-progress-metric-item.is-resizing {
+  z-index: 11;
+  box-shadow:
+    0 0 0 4px color-mix(in srgb, var(--pj-primary) 26%, transparent),
+    0 22px 52px rgb(15 23 42 / 0.18);
 }
 
 .projects .pj-progress-metric-item[data-resize-preview]::after {

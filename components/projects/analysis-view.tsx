@@ -1,6 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 import { useEffect, useState, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { flushSync } from "react-dom";
 import {
   METRICS,
   SECTIONS,
@@ -144,6 +145,7 @@ export function AnalysisView({
     [draggedMetric, setDraggedMetric] = useState(""),
     [dropTargetMetric, setDropTargetMetric] = useState(""),
     [resizingMetric, setResizingMetric] = useState(""),
+    [resizePreview, setResizePreview] = useState<{ id: string; size: MetricSize } | null>(null),
     [customMetricOpen, setCustomMetricOpen] = useState(false),
     [editingCustomId, setEditingCustomId] = useState(""),
     [customMetric, setCustomMetric] = useState(defaultCustomMetric()),
@@ -368,40 +370,105 @@ export function AnalysisView({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    const handle = event.currentTarget;
+    const wrapper = handle.closest<HTMLElement>(".pj-progress-metric-item");
+    if (!wrapper) return;
+    const pointerId = event.pointerId;
     const startX = event.clientX;
     const startY = event.clientY;
+    const sourceRect = wrapper.getBoundingClientRect();
     let active = false;
     let target = "";
+    let targetRect: DOMRect | null = null;
+    let offsetX = 0;
+    let offsetY = 0;
     setSelectedMetric(id);
-    const onMove = (pointerEvent: PointerEvent) => {
-      const distance = Math.hypot(
-        pointerEvent.clientX - startX,
-        pointerEvent.clientY - startY,
+    handle.setPointerCapture(pointerId);
+    const cleanupListeners = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", finish);
+      window.removeEventListener("pointercancel", cancel);
+      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
+    };
+    const cleanupStyles = () => {
+      wrapper.style.removeProperty("transform");
+      wrapper.style.removeProperty("transition");
+      wrapper.style.removeProperty("will-change");
+      wrapper.style.removeProperty("z-index");
+      wrapper.style.removeProperty("pointer-events");
+    };
+    const settle = (commit: boolean) => {
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      const endX = commit && targetRect ? targetRect.left - sourceRect.left : 0;
+      const endY = commit && targetRect ? targetRect.top - sourceRect.top : 0;
+      const complete = () => {
+        if (commit && target) flushSync(() => reorderMetric(target, id));
+        else {
+          setDraggedMetric("");
+          setDropTargetMetric("");
+        }
+        cleanupStyles();
+      };
+      if (reduceMotion) {
+        complete();
+        return;
+      }
+      const animation = wrapper.animate(
+        [
+          { transform: `translate3d(${offsetX}px, ${offsetY}px, 0) scale(0.985)`, opacity: 0.94 },
+          { transform: `translate3d(${endX}px, ${endY}px, 0) scale(${commit ? 0.985 : 1})`, opacity: 0.94 },
+        ],
+        { duration: 180, easing: "cubic-bezier(0.77, 0, 0.175, 1)", fill: "forwards" },
       );
+      let settled = false;
+      animation.addEventListener("finish", () => {
+        if (settled) return;
+        settled = true;
+        animation.cancel();
+        complete();
+      }, { once: true });
+      animation.addEventListener("cancel", () => {
+        if (settled) return;
+        settled = true;
+        complete();
+      }, { once: true });
+    };
+    const onMove = (pointerEvent: PointerEvent) => {
+      offsetX = pointerEvent.clientX - startX;
+      offsetY = pointerEvent.clientY - startY;
+      const distance = Math.hypot(offsetX, offsetY);
       if (!active && distance < 6) return;
-      active = true;
+      if (!active) {
+        active = true;
+        setDraggedMetric(id);
+        wrapper.style.transition = "none";
+        wrapper.style.willChange = "transform";
+        wrapper.style.zIndex = "40";
+        wrapper.style.pointerEvents = "none";
+      }
       pointerEvent.preventDefault();
-      setDraggedMetric(id);
+      wrapper.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0) scale(0.985)`;
       const targetCard = document
         .elementFromPoint(pointerEvent.clientX, pointerEvent.clientY)
         ?.closest<HTMLElement>("[data-metric-id]");
       const nextTarget = targetCard?.dataset.metricId ?? "";
       target = nextTarget && nextTarget !== id ? nextTarget : "";
+      targetRect = target ? targetCard!.getBoundingClientRect() : null;
       setDropTargetMetric(target);
     };
     const finish = () => {
-      window.removeEventListener("pointermove", onMove);
-      window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
-      if (active && target) reorderMetric(target, id);
-      else {
-        setDraggedMetric("");
-        setDropTargetMetric("");
-      }
+      cleanupListeners();
+      if (active) settle(Boolean(target && targetRect));
+      else cleanupStyles();
+    };
+    const cancel = () => {
+      cleanupListeners();
+      if (active) settle(false);
+      else cleanupStyles();
     };
     window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", finish, { once: true });
-    window.addEventListener("pointercancel", finish, { once: true });
+    window.addEventListener("pointercancel", cancel, { once: true });
   };
   const startMetricResize = (
     event: ReactPointerEvent<HTMLButtonElement>,
@@ -409,35 +476,52 @@ export function AnalysisView({
   ) => {
     event.preventDefault();
     event.stopPropagation();
+    const handle = event.currentTarget;
+    const pointerId = event.pointerId;
     const startX = event.clientX;
-    const wrapper = event.currentTarget.closest<HTMLElement>(".pj-progress-metric-item");
+    const wrapper = handle.closest<HTMLElement>(".pj-progress-metric-item");
     const sizes: MetricSize[] = ["compact", "wide", "full"];
     const current = config.metric_sizes?.[id] ?? "compact";
     const currentIndex = sizes.indexOf(current);
     let preview = current;
     setSelectedMetric(id);
     setResizingMetric(id);
-    const onMove = (pointerEvent: PointerEvent) => {
-      const delta = pointerEvent.clientX - startX;
-      const step = delta > 24 ? 1 : delta < -24 ? -1 : 0;
-      preview = sizes[Math.max(0, Math.min(sizes.length - 1, currentIndex + step))];
-      if (wrapper) wrapper.dataset.resizePreview = preview;
-    };
-    const finish = () => {
+    setResizePreview({ id, size: current });
+    handle.setPointerCapture(pointerId);
+    const cleanup = () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", finish);
-      window.removeEventListener("pointercancel", finish);
+      window.removeEventListener("pointercancel", cancel);
+      if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId);
       if (wrapper) delete wrapper.dataset.resizePreview;
       setResizingMetric("");
+      setResizePreview(null);
+    };
+    const onMove = (pointerEvent: PointerEvent) => {
+      pointerEvent.preventDefault();
+      const delta = pointerEvent.clientX - startX;
+      const step = delta > 24 ? 1 : delta < -24 ? -1 : 0;
+      const next = sizes[Math.max(0, Math.min(sizes.length - 1, currentIndex + step))];
+      if (next !== preview) {
+        preview = next;
+        setResizePreview({ id, size: preview });
+      }
+      if (wrapper) {
+        wrapper.dataset.resizePreview = preview === "compact" ? "compacto" : preview === "wide" ? "largo" : "completo";
+      }
+    };
+    const finish = () => {
+      cleanup();
       if (preview !== current) {
         patch({
           metric_sizes: { ...(config.metric_sizes ?? {}), [id]: preview },
         });
       }
     };
-    window.addEventListener("pointermove", onMove);
+    const cancel = () => cleanup();
+    window.addEventListener("pointermove", onMove, { passive: false });
     window.addEventListener("pointerup", finish, { once: true });
-    window.addEventListener("pointercancel", finish, { once: true });
+    window.addEventListener("pointercancel", cancel, { once: true });
   };
   const addBuiltInMetric = (metric: MetricKey) => {
     if (replacingMetric) {
@@ -681,7 +765,8 @@ export function AnalysisView({
                   ? customMetricValue(custom, data.previous)
                   : null;
               const delta = metricChange(value, previous);
-              const size = config.metric_sizes?.[id] ?? "compact";
+              const savedSize = config.metric_sizes?.[id] ?? "compact";
+              const size = resizePreview?.id === id ? resizePreview.size : savedSize;
               const formatted = builtIn
                 ? formatMetric(builtIn, value, currency)
                 : formatCustomMetric(custom!, value, currency);
