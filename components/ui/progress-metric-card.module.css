@@ -12,6 +12,7 @@
   background: var(--pj-surface-raised, #fff);
   color: var(--pj-text, #1c2b3d);
   box-shadow: var(--pj-shadow-sm, 0 8px 24px rgb(15 23 42 / 0.08));
+  container-type: inline-size;
   isolation: isolate;
 }
 
@@ -148,6 +149,7 @@
   min-height: 0;
   padding: 24px 0 0 24px;
 }
+.sm .body { grid-template-columns: minmax(220px, 0.95fr) minmax(220px, 1.05fr); }
 .md .body { grid-template-columns: minmax(190px, 0.72fr) minmax(280px, 1.28fr); padding-left: 28px; }
 .lg .body { grid-template-columns: minmax(220px, 0.68fr) minmax(340px, 1.32fr); padding-left: 32px; }
 
@@ -176,15 +178,15 @@
   display: block;
   overflow: hidden;
   color: var(--pj-text, #1c2b3d);
-  font-size: clamp(2.4rem, 4.7vw, 4.6rem);
+  font-size: clamp(2.2rem, 6.5cqi, 4rem);
   font-weight: 650;
   letter-spacing: -0.06em;
   line-height: 0.92;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.sm .total { font-size: clamp(2.25rem, 4vw, 3.5rem); }
-.lg .total { font-size: clamp(3.4rem, 6vw, 5.5rem); }
+.sm .total { font-size: clamp(1.9rem, 6cqi, 2.4rem); }
+.lg .total { font-size: clamp(3.4rem, 7cqi, 5.5rem); }
 .comparison {
   max-width: 19rem;
   margin-top: 7px;

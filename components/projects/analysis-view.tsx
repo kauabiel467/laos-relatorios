@@ -53,18 +53,6 @@ const metricUnitLabel = (unit: MetricUnit | undefined, currency: string) => {
   return "contagem";
 };
 
-const formatSyncTime = (value: string, timezone: string) => {
-  try {
-    return new Intl.DateTimeFormat("pt-BR", {
-      dateStyle: "short",
-      timeStyle: "short",
-      timeZone: timezone,
-    }).format(new Date(value));
-  } catch {
-    return new Date(value).toLocaleString("pt-BR");
-  }
-};
-
 function SectionHeading({
   title,
   description,
@@ -896,86 +884,75 @@ export function AnalysisView({
         </div>
       </div>
       <div className="pj-analysis-subbar">
-        <div className="pj-analysis-data-controls">
-          <span className="pj-control-label">Período e dados</span>
+        <div className="pj-analysis-period">
           <button
             className="pj-period-control"
             disabled={!editable || preview}
             onClick={() => setDates(true)}
           >
-            <span aria-hidden="true">▣</span>
+            <span aria-hidden="true">□</span>
             Alterar período
           </button>
-          {staff && !preview && editable && (
-            <>
+          <dl className="pj-period-summary" aria-label="Período da análise">
+            <div>
+              <dt>Período</dt>
+              <dd>{shortDate(effectiveSince)} — {shortDate(effectiveUntil)}</dd>
+            </div>
+            <div>
+              <dt>Comparação</dt>
+              <dd>
+                {config.comparison !== "none" && effectiveCompareSince && effectiveCompareUntil
+                  ? `${shortDate(effectiveCompareSince)} — ${shortDate(effectiveCompareUntil)}`
+                  : "Desativada"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+        {staff && !preview && editable && (
+          <div className="pj-analysis-actions">
+            <div className="pj-analysis-data-controls">
               <button disabled={busy} onClick={() => void action("refresh")}>
-                {busy ? "Atualizando…" : "↻ Atualizar dados"}
+                <span aria-hidden="true">↻</span>
+                {busy ? "Atualizando…" : "Atualizar dados"}
               </button>
               {doc.kind === "dashboard" && (
-                <label className="pj-check">
+                <label className="pj-check pj-auto-refresh">
                   <input
                     type="checkbox"
                     checked={auto}
                     onChange={(e) => setAuto(e.target.checked)}
                   />
-                  Atualizar a cada 5 min
+                  <span>
+                    Autoatualizar
+                    <small>A cada 5 min</small>
+                  </span>
                 </label>
               )}
-            </>
-          )}
-        </div>
-        <dl className="pj-trust-strip" aria-label="Contexto e origem dos dados">
-          <div>
-            <dt>Período atual</dt>
-            <dd>{shortDate(effectiveSince)} — {shortDate(effectiveUntil)}</dd>
-          </div>
-          <div>
-            <dt>Comparação</dt>
-            <dd>
-              {config.comparison !== "none" && effectiveCompareSince && effectiveCompareUntil
-                ? `${shortDate(effectiveCompareSince)} — ${shortDate(effectiveCompareUntil)}`
-                : "Sem comparação"}
-            </dd>
-          </div>
-          <div>
-            <dt>Última sincronização</dt>
-            <dd>{data ? formatSyncTime(data.updated_at, data.timezone) : "Não sincronizado"}</dd>
-          </div>
-          <div>
-            <dt>Timezone</dt>
-            <dd>{data?.timezone ?? "Conta do projeto"}</dd>
-          </div>
-          <div>
-            <dt>Origem</dt>
-            <dd>Meta Ads</dd>
-          </div>
-        </dl>
-        {staff && !preview && (
-          <div className="pj-analysis-edit-controls">
-            <span className="pj-control-label">Editar layout</span>
-            {editable && (
-              <>
-                <button onClick={() => setEditor(!editor)}>
-                  ✎ Editar blocos
-                </button>
+            </div>
+            <div className="pj-analysis-edit-controls">
+              <button onClick={() => setEditor(!editor)}>
+                <span aria-hidden="true">✎</span>
+                {editor ? "Fechar edição" : "Editar blocos"}
+              </button>
+              {dirty && (
                 <button
-                  className={dirty ? "primary" : ""}
-                  disabled={busy || !dirty}
+                  className="primary"
+                  disabled={busy}
                   onClick={() => void action("save")}
                 >
-                  Salvar
+                  Salvar alterações
                 </button>
-              </>
-            )}
-            {doc.status === "draft" && (
-              <button
-                className={!dirty ? "primary" : ""}
-                disabled={busy || !data || dirty}
-                onClick={() => void action("publish")}
-              >
-                Publicar para cliente
-              </button>
-            )}
+              )}
+              {doc.status === "draft" && (
+                <button
+                  className={!dirty ? "primary" : ""}
+                  disabled={busy || !data || dirty}
+                  onClick={() => void action("publish")}
+                >
+                  Publicar
+                </button>
+              )}
+            </div>
           </div>
         )}
       </div>
