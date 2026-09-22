@@ -824,7 +824,6 @@ export function ProjectsWorkspace({
               <strong>{data.userName || "Minha conta"}</strong>
               <small>{workspaceLabel}</small>
             </span>
-            <InterfaceIcon name="chevron-down" size={16} />
           </button>
           {accountMenuOpen ? (
             <div className="pj-account-menu" role="menu" aria-label="Menu da conta">
