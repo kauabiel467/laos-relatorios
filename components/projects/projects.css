@@ -54,6 +54,26 @@
   --pj-font-brand: var(--font-brand), "Avenir Next", "Segoe UI", sans-serif;
   --pj-font-ui: var(--font-sans), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
+  /* App-chrome z-index scale. Values are unchanged from before this was named —
+     each variable documents where a layer sits, it doesn't reorder anything.
+     Sticky-table and drag/resize z-indexes (1-21) stay as local literals: they
+     only need to out-rank their own siblings, never this global stack. */
+  --pj-z-context-menu: 75;
+  --pj-z-topnav-mosaic: 80;
+  --pj-z-topnav-theme: 90;
+  --pj-z-sidebar-backdrop: 100;
+  --pj-z-sidebar: 110;
+  --pj-z-analysis-toolbar: 120;
+  --pj-z-route-progress: 120;
+  --pj-z-copy-report-menu: 170;
+  --pj-z-account-menu: 180;
+  --pj-z-overlay-base: 200;
+  --pj-z-menu: 240;
+  --pj-z-skip-link: 300;
+  --pj-z-metric-library: 380;
+  --pj-z-overlay: 500;
+  --pj-z-toast: 700;
+
   /* Compatibility aliases while legacy selectors move to semantic tokens. */
   --pj-blue: var(--pj-primary);
   --pj-green: var(--pj-success);
@@ -1197,7 +1217,7 @@
   position: fixed;
   inset: 0;
   background: #1a2c4680;
-  z-index: 200;
+  z-index: var(--pj-z-overlay-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1299,7 +1319,7 @@
   align-items: center;
   padding: 17px 35px;
   position: relative;
-  z-index: 120;
+  z-index: var(--pj-z-analysis-toolbar);
   flex-wrap: wrap;
 }
 .pj-analysis-toolbar > strong {
@@ -1368,7 +1388,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 10px);
-  z-index: 240;
+  z-index: var(--pj-z-menu);
   box-shadow: 0 12px 40px #0a285f25;
   background: white;
   border: 1px solid var(--pj-line);
@@ -2483,7 +2503,7 @@
   .projects:is(.theme-light, .theme-dark) .pj-topnav {
     position: sticky;
     top: 0;
-    z-index: 90;
+    z-index: var(--pj-z-topnav-theme);
     min-height: 72px;
     height: auto;
     padding-top: env(safe-area-inset-top, 0px);
@@ -2797,7 +2817,7 @@
 
   .pj-route-progress {
     position: fixed;
-    z-index: 120;
+    z-index: var(--pj-z-route-progress);
     top: 0;
     right: 0;
     left: 0;
@@ -3045,7 +3065,7 @@
 
 .pj-context-menu > div {
   position: absolute;
-  z-index: 75;
+  z-index: var(--pj-z-context-menu);
   top: calc(100% + 8px);
   right: 0;
   width: max-content;
@@ -3695,7 +3715,7 @@
 
 .projects .pj-metric-library {
   position: fixed;
-  z-index: 380;
+  z-index: var(--pj-z-metric-library);
   top: 0;
   bottom: 0;
   left: 0;
@@ -4899,7 +4919,7 @@
 /* Interaction surfaces: one modal, menu and feedback language across the workspace. */
 @media screen {
   .projects .pj-overlay {
-    z-index: 500;
+    z-index: var(--pj-z-overlay);
     align-items: center;
     justify-content: center;
     overflow: hidden;
@@ -5024,7 +5044,7 @@
 
   .projects .pj-toast {
     position: fixed;
-    z-index: 700;
+    z-index: var(--pj-z-toast);
     right: max(20px, env(safe-area-inset-right, 0px));
     bottom: max(20px, env(safe-area-inset-bottom, 0px));
     width: min(420px, calc(100vw - 40px));
@@ -5230,9 +5250,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .projects .pj-dialog,
-  .projects .pj-toast {
+  /* The override flag below is required: the theme-scoped rule at
+     .projects:is(.theme-light, .theme-dark) .pj-dialog (3 classes) outranks
+     this 2-class selector on specificity alone. */
+  .projects .pj-dialog {
     transition: none !important;
+  }
+
+  .projects .pj-toast {
+    transition: none;
   }
 }
 
@@ -5253,7 +5279,7 @@
 
   .pj-mosaic-shell .pj-skip-link {
     position: fixed;
-    z-index: 300;
+    z-index: var(--pj-z-skip-link);
     top: 10px;
     left: 272px;
     padding: 10px 14px;
@@ -5272,7 +5298,7 @@
 
   .pj-mosaic-shell .pj-sidebar {
     position: sticky;
-    z-index: 110;
+    z-index: var(--pj-z-sidebar);
     top: 0;
     grid-column: 1;
     grid-row: 1 / span 2;
@@ -5361,6 +5387,8 @@
     box-shadow: none;
   }
 
+  /* Needs the override flag: the generic ".projects button" reset (a class +
+     an element selector, 0-1-1) otherwise outranks this bare class (0-1-0). */
   .pj-sidebar-close {
     display: none !important;
     color: #9eabc0 !important;
@@ -5531,13 +5559,15 @@
     font-size: 10px;
   }
 
+  /* Needs the override flag: ".projects button" (0-1-1) otherwise beats this
+     bare class (0-1-0) since .pj-sidebar-backdrop is a <button>. */
   .pj-sidebar-backdrop {
     display: none !important;
   }
 
   .projects.pj-mosaic-shell .pj-topnav {
     position: sticky;
-    z-index: 80;
+    z-index: var(--pj-z-topnav-mosaic);
     top: 0;
     grid-column: 2;
     grid-row: 1;
@@ -5735,7 +5765,7 @@
 
   .projects.pj-mosaic-shell .pj-sidebar-backdrop {
     position: fixed;
-    z-index: 100;
+    z-index: var(--pj-z-sidebar-backdrop);
     inset: 0;
     min-height: 100dvh;
     display: block !important;
@@ -6117,7 +6147,7 @@
 
   .projects .pj-account-menu {
     position: absolute;
-    z-index: 180;
+    z-index: var(--pj-z-account-menu);
     right: 12px;
     bottom: calc(100% + 8px);
     left: 12px;
@@ -6223,7 +6253,7 @@
 
   .projects .pj-copy-report-menu {
     position: absolute;
-    z-index: 170;
+    z-index: var(--pj-z-copy-report-menu);
     top: calc(100% + 8px);
     right: 0;
     width: min(340px, calc(100vw - 32px));
