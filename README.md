@@ -22,6 +22,30 @@ npm test
 npm run build
 ```
 
+## Testes de RLS (SQL)
+
+`tests/agency-rls.sql` e `tests/project-documents-rls.sql` validam as políticas de
+RLS e as RPCs security-definer diretamente no Postgres, usando `auth.uid()` e os
+papéis `authenticated`/`anon`/`service_role`. Isso só existe de verdade numa
+instância Supabase (stack local via `supabase start`, ou um projeto de teste
+descartável) — um container `postgres:` genérico no CI não replica esse ambiente
+com fidelidade suficiente para um teste de segurança, então eles não rodam no CI
+por enquanto (ver comentário em `.github/workflows/ci.yml`). Para rodar localmente:
+
+```bash
+supabase start
+for f in supabase/migrations/*.sql; do
+  psql "$(supabase status -o json | jq -r '.DB_URL')" -f "$f"
+done
+psql "$(supabase status -o json | jq -r '.DB_URL')" -f tests/agency-rls.sql
+psql "$(supabase status -o json | jq -r '.DB_URL')" -f tests/project-documents-rls.sql
+```
+
+Cada arquivo roda dentro de uma transação (`begin`/`rollback`, sem deixar
+fixtures no banco) e usa `raise exception` para falhar alto ao primeiro
+problema — o `psql` retorna código de saída não-zero nesse caso. Sem erro, a
+última linha impressa é `PASS: ...`.
+
 ## Variaveis de ambiente
 
 Copie `.env.example` para `.env.local` e preencha:
