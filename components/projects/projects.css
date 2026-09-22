@@ -5281,11 +5281,11 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid rgb(255 255 255 / 0.07);
+    border-right: 1px solid var(--pj-border);
     background:
-      radial-gradient(circle at 0 0, rgb(59 130 246 / 0.18), transparent 18rem),
-      #111827;
-    color: #d8e0ed;
+      radial-gradient(circle at 0 0, color-mix(in srgb, var(--pj-primary) 18%, transparent), transparent 18rem),
+      var(--pj-surface);
+    color: var(--pj-text);
     box-shadow: 12px 0 34px rgb(15 23 42 / 0.08);
   }
 
@@ -5296,7 +5296,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px 16px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    border-bottom: 1px solid var(--pj-border);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-brand {
@@ -5308,7 +5308,7 @@
     padding: 4px;
     border: 0;
     background: transparent;
-    color: #fff;
+    color: var(--pj-text);
     box-shadow: none;
   }
 
@@ -5320,7 +5320,7 @@
     place-items: center;
     border: 0;
     background: transparent;
-    color: #60a5fa;
+    color: var(--pj-primary);
     font-family: var(--pj-font-brand);
     font-size: 17px;
     font-weight: 750;
@@ -5336,7 +5336,7 @@
   }
 
   .pj-brand-copy strong {
-    color: #fff;
+    color: var(--pj-text);
     font-family: var(--pj-font-brand);
     font-size: 20px;
     letter-spacing: -0.04em;
@@ -5344,7 +5344,7 @@
 
   .pj-brand-copy small {
     margin-top: 3px;
-    color: #8290a7;
+    color: var(--pj-text-muted);
     font-size: 10px;
     font-weight: 650;
     letter-spacing: 0.08em;
@@ -5363,7 +5363,7 @@
 
   .pj-sidebar-close {
     display: none !important;
-    color: #9eabc0 !important;
+    color: var(--pj-text-secondary) !important;
   }
 
   .pj-mobile-menu {
@@ -5384,13 +5384,13 @@
     overscroll-behavior: contain;
     padding: 20px 14px 24px;
     scrollbar-width: thin;
-    scrollbar-color: #31405a transparent;
+    scrollbar-color: var(--pj-border-strong) transparent;
   }
 
   .pj-sidebar-label {
     display: block;
     margin: 0 10px 8px;
-    color: #718096;
+    color: var(--pj-text-muted);
     font-size: 10px;
     font-weight: 750;
     letter-spacing: 0.08em;
@@ -5410,10 +5410,10 @@
     justify-content: stretch;
     gap: 11px;
     padding: 9px 11px;
-    border: 1px solid transparent;
+    border: 1px solid transparent !important;
     border-radius: 9px;
-    background: transparent;
-    color: #9eabc0;
+    background: transparent !important;
+    color: var(--pj-text-secondary) !important;
     box-shadow: none;
     font-size: 13px;
     font-weight: 560;
@@ -5423,29 +5423,29 @@
   .projects.pj-mosaic-shell .pj-sidebar nav button svg {
     width: 19px;
     height: 19px;
-    color: #718096;
+    color: var(--pj-text-muted);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button:hover {
-    background: rgb(255 255 255 / 0.055);
-    color: #edf3fb;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button.active {
-    border-color: rgb(96 165 250 / 0.16);
-    background: linear-gradient(90deg, rgb(37 99 235 / 0.23), rgb(37 99 235 / 0.08));
-    color: #fff;
-    box-shadow: inset 3px 0 0 #3b82f6;
+    border-color: color-mix(in srgb, var(--pj-primary) 30%, transparent) !important;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--pj-primary) 23%, transparent), color-mix(in srgb, var(--pj-primary) 8%, transparent)) !important;
+    color: var(--pj-text) !important;
+    box-shadow: inset 3px 0 0 var(--pj-primary);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button.active svg {
-    color: #60a5fa;
+    color: var(--pj-primary);
   }
 
   .pj-sidebar-project {
     margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid rgb(255 255 255 / 0.07);
+    border-top: 1px solid var(--pj-border);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-active-project {
@@ -5458,15 +5458,15 @@
     justify-content: stretch;
     margin-bottom: 12px;
     padding: 9px 10px;
-    border-color: rgb(255 255 255 / 0.07);
-    background: rgb(255 255 255 / 0.04);
-    color: #d8e0ed;
+    border-color: var(--pj-border) !important;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-active-project .pj-project-avatar {
     width: 38px;
     height: 38px;
-    border-color: rgb(147 197 253 / 0.28);
+    border-color: color-mix(in srgb, var(--pj-primary) 30%, transparent);
     font-size: 15px;
     box-shadow: none;
   }
@@ -5476,12 +5476,12 @@
   }
 
   .pj-sidebar .pj-active-project strong {
-    color: #f8fafc;
+    color: var(--pj-text);
     font-size: 12px;
   }
 
   .pj-sidebar .pj-active-project small {
-    color: #8290a7;
+    color: var(--pj-text-muted);
     font-size: 10px;
   }
 
@@ -5496,14 +5496,14 @@
     align-items: center;
     gap: 10px;
     padding: 12px 16px max(12px, env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid rgb(255 255 255 / 0.07);
-    background: rgb(3 7 18 / 0.18);
+    border-top: 1px solid var(--pj-border);
+    background: var(--pj-surface-sunken);
   }
 
   .pj-mosaic-shell .pj-sidebar-footer .pj-small-avatar {
     width: 34px;
     height: 34px;
-    border-color: rgb(147 197 253 / 0.26);
+    border-color: color-mix(in srgb, var(--pj-primary) 26%, transparent);
     box-shadow: none;
   }
 
@@ -5521,13 +5521,13 @@
   }
 
   .pj-sidebar-user strong {
-    color: #e5eaf2;
+    color: var(--pj-text);
     font-size: 12px;
   }
 
   .pj-sidebar-user small {
     margin-top: 2px;
-    color: #718096;
+    color: var(--pj-text-muted);
     font-size: 10px;
   }
 
@@ -6021,15 +6021,15 @@
     display: inline-grid;
     place-items: center;
     padding: 0;
-    border-color: transparent;
-    background: transparent;
-    color: #9eabc0;
+    border-color: transparent !important;
+    background: transparent !important;
+    color: var(--pj-text-secondary) !important;
     box-shadow: none;
   }
 
   .projects .pj-sidebar-collapse:hover {
-    background: rgb(255 255 255 / 0.07);
-    color: #fff;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.is-sidebar-collapsed .pj-sidebar-header {
@@ -6046,8 +6046,7 @@
   .projects.is-sidebar-collapsed .pj-sidebar-label,
   .projects.is-sidebar-collapsed .pj-sidebar nav button > span,
   .projects.is-sidebar-collapsed .pj-active-project > span:last-child,
-  .projects.is-sidebar-collapsed .pj-sidebar-user,
-  .projects.is-sidebar-collapsed .pj-account-trigger > svg {
+  .projects.is-sidebar-collapsed .pj-sidebar-user {
     display: none;
   }
 
@@ -6093,21 +6092,21 @@
     width: 100%;
     min-height: 48px;
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    grid-template-columns: 34px minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     padding: 6px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: #d8e0ed;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: var(--pj-text) !important;
     box-shadow: none;
     text-align: left;
   }
 
   .projects .pj-account-trigger:hover,
   .projects .pj-account-trigger[aria-expanded="true"] {
-    border-color: rgb(255 255 255 / 0.08);
-    background: rgb(255 255 255 / 0.055);
+    border-color: var(--pj-border) !important;
+    background: var(--pj-surface-hover) !important;
   }
 
   .projects.is-sidebar-collapsed .pj-account-trigger {
@@ -6123,11 +6122,11 @@
     left: 12px;
     min-width: 220px;
     padding: 7px;
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--pj-border);
     border-radius: 12px;
-    background: #172033;
-    color: #e5eaf2;
-    box-shadow: 0 18px 44px rgb(0 0 0 / 0.34);
+    background: var(--pj-surface-raised);
+    color: var(--pj-text);
+    box-shadow: var(--pj-shadow-md);
   }
 
   .projects.is-sidebar-collapsed .pj-account-menu {
@@ -6158,7 +6157,7 @@
 
   .projects .pj-account-menu-identity small {
     margin-top: 2px;
-    color: #8290a7;
+    color: var(--pj-text-muted);
   }
 
   .projects .pj-account-menu button {
@@ -6169,24 +6168,24 @@
     justify-content: flex-start;
     gap: 9px;
     padding: 9px 10px;
-    border: 0;
-    background: transparent;
-    color: #d8e0ed;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--pj-text) !important;
     box-shadow: none;
   }
 
   .projects .pj-account-menu button:hover {
-    background: rgb(255 255 255 / 0.06);
+    background: var(--pj-surface-hover) !important;
   }
 
   .projects .pj-account-menu button.danger {
-    color: #fca5a5;
+    color: var(--pj-danger) !important;
   }
 
   .projects .pj-account-menu-separator {
     height: 1px;
     margin: 5px 4px;
-    background: rgb(255 255 255 / 0.08);
+    background: var(--pj-border);
   }
 
   .projects .pj-theme-toggle {
@@ -6393,8 +6392,7 @@
   .projects.is-sidebar-collapsed .pj-sidebar-label,
   .projects.is-sidebar-collapsed .pj-sidebar nav button > span,
   .projects.is-sidebar-collapsed .pj-active-project > span:last-child,
-  .projects.is-sidebar-collapsed .pj-sidebar-user,
-  .projects.is-sidebar-collapsed .pj-account-trigger > svg {
+  .projects.is-sidebar-collapsed .pj-sidebar-user {
     display: initial;
   }
 
@@ -6428,7 +6426,7 @@
   }
 
   .projects.is-sidebar-collapsed .pj-account-trigger {
-    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    grid-template-columns: 34px minmax(0, 1fr);
   }
 
   .projects .pj-document-shell {
