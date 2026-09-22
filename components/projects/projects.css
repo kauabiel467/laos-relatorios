@@ -4662,6 +4662,234 @@
   }
 }
 
+/* Official iFood authorization entry point. The branded red surface is kept
+ * separate from semantic success/error colors used elsewhere in the product. */
+.projects .pj-integration-card.is-ifood {
+  border-color: color-mix(in srgb, #ea1d2c 38%, var(--pj-border));
+  background:
+    linear-gradient(#ea1d2c 0 68px, var(--pj-surface-raised) 68px);
+}
+
+.projects .pj-integration-card.is-ifood .pj-integration-card-header {
+  min-height: 38px;
+}
+
+.projects .pj-integration-brand.is-ifood {
+  background: #ea1d2c !important;
+}
+
+.projects .pj-integration-brand.is-ifood img {
+  width: 26px;
+  height: 26px;
+  display: block;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+}
+
+.projects .pj-integration-card.is-ifood .pj-status-badge {
+  border-color: rgb(255 255 255 / 0.42);
+  background: rgb(255 255 255 / 0.94);
+}
+
+.projects .pj-ifood-intro {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.projects .pj-ifood-intro h3,
+.projects .pj-ifood-intro p {
+  margin: 0;
+}
+
+.projects .pj-ifood-intro p {
+  margin-top: 5px;
+  color: var(--pj-text-secondary);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.projects .pj-ifood-mark {
+  width: 64px;
+  height: 64px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #ea1d2c;
+}
+
+.projects .pj-ifood-mark img {
+  width: 42px;
+  height: 42px;
+  filter: brightness(0) invert(1);
+}
+
+.projects .pj-ifood-steps {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+
+.projects .pj-ifood-steps li {
+  min-width: 0;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--pj-border);
+  border-radius: var(--pj-radius-sm);
+  background: var(--pj-canvas-subtle);
+}
+
+.projects .pj-ifood-steps li > span {
+  width: 25px;
+  height: 25px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #ea1d2c;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.projects .pj-ifood-steps p,
+.projects .pj-ifood-steps strong,
+.projects .pj-ifood-steps small {
+  display: block;
+  margin: 0;
+}
+
+.projects .pj-ifood-steps strong {
+  color: var(--pj-text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.projects .pj-ifood-steps small {
+  margin-top: 5px;
+  color: var(--pj-text-muted);
+  font-size: 11px;
+  font-weight: 450;
+  line-height: 1.4;
+}
+
+.projects .pj-ifood-generate,
+.projects .pj-ifood-code-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--pj-border);
+  border-radius: var(--pj-radius-md);
+  background: var(--pj-canvas-subtle);
+}
+
+.projects .pj-ifood-generate p {
+  margin: 0;
+  color: var(--pj-text-secondary);
+  font-size: 13px;
+}
+
+.projects .pj-ifood-generate button,
+.projects .pj-ifood-portal {
+  justify-self: start;
+}
+
+.projects .pj-ifood-portal {
+  border-color: #ea1d2c;
+  background: #ea1d2c;
+  color: #fff;
+  box-shadow: 0 8px 20px rgb(234 29 44 / 0.2);
+}
+
+.projects .pj-ifood-portal:hover {
+  border-color: #c91523;
+  background: #c91523;
+  color: #fff;
+}
+
+.projects .pj-ifood-code-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.projects .pj-ifood-code-heading output {
+  display: block;
+  margin-top: 5px;
+  color: var(--pj-text);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: clamp(24px, 4vw, 36px);
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  user-select: all;
+}
+
+.projects .pj-ifood-code-heading button,
+.projects .pj-ifood-portal,
+.projects .pj-ifood-expiration {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects .pj-ifood-expiration {
+  margin: 0;
+  color: var(--pj-text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.projects .pj-ifood-code-panel > label {
+  display: grid;
+}
+
+@media screen and (max-width: 900px) {
+  .projects .pj-ifood-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .projects .pj-ifood-steps li {
+    grid-template-columns: 25px minmax(0, 1fr);
+  }
+}
+
+@media screen and (max-width: 520px) {
+  .projects .pj-ifood-intro {
+    grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .projects .pj-ifood-mark {
+    width: 52px;
+    height: 52px;
+    border-radius: 13px;
+  }
+
+  .projects .pj-ifood-mark img {
+    width: 34px;
+    height: 34px;
+  }
+
+  .projects .pj-ifood-code-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .projects .pj-ifood-code-heading button,
+  .projects .pj-ifood-portal,
+  .projects .pj-ifood-generate button {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .projects .pj-table-skeleton span {
     animation: none;

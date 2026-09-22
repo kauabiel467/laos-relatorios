@@ -100,19 +100,24 @@ try {
   const connectable = config.PROJECT_INTEGRATIONS.filter((item) => item.connectable);
   assert.deepEqual(
     connectable.map((item) => item.id),
-    ["meta"],
+    ["meta", "ifood"],
     "apenas integrações realmente implementadas podem oferecer conexão",
   );
   const meta = config.PROJECT_INTEGRATIONS.find((item) => item.id === "meta");
   assert.equal(meta.availability, "available");
   assert.equal(meta.maturity, "beta");
-  for (const integration of config.PROJECT_INTEGRATIONS.filter((item) => item.id !== "meta")) {
+  const ifood = config.PROJECT_INTEGRATIONS.find((item) => item.id === "ifood");
+  assert.equal(ifood.availability, "available");
+  assert.equal(ifood.maturity, "beta");
+  assert.match(ifood.note, /coleta de dados será adicionada/i);
+  for (const integration of config.PROJECT_INTEGRATIONS.filter(
+    (item) => item.id !== "meta" && item.id !== "ifood",
+  )) {
     assert.equal(integration.connectable, false, `${integration.name} não pode exibir controle de conexão`);
     assert.notEqual(integration.availability, "connected", `${integration.name} não pode fingir conexão`);
     assert.notEqual(integration.availability, "available", `${integration.name} não pode fingir disponibilidade`);
     assert.ok(integration.note.length > 20, `${integration.name} precisa explicar a dependência real`);
   }
-  assert.equal(config.PROJECT_INTEGRATIONS.find((item) => item.id === "ifood").availability, "unavailable");
   assert.equal(config.PROJECT_INTEGRATIONS.find((item) => item.id === "cardapio").availability, "unavailable");
 
   const detailsComponent = fs.readFileSync("components/projects/project-details-fields.tsx", "utf8");

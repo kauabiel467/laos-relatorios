@@ -27,6 +27,9 @@ const serverSchema = sharedSchema.extend({
   META_APP_ID: optionalString,
   META_APP_SECRET: optionalString,
   META_SYSTEM_USER_TOKEN: optionalString,
+  IFOOD_CLIENT_ID: optionalString,
+  IFOOD_OAUTH_STATE_SECRET: optionalString,
+  IFOOD_API_BASE_URL: optionalUrl,
   CARDAPIO_API_URL: optionalUrl,
   CARDAPIO_API_TOKEN: optionalString
 });
@@ -43,6 +46,9 @@ export const env = serverSchema.parse({
   META_APP_ID: process.env.META_APP_ID,
   META_APP_SECRET: process.env.META_APP_SECRET,
   META_SYSTEM_USER_TOKEN: process.env.META_SYSTEM_USER_TOKEN,
+  IFOOD_CLIENT_ID: process.env.IFOOD_CLIENT_ID,
+  IFOOD_OAUTH_STATE_SECRET: process.env.IFOOD_OAUTH_STATE_SECRET,
+  IFOOD_API_BASE_URL: process.env.IFOOD_API_BASE_URL,
   CARDAPIO_API_URL: process.env.CARDAPIO_API_URL,
   CARDAPIO_API_TOKEN: process.env.CARDAPIO_API_TOKEN
 });

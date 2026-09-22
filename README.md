@@ -37,8 +37,17 @@ Principais variaveis:
 - `SUPABASE_SECRET_KEY`
 - `OPENAI_API_KEY`
 - `META_SYSTEM_USER_TOKEN`
+- `IFOOD_CLIENT_ID`
+- `IFOOD_OAUTH_STATE_SECRET` (segredo aleatório com pelo menos 32 caracteres)
 - `CARDAPIO_API_URL`
 - `CARDAPIO_API_TOKEN`
+
+O início da autorização oficial do iFood está disponível no catálogo de
+integrações. Nesta etapa, o LAOS gera o código de vinculação e mantém o
+`authorizationCodeVerifier` cifrado em cookie `HttpOnly` até a expiração. A
+troca por token e a coleta de pedidos/Analytics ainda não fazem parte deste
+fluxo. `IFOOD_API_BASE_URL` é opcional e, em produção, deve permanecer no
+endpoint oficial `https://merchant-api.ifood.com.br`.
 
 Compatibilidade legada:
 
