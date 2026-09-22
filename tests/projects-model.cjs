@@ -21,6 +21,9 @@ try {
   const model = require(path.join(dir, "lib/projects/model.js"));
   const { configSchema } = require(path.join(dir, "lib/projects/schema.js"));
   assert.deepEqual(model.periodDates("last_month", new Date(2024, 2, 15)), { since: "2024-02-01", until: "2024-02-29" });
+  assert.deepEqual(model.periodDates("current_month", new Date("2026-09-21T12:00:00Z"), "UTC"), { since: "2026-09-01", until: "2026-09-21" });
+  assert.deepEqual(model.periodDates("last_90d", new Date("2026-09-21T12:00:00Z"), "UTC"), { since: "2026-06-24", until: "2026-09-21" });
+  assert.deepEqual(model.periodDates("last_180d", new Date("2026-09-21T12:00:00Z"), "UTC"), { since: "2026-03-26", until: "2026-09-21" });
   assert.deepEqual(model.previousDates("2026-08-01", "2026-08-31"), { compare_since: "2026-07-01", compare_until: "2026-07-31" });
   assert.equal(model.metricChange(10, 0), null);
   assert.equal(model.metricChange(0, 10), -100);

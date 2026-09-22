@@ -45,7 +45,7 @@ const customMetric = z
   });
 export const configSchema = z
   .object({
-    preset: z.enum(["last_7d", "last_30d", "last_month", "custom"]),
+    preset: z.enum(["last_7d", "last_30d", "last_90d", "last_180d", "current_month", "last_month", "custom"]),
     since: z.string().date(),
     until: z.string().date(),
     comparison: z.enum(["previous", "none", "custom"]),

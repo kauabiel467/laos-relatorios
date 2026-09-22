@@ -27,6 +27,14 @@ import { inferCalculationFormat } from "@/lib/metrics/engine";
 import { Dialog, FieldMessage, MetaMark, Toast, shortDate } from "./ui";
 import { LineChart } from "./line-chart";
 import { workspaceHref } from "@/lib/projects/routes";
+import {
+  REPORT_MESSAGE_TEMPLATES,
+  buildReportMessage,
+  reportTemplateAvailable,
+  type ReportMessageInput,
+  type ReportMessageTemplateId,
+} from "@/lib/report-templates";
+import { InterfaceIcon } from "./interface-icon";
 import ProgressMetricCard, {
   type CardSize,
   type MetricAccent,
@@ -141,6 +149,9 @@ export function AnalysisView({
     [confirmDelete, setConfirmDelete] = useState(false),
     [copied, setCopied] = useState(false),
     [copyError, setCopyError] = useState(""),
+    [reportCopyMenu, setReportCopyMenu] = useState(false),
+    [reportCopied, setReportCopied] = useState(false),
+    [reportCopyError, setReportCopyError] = useState(""),
     [link, setLink] = useState(""),
     [draggedMetric, setDraggedMetric] = useState(""),
     [dropTargetMetric, setDropTargetMetric] = useState(""),
@@ -163,6 +174,8 @@ export function AnalysisView({
     [inlineAnalysis, setInlineAnalysis] = useState(false);
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const reportCopyButtonRef = useRef<HTMLButtonElement>(null);
+  const reportCopyMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     setConfig(normalizeAnalysisConfig(doc.config));
     setTitle(doc.title);
@@ -210,6 +223,36 @@ export function AnalysisView({
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [menu]);
+  useEffect(() => {
+    if (!reportCopyMenu) return;
+    const popover = reportCopyMenuRef.current;
+    const items = Array.from(
+      popover?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [],
+    );
+    items[0]?.focus();
+    const closePopover = () => {
+      setReportCopyMenu(false);
+      reportCopyButtonRef.current?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (!popover?.contains(target) && !reportCopyButtonRef.current?.contains(target)) {
+        closePopover();
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        closePopover();
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [reportCopyMenu]);
   const editable =
     staff && !(doc.kind === "report" && doc.status === "published");
   const data = doc.data,
@@ -667,6 +710,32 @@ export function AnalysisView({
   const effectiveUntil = data?.effective_period?.until ?? config.until;
   const effectiveCompareSince = data?.effective_period?.compare_since ?? compare.compare_since;
   const effectiveCompareUntil = data?.effective_period?.compare_until ?? compare.compare_until;
+  const reportMessageInput: ReportMessageInput | null = data ? {
+    client: clientName,
+    since: effectiveSince,
+    until: effectiveUntil,
+    compareSince: config.comparison === "none" ? undefined : effectiveCompareSince,
+    compareUntil: config.comparison === "none" ? undefined : effectiveCompareUntil,
+    currency,
+    primaryMetric: config.primary_metric,
+    metrics: config.metrics,
+    current: data.current,
+    previous: config.comparison === "none" ? null : data.previous,
+  } : null;
+  const copyReport = async (templateId: ReportMessageTemplateId) => {
+    if (!reportMessageInput) return;
+    try {
+      await navigator.clipboard.writeText(buildReportMessage(templateId, reportMessageInput));
+      setReportCopyMenu(false);
+      setReportCopyError("");
+      setReportCopied(true);
+      reportCopyButtonRef.current?.focus();
+    } catch {
+      setReportCopyError(
+        "Não foi possível copiar automaticamente. Verifique a permissão da área de transferência e tente novamente.",
+      );
+    }
+  };
   const row = (items: InsightItem[], name: string) => items.length ? (
     <div
       className="pj-table-scroll"
@@ -918,7 +987,7 @@ export function AnalysisView({
                           title="Segure e arraste para reordenar"
                           onPointerDown={(event) => startMetricDrag(event, id)}
                         >
-                          ⠿
+                          <InterfaceIcon name="grip" size={18} />
                         </button>
                         <button
                           className={(config.featured_metrics ?? []).includes(id) ? "is-active" : ""}
@@ -926,10 +995,10 @@ export function AnalysisView({
                           title="Destacar"
                           onClick={() => toggleFeatured(id)}
                         >
-                          {(config.featured_metrics ?? []).includes(id) ? "★" : "☆"}
+                          <InterfaceIcon name={(config.featured_metrics ?? []).includes(id) ? "star-filled" : "star"} size={18} />
                         </button>
                         {builtIn ? (
-                          <button aria-label={`Duplicar ${definition.label}`} title="Duplicar" onClick={() => duplicateMetric(id, builtIn)}>⧉</button>
+                          <button aria-label={`Duplicar ${definition.label}`} title="Duplicar" onClick={() => duplicateMetric(id, builtIn)}><InterfaceIcon name="copy" size={18} /></button>
                         ) : null}
                         {builtIn ? (
                           <button
@@ -942,10 +1011,10 @@ export function AnalysisView({
                               setMetricLibraryOpen(true);
                             }}
                           >
-                            ⚙
+                            <InterfaceIcon name="settings" size={18} />
                           </button>
                         ) : null}
-                        <button aria-label={`Definir meta para ${definition.label}`} title="Meta ou limite" onClick={() => openMetricGoal(id)}>◎</button>
+                        <button aria-label={`Definir meta para ${definition.label}`} title="Meta ou limite" onClick={() => openMetricGoal(id)}><InterfaceIcon name="goals" size={18} /></button>
                         {builtIn ? (
                           <button
                             className={campaignIds.length ? "is-active" : ""}
@@ -953,7 +1022,7 @@ export function AnalysisView({
                             title="Filtrar por campanha"
                             onClick={() => openCampaignFilter(id)}
                           >
-                            ⌕
+                            <InterfaceIcon name="filter" size={18} />
                           </button>
                         ) : null}
                         <button
@@ -963,11 +1032,7 @@ export function AnalysisView({
                           title={showChart ? "Ocultar gráfico" : "Exibir gráfico"}
                           onClick={() => toggleMetricChart(id)}
                         >
-                          <svg viewBox="0 0 20 20" aria-hidden="true">
-                            <path d="M3 16V4m0 12h14" />
-                            <path d="m5 12 3-4 3 3 4-6" />
-                            {!showChart ? <path d="M3 3l14 14" /> : null}
-                          </svg>
+                          <InterfaceIcon name="chart-line" size={18} />
                         </button>
                         <button
                           aria-label={`Alterar tamanho de ${definition.label}`}
@@ -982,7 +1047,7 @@ export function AnalysisView({
                           disabled={builtIn != null && config.metrics.length <= 1}
                           onClick={() => removeMetric(id)}
                         >
-                          ×
+                          <InterfaceIcon name="delete" size={18} />
                         </button>
                       </div>
                     ) : undefined}
@@ -995,7 +1060,7 @@ export function AnalysisView({
                       title="Arraste para a esquerda ou direita para alterar o tamanho"
                       onPointerDown={(event) => startMetricResize(event, id)}
                     >
-                      <span aria-hidden="true">↘</span>
+                      <InterfaceIcon name="resize" size={18} />
                     </button>
                   ) : null}
                 </div>
@@ -1198,7 +1263,7 @@ export function AnalysisView({
     >
       <div className="pj-analysis-toolbar">
         <button onClick={onBack}>
-          <span aria-hidden="true">←</span>
+          <InterfaceIcon name="back" size={18} />
           <span>{preview ? clientName : "Voltar ao projeto"}</span>
         </button>
         <strong>{title}</strong>
@@ -1218,10 +1283,69 @@ export function AnalysisView({
               target="_blank"
               rel="noopener noreferrer"
             >
-              Ver como cliente ↗
+              Ver como cliente
+              <InterfaceIcon name="external" size={18} />
             </a>
           )}
-          <button onClick={() => setShare(true)}>Compartilhar ↗</button>
+          <div className="pj-copy-report">
+            <button
+              ref={reportCopyButtonRef}
+              disabled={!reportMessageInput}
+              aria-haspopup="menu"
+              aria-expanded={reportCopyMenu}
+              aria-controls="copy-report-menu"
+              title="Copiar relatório"
+              onClick={() => {
+                setReportCopyError("");
+                setReportCopyMenu((open) => !open);
+              }}
+            >
+              <InterfaceIcon name="copy" size={18} />
+              Copiar relatório
+            </button>
+            {reportCopyMenu ? (
+              <div
+                ref={reportCopyMenuRef}
+                className="pj-copy-report-menu"
+                id="copy-report-menu"
+                role="menu"
+                aria-label="Modelos para copiar relatório"
+              >
+                <header>
+                  <strong>Escolha um modelo</strong>
+                  <span>O texto usa somente os dados exibidos.</span>
+                </header>
+                {REPORT_MESSAGE_TEMPLATES.map((template) => {
+                  const available = reportMessageInput
+                    ? reportTemplateAvailable(template, reportMessageInput)
+                    : false;
+                  return (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      key={template.id}
+                      disabled={!available}
+                      onClick={() => void copyReport(template.id)}
+                    >
+                      <InterfaceIcon
+                        name={template.id === "sales" ? "sales" : template.id === "messages" ? "messages" : template.id === "followers" ? "followers" : "reports"}
+                        size={18}
+                      />
+                      <span>
+                        <strong>{template.label}</strong>
+                        <small>{available ? template.description : "Sem métricas compatíveis neste documento"}</small>
+                      </span>
+                    </button>
+                  );
+                })}
+                {reportCopyError ? <p role="alert">{reportCopyError}</p> : null}
+              </div>
+            ) : null}
+          </div>
+          <button onClick={() => setShare(true)}>
+            <InterfaceIcon name="share" size={18} />
+            Compartilhar
+          </button>
           {staff && !preview && (
             <div className="pj-more-actions">
               <button
@@ -1232,7 +1356,7 @@ export function AnalysisView({
                 aria-controls="document-actions-menu"
                 onClick={() => setMenu(!menu)}
               >
-                <span aria-hidden="true">•••</span>
+                <InterfaceIcon name="more" />
               </button>
               {menu && (
                 <div ref={menuRef} className="pj-menu" id="document-actions-menu" role="menu">
@@ -1312,18 +1436,19 @@ export function AnalysisView({
       <div className="pj-analysis-subbar">
         <div className="pj-analysis-period">
           <button
-            className="pj-period-control"
+            className="pj-period-trigger"
             disabled={!editable || preview}
             onClick={() => setDates(true)}
+            aria-label={`Alterar período atual: ${shortDate(effectiveSince)} a ${shortDate(effectiveUntil)}`}
           >
-            <span aria-hidden="true">□</span>
-            Alterar período
+            <InterfaceIcon name="calendar" size={20} />
+            <span>
+              <small>Período</small>
+              <strong>{shortDate(effectiveSince)} — {shortDate(effectiveUntil)}</strong>
+            </span>
+            {editable && !preview ? <InterfaceIcon name="chevron-down" size={18} /> : null}
           </button>
           <dl className="pj-period-summary" aria-label="Período da análise">
-            <div>
-              <dt>Período</dt>
-              <dd>{shortDate(effectiveSince)} — {shortDate(effectiveUntil)}</dd>
-            </div>
             <div>
               <dt>Comparação</dt>
               <dd>
@@ -1338,7 +1463,7 @@ export function AnalysisView({
           <div className="pj-analysis-actions">
             <div className="pj-analysis-data-controls">
               <button disabled={busy} onClick={() => void action("refresh")}>
-                <span aria-hidden="true">↻</span>
+                <InterfaceIcon name="refresh" size={18} />
                 {busy ? "Atualizando…" : "Atualizar dados"}
               </button>
               {doc.kind === "dashboard" && (
@@ -1357,7 +1482,7 @@ export function AnalysisView({
             </div>
             <div className="pj-analysis-edit-controls">
               <button onClick={() => setEditor(!editor)}>
-                <span aria-hidden="true">✎</span>
+                <InterfaceIcon name="edit" size={18} />
                 {editor ? "Fechar edição" : "Editar blocos"}
               </button>
               {dirty && (
@@ -1408,7 +1533,7 @@ export function AnalysisView({
                   setReplacingMetric("");
                 }}
               >
-                ×
+                <InterfaceIcon name="close" size={18} />
               </button>
             </header>
             <div className="pj-library-tabs" role="tablist" aria-label="Tipo de conteúdo">
@@ -1434,7 +1559,7 @@ export function AnalysisView({
             {metricLibraryTab === "predefined" ? (
               <>
                 <label className="pj-library-search">
-                  <span aria-hidden="true">⌕</span>
+                  <InterfaceIcon name="search" size={18} />
                   <input
                     data-autofocus
                     value={metricSearch}
@@ -1471,9 +1596,9 @@ export function AnalysisView({
             ) : (
               <div className="pj-custom-blocks">
                 <p>Crie blocos para explicar os resultados ou montar indicadores próprios.</p>
-                <button type="button" onClick={() => addSection("analysis")}><span>▤</span><b>Análise</b><small>Texto com aprendizados e próximos passos</small></button>
-                <button type="button" onClick={() => addSection("funnel")}><span>▽</span><b>Funil</b><small>Conversão entre as etapas escolhidas</small></button>
-                <button type="button" onClick={() => addSection("results")}><span>↗</span><b>Gráfico</b><small>Evolução do indicador principal</small></button>
+                <button type="button" onClick={() => addSection("analysis")}><span><InterfaceIcon name="edit" /></span><b>Análise</b><small>Texto com aprendizados e próximos passos</small></button>
+                <button type="button" onClick={() => addSection("funnel")}><span><InterfaceIcon name="filter" /></span><b>Funil</b><small>Conversão entre as etapas escolhidas</small></button>
+                <button type="button" onClick={() => addSection("results")}><span><InterfaceIcon name="chart-line" /></span><b>Gráfico</b><small>Evolução do indicador principal</small></button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1483,7 +1608,7 @@ export function AnalysisView({
                     setCustomMetric({ ...defaultCustomMetric(), kind: "calculated", format: "ratio" });
                     setCustomMetricOpen(true);
                   }}
-                ><span>⌗</span><b>Métrica calculada</b><small>Combine duas métricas do catálogo</small></button>
+                ><span><InterfaceIcon name="calculator" /></span><b>Métrica calculada</b><small>Combine duas métricas do catálogo</small></button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1493,7 +1618,7 @@ export function AnalysisView({
                     setCustomMetric(defaultCustomMetric());
                     setCustomMetricOpen(true);
                   }}
-                ><span>✎</span><b>Métrica manual</b><small>Informe um valor próprio</small></button>
+                ><span><InterfaceIcon name="edit" /></span><b>Métrica manual</b><small>Informe um valor próprio</small></button>
               </div>
             )}
           </aside>
@@ -1556,7 +1681,7 @@ export function AnalysisView({
                 setCustomMetricOpen(true);
               }}
             >
-              ＋ Métrica manual ou calculada
+              <InterfaceIcon name="plus" size={18} /> Métrica manual ou calculada
             </button>
             {!!customMetrics.length && (
               <div className="pj-custom-metric-list">
@@ -1577,14 +1702,14 @@ export function AnalysisView({
                         setCustomMetricOpen(true);
                       }}
                     >
-                      ✎
+                      <InterfaceIcon name="edit" size={18} />
                     </button>
                     <button
                       className="danger"
                       aria-label={`Remover ${metric.label}`}
                       onClick={() => removeMetric(metric.id)}
                     >
-                      ×
+                      <InterfaceIcon name="delete" size={18} />
                     </button>
                   </div>
                 ))}
@@ -1599,14 +1724,14 @@ export function AnalysisView({
                   disabled={i === 0}
                   onClick={() => move(i, -1)}
                 >
-                  ↑
+                  <InterfaceIcon name="up" size={18} />
                 </button>
                 <button
                   aria-label={"Mover " + SECTIONS[k] + " abaixo"}
                   disabled={i === config.sections.length - 1}
                   onClick={() => move(i, 1)}
                 >
-                  ↓
+                  <InterfaceIcon name="down" size={18} />
                 </button>
                 <button
                   className="danger"
@@ -1615,7 +1740,7 @@ export function AnalysisView({
                     patch({ sections: config.sections.filter((x) => x !== k) })
                   }
                 >
-                  ×
+                  <InterfaceIcon name="delete" size={18} />
                 </button>
               </div>
             ))}
@@ -1716,7 +1841,7 @@ export function AnalysisView({
             <div className="pj-canvas-actions">
               <span>Edite o relatório diretamente no canvas</span>
               <div>
-                <button type="button" onClick={() => addSection("analysis")}>＋ Adicionar análise</button>
+                <button type="button" onClick={() => addSection("analysis")}><InterfaceIcon name="plus" size={18} /> Adicionar análise</button>
                 <button
                   type="button"
                   className="primary"
@@ -1727,7 +1852,7 @@ export function AnalysisView({
                     setMetricLibraryOpen(true);
                   }}
                 >
-                  ＋ Adicionar métricas
+                  <InterfaceIcon name="plus" size={18} /> Adicionar métricas
                 </button>
               </div>
             </div>
@@ -1880,7 +2005,7 @@ export function AnalysisView({
             ) : null;
           })()}
           <label className="pj-library-search">
-            <span aria-hidden="true">⌕</span>
+            <InterfaceIcon name="search" size={18} />
             <input
               data-autofocus
               value={campaignSearch}
@@ -1941,22 +2066,32 @@ export function AnalysisView({
       ) : null}
       {dates && (
         <Dialog title="Período da análise" close={() => setDates(false)} busy={busy}>
-          <label>
-            Período
-            <select
-              value={config.preset}
-              onChange={(e) => {
-                const p = e.target.value as AnalysisConfig["preset"];
-                patch({ preset: p, ...(p === "custom" ? {} : periodDates(p)) });
-              }}
-            >
-              <option value="last_7d">Últimos 7 dias</option>
-              <option value="last_30d">Últimos 30 dias</option>
-              <option value="last_month">Último mês</option>
-              <option value="custom">Personalizado</option>
-            </select>
-          </label>
-          <div className="pj-form-row">
+          <fieldset className="pj-period-presets">
+            <legend>Atalhos de período</legend>
+            {([
+              ["last_7d", "7 dias"],
+              ["last_30d", "30 dias"],
+              ["last_90d", "3 meses"],
+              ["last_180d", "6 meses"],
+              ["current_month", "Mês atual"],
+              ["last_month", "Mês anterior"],
+              ["custom", "Personalizado"],
+            ] as const).map(([preset, label]) => (
+              <button
+                type="button"
+                key={preset}
+                className={config.preset === preset ? "is-active" : ""}
+                aria-pressed={config.preset === preset}
+                onClick={() => patch({
+                  preset,
+                  ...(preset === "custom" ? {} : periodDates(preset)),
+                })}
+              >
+                {label}
+              </button>
+            ))}
+          </fieldset>
+          {config.preset === "custom" ? <div className="pj-form-row">
             <label>
               De
               <input
@@ -1977,7 +2112,12 @@ export function AnalysisView({
                 }
               />
             </label>
-          </div>
+          </div> : (
+            <p className="pj-period-selected" aria-live="polite">
+              <InterfaceIcon name="calendar" size={18} />
+              {shortDate(config.since)} — {shortDate(config.until)}
+            </p>
+          )}
           <label>
             Comparação
             <select
@@ -2322,6 +2462,7 @@ export function AnalysisView({
         </Dialog>
       ) : null}
       {copied ? <Toast message="Link copiado para a área de transferência." close={() => setCopied(false)} /> : null}
+      {reportCopied ? <Toast message="Relatório copiado" close={() => setReportCopied(false)} /> : null}
     </div>
   );
 }

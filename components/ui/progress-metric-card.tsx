@@ -14,6 +14,7 @@ import {
 } from "./metric-chart";
 import { PeriodSelect, ViewToggle, type PeriodOption } from "./metric-controls";
 import styles from "./progress-metric-card.module.css";
+import { IconArrowDownRight, IconArrowUpRight, IconMinus } from "@tabler/icons-react";
 
 export type { SeriesPoint, MetricSeries, MetricAccent, ChartView, PeriodOption };
 
@@ -58,12 +59,8 @@ const sliceWindow = (points: SeriesPoint[], pointCount?: number) =>
   pointCount && pointCount < points.length ? points.slice(-pointCount) : points;
 
 function TrendIcon({ trend }: { trend: "up" | "down" | "flat" }) {
-  const path = trend === "up" ? "M5 15 15 5m0 0H8m7 0v7" : trend === "down" ? "M5 5l10 10m0 0H8m7 0V8" : "M4 10h12";
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d={path} />
-    </svg>
-  );
+  const Icon = trend === "up" ? IconArrowUpRight : trend === "down" ? IconArrowDownRight : IconMinus;
+  return <Icon size={20} stroke={1.8} aria-hidden="true" />;
 }
 
 export default function ProgressMetricCard({

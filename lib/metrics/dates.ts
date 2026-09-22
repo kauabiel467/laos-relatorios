@@ -87,6 +87,11 @@ export function lastMonthDateRange(timezone: string, now = new Date()): DateRang
   return { since: until.slice(0, 8) + "01", until };
 }
 
+export function currentMonthDateRange(timezone: string, now = new Date()): DateRange {
+  const until = dateInTimeZone(now, timezone);
+  return { since: `${until.slice(0, 8)}01`, until };
+}
+
 export function previousCalendarMonth(since: string): DateRange {
   const current = parts(since);
   const lastDay = new Date(Date.UTC(current.year, current.month - 1, 0));
@@ -95,7 +100,7 @@ export function previousCalendarMonth(since: string): DateRange {
 }
 
 export function resolvePeriod(
-  preset: "last_7d" | "last_30d" | "last_90d" | "last_month" | "custom",
+  preset: "last_7d" | "last_30d" | "last_90d" | "last_180d" | "current_month" | "last_month" | "custom",
   timezone: string,
   range: DateRange,
   comparison: "previous" | "none" | "custom" = "previous",
@@ -106,7 +111,13 @@ export function resolvePeriod(
     ? range
     : preset === "last_month"
       ? lastMonthDateRange(timezone, now)
-      : rollingDateRange(preset === "last_7d" ? 7 : preset === "last_90d" ? 90 : 30, timezone, now);
+      : preset === "current_month"
+        ? currentMonthDateRange(timezone, now)
+        : rollingDateRange(
+            preset === "last_7d" ? 7 : preset === "last_90d" ? 90 : preset === "last_180d" ? 180 : 30,
+            timezone,
+            now,
+          );
   const today = dateInTimeZone(now, timezone);
   validateDateRange(current, today, "Período atual");
   if (comparison === "none") return { ...current, timezone };

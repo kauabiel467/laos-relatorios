@@ -2,26 +2,11 @@
 
 import type { ChartView } from "./metric-chart";
 import styles from "./progress-metric-card.module.css";
+import { IconChartBar, IconChartLine } from "@tabler/icons-react";
 
 export interface PeriodOption {
   label: string;
   points?: number;
-}
-
-function CurveIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M2.5 14.5c2.8 0 3.1-8.4 6.2-8.4 2.7 0 2.8 5.5 5.2 5.5 1.6 0 2.6-2 3.6-4.2" />
-    </svg>
-  );
-}
-
-function BarsIcon() {
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M4 16V9m6 7V4m6 12v-5" />
-    </svg>
-  );
 }
 
 export function ViewToggle({ value, onChange }: { value: ChartView; onChange: (view: ChartView) => void }) {
@@ -34,7 +19,7 @@ export function ViewToggle({ value, onChange }: { value: ChartView; onChange: (v
         aria-pressed={value === "curve"}
         onClick={() => onChange("curve")}
       >
-        <CurveIcon />
+        <IconChartLine size={20} stroke={1.8} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -43,7 +28,7 @@ export function ViewToggle({ value, onChange }: { value: ChartView; onChange: (v
         aria-pressed={value === "bars"}
         onClick={() => onChange("bars")}
       >
-        <BarsIcon />
+        <IconChartBar size={20} stroke={1.8} aria-hidden="true" />
       </button>
     </div>
   );

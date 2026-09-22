@@ -22,6 +22,7 @@ import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
 import { Dialog, Empty, FieldMessage, LoadingState, MetaMark, Toast, shortDate } from "./ui";
 import { WorkspaceNavIcon, type WorkspaceNavIconName } from "./workspace-nav-icon";
+import { InterfaceIcon } from "./interface-icon";
 import "./projects.css";
 const viewLabels: Record<WorkspaceView, string> = {
   projects: "Projetos",
@@ -96,9 +97,12 @@ export function ProjectsWorkspace({
     [account, setAccount] = useState(""),
     [goalId, setGoalId] = useState(""),
     [sidebarOpen, setSidebarOpen] = useState(false),
+    [sidebarCollapsed, setSidebarCollapsed] = useState(false),
+    [accountMenuOpen, setAccountMenuOpen] = useState(false),
     [theme, setTheme] = useState<"dark" | "light">("dark");
   const busyRef = useRef(false);
   const createMenuRef = useRef<HTMLDetailsElement>(null);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const closeMenu = (returnFocus = false) => {
       const details = createMenuRef.current;
@@ -122,7 +126,29 @@ export function ProjectsWorkspace({
   useEffect(() => {
     const saved = window.localStorage.getItem("laos-theme");
     if (saved === "light" || saved === "dark") setTheme(saved);
+    setSidebarCollapsed(window.localStorage.getItem("laos-sidebar-collapsed") === "1");
   }, []);
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const menu = accountMenuRef.current?.querySelector<HTMLElement>("[role='menu']");
+    menu?.querySelector<HTMLElement>("button:not(:disabled)")?.focus();
+    const close = (restoreFocus = false) => {
+      setAccountMenuOpen(false);
+      if (restoreFocus) accountMenuRef.current?.querySelector<HTMLElement>("[aria-haspopup='menu']")?.focus();
+    };
+    const onPointerDown = (event: PointerEvent) => {
+      if (!accountMenuRef.current?.contains(event.target as Node)) close();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") close(true);
+    };
+    window.document.addEventListener("pointerdown", onPointerDown);
+    window.document.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.document.removeEventListener("pointerdown", onPointerDown);
+      window.document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [accountMenuOpen]);
   useEffect(() => {
     window.document.documentElement.style.colorScheme = theme;
     let themeColor = window.document.head.querySelector<HTMLMetaElement>(
@@ -146,6 +172,17 @@ export function ProjectsWorkspace({
       window.localStorage.setItem("laos-theme", next);
       return next;
     });
+  };
+  const toggleSidebar = () => {
+    setSidebarCollapsed((current) => {
+      const next = !current;
+      window.localStorage.setItem("laos-sidebar-collapsed", next ? "1" : "0");
+      return next;
+    });
+  };
+  const signOut = async () => {
+    await fetch("/api/auth/signout", { method: "POST" });
+    window.location.href = "/login";
   };
   const project = data.clients.find((c) => c.id === cid) as
     | AgencyClient
@@ -672,7 +709,7 @@ export function ProjectsWorkspace({
     { label: "Equipe e acesso", icon: "access", view: "access", visible: staff },
   ];
   return (
-    <div className={`projects pj-mosaic-shell theme-${theme}`}>
+    <div className={`projects pj-mosaic-shell theme-${theme} ${sidebarCollapsed ? "is-sidebar-collapsed" : ""}`}>
       {isNavigating ? (
         <div className="pj-route-progress" role="status" aria-label="Carregando próxima tela">
           <span aria-hidden="true" />
@@ -693,11 +730,20 @@ export function ProjectsWorkspace({
       >
         <div className="pj-sidebar-header">
           <button className="pj-brand" aria-label="Ir para meus projetos" onClick={() => navigate({})}>
-            <span className="pj-brand-mark" aria-hidden="true">L</span>
+            <span className="pj-brand-mark" aria-hidden="true">la</span>
             <span className="pj-brand-copy">
               <strong>laos</strong>
               <small>relatórios</small>
             </span>
+          </button>
+          <button
+            className="pj-sidebar-collapse"
+            aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
+            aria-pressed={sidebarCollapsed}
+            onClick={toggleSidebar}
+          >
+            <InterfaceIcon name={sidebarCollapsed ? "expand" : "collapse"} />
           </button>
           <button
             className="pj-sidebar-close"
@@ -719,6 +765,7 @@ export function ProjectsWorkspace({
                   className={item.active ? "active" : ""}
                   aria-current={item.active ? "page" : undefined}
                   onClick={() => navigate(item.values)}
+                  title={sidebarCollapsed ? item.label : undefined}
                 >
                   <WorkspaceNavIcon name={item.icon} />
                   <span>{item.label}</span>
@@ -752,6 +799,7 @@ export function ProjectsWorkspace({
                       className={view === item.view ? "active" : ""}
                       aria-current={view === item.view ? "page" : undefined}
                       onClick={() => navigate({ project: cid, view: item.view })}
+                      title={sidebarCollapsed ? item.label : undefined}
                     >
                       <WorkspaceNavIcon name={item.icon} />
                       <span>{item.label}</span>
@@ -762,12 +810,44 @@ export function ProjectsWorkspace({
           ) : null}
         </div>
 
-        <div className="pj-sidebar-footer">
-          <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
-          <span className="pj-sidebar-user">
-            <strong>{data.userName || "Minha conta"}</strong>
-            <small>{workspaceLabel}</small>
-          </span>
+        <div className="pj-sidebar-footer" ref={accountMenuRef}>
+          <button
+            type="button"
+            className="pj-account-trigger"
+            aria-haspopup="menu"
+            aria-expanded={accountMenuOpen}
+            title={sidebarCollapsed ? "Abrir menu da conta" : undefined}
+            onClick={() => setAccountMenuOpen((open) => !open)}
+          >
+            <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
+            <span className="pj-sidebar-user">
+              <strong>{data.userName || "Minha conta"}</strong>
+              <small>{workspaceLabel}</small>
+            </span>
+            <InterfaceIcon name="chevron-down" size={16} />
+          </button>
+          {accountMenuOpen ? (
+            <div className="pj-account-menu" role="menu" aria-label="Menu da conta">
+              <div className="pj-account-menu-identity">
+                <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
+                <span><strong>{data.userName || "Minha conta"}</strong><small>{workspaceLabel}</small></span>
+              </div>
+              {data.isStaff ? (
+                <button type="button" role="menuitem" onClick={() => {
+                  setAccountMenuOpen(false);
+                  navigate({ view: "team" });
+                }}>
+                  <InterfaceIcon name="settings" size={18} />
+                  Configurações
+                </button>
+              ) : null}
+              <div className="pj-account-menu-separator" role="separator" />
+              <button type="button" role="menuitem" className="danger" onClick={() => void signOut()}>
+                <InterfaceIcon name="logout" size={18} />
+                Sair
+              </button>
+            </div>
+          ) : null}
         </div>
       </aside>
       <header className="pj-topnav">
@@ -787,30 +867,12 @@ export function ProjectsWorkspace({
         <div className="pj-account">
           <button
             className="pj-theme-toggle"
-            aria-label={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
             aria-pressed={theme === "dark"}
-            title={theme === "dark" ? "Usar tema claro" : "Usar tema escuro"}
+            title={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
             onClick={toggleTheme}
           >
-            <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
-            <span className="pj-account-label">
-              {theme === "dark" ? "Tema claro" : "Tema escuro"}
-            </span>
-          </button>
-          <span className="pj-workspace-name" title={`Workspace: ${workspaceLabel}`}>
-            {workspaceLabel}
-          </span>
-          <button
-            className="pj-signout"
-            aria-label="Sair"
-            title="Sair da conta"
-            onClick={async () => {
-              await fetch("/api/auth/signout", { method: "POST" });
-              window.location.href = "/login";
-            }}
-          >
-            <span aria-hidden="true">↗</span>
-            <span className="pj-account-label">Sair</span>
+            <InterfaceIcon name={theme === "dark" ? "sun" : "moon"} />
           </button>
         </div>
       </header>
@@ -822,7 +884,7 @@ export function ProjectsWorkspace({
             <span>{notice}</span>
           </div>
           <button aria-label="Fechar aviso" onClick={() => setNotice("")}>
-            ×
+            <InterfaceIcon name="close" size={18} />
           </button>
         </div>
       )}
@@ -850,8 +912,8 @@ export function ProjectsWorkspace({
       ) : legacyDocId && project && legacyDocument ? (
         <PreservedReport record={legacyDocument} clientName={project.name} onBack={() => navigate({ project: cid, view: "reports" })} />
       ) : docId && project && document ? (
-        <>
-        <nav className="pj-container pj-breadcrumbs pj-document-breadcrumbs" aria-label="Caminho atual">
+        <div className="pj-document-shell">
+        <nav className="pj-breadcrumbs pj-document-breadcrumbs" aria-label="Caminho atual">
           <button onClick={() => navigate({})}>Projetos</button>
           <span aria-hidden="true">/</span>
           <button onClick={() => navigate({ project: cid })}>{project.name}</button>
@@ -873,7 +935,7 @@ export function ProjectsWorkspace({
           onBack={() => navigate({ project: cid })}
           onAction={documentAction}
         />
-        </>
+        </div>
       ) : docId || legacyDocId ? (
         <main className="pj-container">
           <Empty title="Documento indisponível">
@@ -908,7 +970,7 @@ export function ProjectsWorkspace({
                   className="accent"
                   onClick={() => navigate({ create: "project" })}
                 >
-                  ＋ Novo projeto
+                  <InterfaceIcon name="plus" size={18} /> Novo projeto
                 </button>
               )}
               {canCreateDocumentFromScreen && (
@@ -934,7 +996,7 @@ export function ProjectsWorkspace({
                   >
                     <summary aria-label="Mais ações de criação" aria-haspopup="menu">
                       Mais ações
-                      <span aria-hidden="true">⌄</span>
+                      <InterfaceIcon name="chevron-down" size={16} />
                     </summary>
                     <div role="menu">
                       <button
@@ -1231,7 +1293,7 @@ export function ProjectsWorkspace({
                                   : "Rascunho da equipe"}
                               </small>
                             </div>
-                            <span>→</span>
+                            <InterfaceIcon name="forward" size={18} />
                           </button>
                         ))}
                       {view === "reports" &&
@@ -1385,7 +1447,7 @@ export function ProjectsWorkspace({
                             setModal(view === "timeline" ? "timeline" : "goal")
                           }
                         >
-                          ＋{" "}
+                          <InterfaceIcon name="plus" size={18} />{" "}
                           {view === "timeline"
                             ? "Registrar ação"
                             : "Criar meta"}
@@ -1482,7 +1544,7 @@ export function ProjectsWorkspace({
                           {data.clients.find((c) => c.id === d.client_id)?.name}
                         </span>
                         <small>{shortDate(d.updated_at)}</small>
-                        <span>→</span>
+                        <InterfaceIcon name="forward" size={18} />
                       </button>
                     ))}
                   <p className="pj-muted">
@@ -1643,7 +1705,7 @@ export function ProjectsWorkspace({
                               <b>{lastActivity ? shortDate(lastActivity) : "indisponível"}</b>
                             </small>
                             <span className="pj-open-project">
-                              Abrir projeto <span aria-hidden="true">→</span>
+                              Abrir projeto <InterfaceIcon name="forward" size={18} />
                             </span>
                           </div>
                         </div>
@@ -1758,7 +1820,7 @@ export function ProjectsWorkspace({
                             .join(" · ")}
                         </small>
                       </div>
-                      {account === a.id && <span>✓</span>}
+                      {account === a.id && <span><InterfaceIcon name="check" size={18} /></span>}
                     </button>
                   ))}
               </div>

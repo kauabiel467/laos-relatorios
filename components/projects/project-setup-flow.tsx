@@ -11,6 +11,7 @@ import type { TeamMember } from "@/lib/team/types";
 import { ProjectDetailsFields } from "./project-details-fields";
 import { ProjectAccessPanel } from "./project-access-panel";
 import { ProjectIntegrations } from "./project-integrations";
+import { InterfaceIcon } from "./interface-icon";
 
 const setupSteps = [
   "Dados do projeto",
@@ -56,7 +57,7 @@ function SetupFrame({
                   disabled={itemStep > maxStep}
                   aria-label={`Etapa ${itemStep}: ${label}`}
                 >
-                  <span aria-hidden="true">{itemStep < step ? "✓" : itemStep}</span>
+                  <span aria-hidden="true">{itemStep < step ? <InterfaceIcon name="check" size={17} /> : itemStep}</span>
                   <strong>{label}</strong>
                 </button>
               </li>

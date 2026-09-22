@@ -4,6 +4,7 @@ import type { AgencyRecord } from "@/lib/agency/types";
 import Link from "next/link";
 import { projectHref } from "@/lib/projects/routes";
 import { shortDate } from "./ui";
+import { InterfaceIcon } from "./interface-icon";
 
 export function PreservedReport({
   record,
@@ -33,7 +34,7 @@ export function PreservedReport({
         <span aria-hidden="true">/</span>
         <span aria-current="page">{record.title}</span>
       </nav>
-      <button onClick={onBack}>← Voltar aos relatórios</button>
+      <button onClick={onBack}><InterfaceIcon name="back" size={18} /> Voltar aos relatórios</button>
       <article className="pj-panel">
         <span className="pj-section-label">RELATÓRIO HISTÓRICO · SOMENTE LEITURA</span>
         <h1>{record.title}</h1>

@@ -11,6 +11,7 @@ import {
 import { calculatedMetricValue, metricChange } from "@/lib/metrics/engine";
 import {
   lastMonthDateRange,
+  currentMonthDateRange,
   previousCalendarMonth,
   previousDateRange,
   rollingDateRange,
@@ -56,7 +57,7 @@ export interface CustomMetricDefinition {
   formula?: string;
 }
 export interface AnalysisConfig {
-  preset: "last_7d" | "last_30d" | "last_month" | "custom";
+  preset: "last_7d" | "last_30d" | "last_90d" | "last_180d" | "current_month" | "last_month" | "custom";
   since: string;
   until: string;
   comparison: "previous" | "none" | "custom";
@@ -243,7 +244,12 @@ export function periodDates(
   timezone = "UTC",
 ) {
   if (preset === "last_month") return lastMonthDateRange(timezone, today);
-  return rollingDateRange(preset === "last_7d" ? 7 : 30, timezone, today);
+  if (preset === "current_month") return currentMonthDateRange(timezone, today);
+  return rollingDateRange(
+    preset === "last_7d" ? 7 : preset === "last_90d" ? 90 : preset === "last_180d" ? 180 : 30,
+    timezone,
+    today,
+  );
 }
 export function previousDates(since: string, until: string) {
   const previous = previousDateRange(since, until);

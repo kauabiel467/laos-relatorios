@@ -12,6 +12,10 @@ import {
 } from "@/lib/projects/model";
 import { PRIMARY_KPI_IDS, type PrimaryKpiId } from "@/lib/metrics/catalog";
 import { MetaMark, shortDate } from "./ui";
+import { InterfaceIcon, type InterfaceIconName } from "./interface-icon";
+
+const templateIcon = (id: string): InterfaceIconName =>
+  id === "sales" ? "sales" : id === "messages" ? "messages" : id === "leads" ? "invite" : "templates";
 export function AnalysisWizard({
   cid,
   clientName,
@@ -107,7 +111,7 @@ export function AnalysisWizard({
                   }
                   onClick={() => setConfig(defaultConfig(t.id))}
                 >
-                  <span>{t.icon}</span>
+                  <span><InterfaceIcon name={templateIcon(t.id)} /></span>
                   <div>
                     <strong>{t.name}</strong>
                     <p>{t.description}</p>
@@ -116,7 +120,7 @@ export function AnalysisWizard({
                       blocos
                     </small>
                   </div>
-                  {config.template === t.id && <b>✓</b>}
+                  {config.template === t.id && <b><InterfaceIcon name="check" size={18} /></b>}
                 </button>
               ))}
             </div>
@@ -145,7 +149,7 @@ export function AnalysisWizard({
                         }))
                       }
                     >
-                      <span>▦</span>
+                      <span><InterfaceIcon name="templates" /></span>
                       <div>
                         <strong>{t.title}</strong>
                         <p>
@@ -164,7 +168,7 @@ export function AnalysisWizard({
             <div className="pj-actions">
               <button onClick={onCancel}>Cancelar</button>
               <button className="primary" onClick={() => setStep(2)}>
-                Continuar →
+                Continuar <InterfaceIcon name="forward" size={18} />
               </button>
             </div>
           </>
@@ -216,7 +220,10 @@ export function AnalysisWizard({
               >
                 <option value="last_7d">Últimos 7 dias</option>
                 <option value="last_30d">Últimos 30 dias</option>
-                <option value="last_month">Último mês</option>
+                <option value="last_90d">Últimos 3 meses</option>
+                <option value="last_180d">Últimos 6 meses</option>
+                <option value="current_month">Mês atual</option>
+                <option value="last_month">Mês anterior</option>
                 <option value="custom">Personalizado</option>
               </select>
             </label>
@@ -313,7 +320,7 @@ export function AnalysisWizard({
                 <strong>Meta Ads</strong>
                 <p>{clientName}</p>
               </div>
-              <span>✓</span>
+              <span><InterfaceIcon name="check" size={18} /></span>
             </div>
             <h2>Escolher detalhes</h2>
             <p className="pj-muted">
@@ -386,7 +393,7 @@ export function AnalysisWizard({
             )}
             <div className="pj-actions">
               <button type="button" disabled={busy} onClick={() => setStep(1)}>
-                ← Voltar
+                <InterfaceIcon name="back" size={18} /> Voltar
               </button>
               <button
                 className="primary"

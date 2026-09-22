@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useId, useRef, type ReactNode } from "react";
 import { BrandIcon } from "./brand-icons";
+import { InterfaceIcon } from "./interface-icon";
 export function Dialog({
   title,
   children,
@@ -81,7 +82,7 @@ export function Dialog({
             disabled={busy}
             onClick={close}
           >
-            <span aria-hidden="true">×</span>
+            <InterfaceIcon name="close" />
           </button>
         </header>
         <div className="pj-dialog-body">{children}</div>
@@ -107,10 +108,10 @@ export function Toast({
   }, [message, duration]);
   return (
     <div className="pj-toast" role="status" aria-live="polite">
-      <span aria-hidden="true">✓</span>
+      <InterfaceIcon name="check" size={18} />
       <p>{message}</p>
       <button type="button" aria-label="Fechar confirmação" onClick={close}>
-        ×
+        <InterfaceIcon name="close" size={18} />
       </button>
     </div>
   );
@@ -140,7 +141,7 @@ export function Empty({
 }) {
   return (
     <div className="pj-empty">
-      <span aria-hidden="true">▦</span>
+      <span aria-hidden="true"><InterfaceIcon name="reports" size={24} /></span>
       <h3>{title}</h3>
       {children}
     </div>
