@@ -4851,6 +4851,29 @@
   display: grid;
 }
 
+.projects .pj-ifood-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.projects .pj-integration-card .pj-ifood-card-success,
+.projects .pj-integration-card .pj-ifood-card-error {
+  margin: -6px 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.projects .pj-integration-card .pj-ifood-card-success {
+  color: var(--pj-success);
+}
+
+.projects .pj-integration-card .pj-ifood-card-error {
+  color: var(--pj-danger);
+}
+
 @media screen and (max-width: 900px) {
   .projects .pj-ifood-steps {
     grid-template-columns: 1fr;
@@ -4884,9 +4907,15 @@
 
   .projects .pj-ifood-code-heading button,
   .projects .pj-ifood-portal,
-  .projects .pj-ifood-generate button {
+  .projects .pj-ifood-generate button,
+  .projects .pj-ifood-actions button {
     width: 100%;
     justify-content: center;
+  }
+
+  .projects .pj-ifood-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 }
 

@@ -47,6 +47,7 @@ const empty: AgencyData = {
   clientAccess: [],
   clientInvitations: [],
   projectMetaConnection: null,
+  projectIfoodConnection: null,
   isStaff: false,
   userName: "",
 };
@@ -1128,6 +1129,7 @@ export function ProjectsWorkspace({
                 clientAccess={data.clientAccess}
                 invitations={data.clientInvitations}
                 connection={data.projectMetaConnection}
+                ifoodConnection={data.projectIfoodConnection}
                 canManageAccess={canManageAccess}
                 canConfigureIntegration={staff}
                 canUnlink={canManageAccess}
@@ -1144,6 +1146,12 @@ export function ProjectsWorkspace({
                 onConnect={() => void openMeta()}
                 onTest={() => void testMetaConnection()}
                 onUnlink={() => void unlinkMetaConnection()}
+                onIfoodConnected={(connection) =>
+                  setData((current) => ({
+                    ...current,
+                    projectIfoodConnection: connection,
+                  }))
+                }
                 onAdvance={advanceSetup}
                 onFinish={finishSetup}
                 onExit={() => navigate({ project: cid })}
@@ -1373,6 +1381,7 @@ export function ProjectsWorkspace({
                     <ProjectIntegrations
                       project={project}
                       connection={data.projectMetaConnection}
+                      ifoodConnection={data.projectIfoodConnection}
                       canConfigure={staff}
                       canUnlink={canManageAccess}
                       busy={busy}
@@ -1381,6 +1390,12 @@ export function ProjectsWorkspace({
                       onConnect={() => void openMeta()}
                       onTest={() => void testMetaConnection()}
                       onUnlink={() => void unlinkMetaConnection()}
+                      onIfoodConnected={(connection) =>
+                        setData((current) => ({
+                          ...current,
+                          projectIfoodConnection: connection,
+                        }))
+                      }
                     />
                     <div className="pj-actions">
                       <button onClick={() => navigate({ project: cid })}>
