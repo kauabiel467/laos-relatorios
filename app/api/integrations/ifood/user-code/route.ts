@@ -8,6 +8,7 @@ import {
   sealIfoodOAuthState,
 } from "@/lib/integrations/ifood-oauth";
 import { authorizeProject, ProjectAccessError } from "@/lib/projects/access";
+import { rateLimit, requestIp, tooManyRequestsResponse } from "@/lib/utils/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 const requestSchema = z.object({ projectId: z.string().uuid() });
 
 export async function POST(request: NextRequest) {
+  const limit = rateLimit(`ifood-user-code:${requestIp(request)}`, 10, 60_000);
+  if (!limit.allowed) return tooManyRequestsResponse(limit);
   try {
     const input = requestSchema.parse(await request.json());
     const { user } = await authorizeProject(input.projectId);
