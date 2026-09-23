@@ -59,6 +59,13 @@ export interface ProjectMetaConnection {
   last_error_category: string | null;
   last_error_message: string | null;
 }
+export interface ProjectIfoodConnection {
+  connection_status: "connected" | "error";
+  token_expires_at: string | null;
+  connected_at: string | null;
+  updated_at: string;
+  last_error: string | null;
+}
 export interface AgencyRecord {
   id: string;
   client_id: string;
@@ -92,6 +99,7 @@ export interface AgencyData {
   clientAccess: ProjectClientAccess[];
   clientInvitations: ProjectClientInvitation[];
   projectMetaConnection: ProjectMetaConnection | null;
+  projectIfoodConnection: ProjectIfoodConnection | null;
   userName: string;
   isStaff: boolean;
 }

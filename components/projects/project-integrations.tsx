@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import type {
   AgencyClient,
+  ProjectIfoodConnection,
   ProjectMetaConnection,
 } from "@/lib/agency/types";
 import {
@@ -20,6 +21,12 @@ type IfoodLinkCode = {
   verificationUrlComplete: string | null;
   expiresIn: number;
   expiresAt: string;
+};
+
+type IfoodCompletionResponse = {
+  connection?: ProjectIfoodConnection;
+  error?: string;
+  code?: string;
 };
 
 function connectionMessage(connection: ProjectMetaConnection | null) {
@@ -56,6 +63,7 @@ function healthLabel(connection: ProjectMetaConnection) {
 export function ProjectIntegrations({
   project,
   connection,
+  ifoodConnection,
   canConfigure,
   canUnlink,
   busy,
@@ -64,9 +72,11 @@ export function ProjectIntegrations({
   onConnect,
   onTest,
   onUnlink,
+  onIfoodConnected,
 }: {
   project: AgencyClient;
   connection: ProjectMetaConnection | null;
+  ifoodConnection: ProjectIfoodConnection | null;
   canConfigure: boolean;
   canUnlink: boolean;
   busy: boolean;
@@ -75,13 +85,15 @@ export function ProjectIntegrations({
   onConnect: () => void;
   onTest: () => void;
   onUnlink: () => void;
+  onIfoodConnected: (connection: ProjectIfoodConnection) => void;
 }) {
   const [confirmUnlink, setConfirmUnlink] = useState(false);
   const [ifoodOpen, setIfoodOpen] = useState(false);
   const [ifoodLoading, setIfoodLoading] = useState(false);
   const [ifoodError, setIfoodError] = useState("");
   const [ifoodCode, setIfoodCode] = useState<IfoodLinkCode | null>(null);
-  const [ifoodCopied, setIfoodCopied] = useState(false);
+  const [ifoodAuthorizationCode, setIfoodAuthorizationCode] = useState("");
+  const [ifoodToast, setIfoodToast] = useState("");
   const normalizedSearch = search.trim().toLocaleLowerCase("pt-BR");
   const visible = PROJECT_INTEGRATIONS.filter((integration) =>
     `${integration.name} ${integration.description}`
@@ -89,6 +101,7 @@ export function ProjectIntegrations({
       .includes(normalizedSearch),
   );
   const isConnected = connection?.connection_status === "connected";
+  const isIfoodConnected = ifoodConnection?.connection_status === "connected";
   const generateIfoodCode = async () => {
     if (ifoodLoading) return;
     setIfoodLoading(true);
@@ -104,11 +117,55 @@ export function ProjectIntegrations({
         throw new Error(payload.error ?? "Não foi possível gerar o código de vinculação.");
       }
       setIfoodCode(payload);
+      setIfoodAuthorizationCode("");
     } catch (error) {
       setIfoodError(
         error instanceof Error
           ? error.message
           : "Não foi possível gerar o código de vinculação.",
+      );
+    } finally {
+      setIfoodLoading(false);
+    }
+  };
+
+  const completeIfoodIntegration = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (ifoodLoading) return;
+    const authorizationCode = ifoodAuthorizationCode.trim();
+    if (!authorizationCode) {
+      setIfoodError("Informe o código de autorização exibido pelo iFood.");
+      return;
+    }
+    setIfoodLoading(true);
+    setIfoodError("");
+    try {
+      const response = await fetch("/api/integrations/ifood/complete", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId: project.id, authorizationCode }),
+      });
+      const payload = await response.json() as IfoodCompletionResponse;
+      if (!response.ok || !payload.connection) {
+        if (
+          payload.code === "state_expired" ||
+          payload.code === "authorization_code_expired"
+        ) {
+          setIfoodCode(null);
+          setIfoodAuthorizationCode("");
+        }
+        throw new Error(payload.error ?? "Não foi possível concluir a integração.");
+      }
+      onIfoodConnected(payload.connection);
+      setIfoodOpen(false);
+      setIfoodCode(null);
+      setIfoodAuthorizationCode("");
+      setIfoodToast("iFood conectado com sucesso");
+    } catch (error) {
+      setIfoodError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível concluir a integração com o iFood.",
       );
     } finally {
       setIfoodLoading(false);
@@ -240,9 +297,16 @@ export function ProjectIntegrations({
         <div className="pj-integration-grid">
           {visible.map((integration) => {
             const metaConnected = integration.id === "meta" && isConnected;
-            const primaryStatus: IntegrationAvailability = metaConnected
-              ? "connected"
-              : integration.availability;
+            const ifoodConnected = integration.id === "ifood" && isIfoodConnected;
+            const ifoodFailed =
+              integration.id === "ifood" &&
+              ifoodConnection?.connection_status === "error";
+            const primaryStatus: IntegrationAvailability =
+              metaConnected || ifoodConnected
+                ? "connected"
+                : ifoodFailed
+                  ? "unavailable"
+                  : integration.availability;
             return (
               <article
                 className={`pj-integration-card ${metaConnected ? "connected" : ""} ${integration.id === "ifood" ? "is-ifood" : ""}`}
@@ -258,7 +322,9 @@ export function ProjectIntegrations({
                   </span>
                   <div className="pj-badge-row">
                     <span className={`pj-status-badge ${primaryStatus}`}>
-                      {INTEGRATION_STATUS_LABELS[primaryStatus]}
+                      {ifoodFailed
+                        ? "Falha na conexão"
+                        : INTEGRATION_STATUS_LABELS[primaryStatus]}
                     </span>
                     {"maturity" in integration ? (
                       <span className="pj-status-badge beta">
@@ -270,16 +336,23 @@ export function ProjectIntegrations({
                 <h3>{integration.name}</h3>
                 <p>{integration.description}</p>
                 <small>{integration.note}</small>
+                {integration.id === "ifood" && ifoodConnection ? (
+                  <small className={ifoodFailed ? "pj-ifood-card-error" : "pj-ifood-card-success"}>
+                    {ifoodConnected
+                      ? `iFood conectado${ifoodConnection.connected_at ? ` em ${shortDate(ifoodConnection.connected_at)}` : ""}.`
+                      : ifoodConnection.last_error ?? "A última tentativa não foi concluída."}
+                  </small>
+                ) : null}
                 {integration.id === "ifood" ? (
                   <button
                     type="button"
-                    disabled={!canConfigure || busy}
+                    disabled={!canConfigure || busy || ifoodConnected}
                     onClick={() => {
                       setIfoodError("");
                       setIfoodOpen(true);
                     }}
                   >
-                    Conectar iFood
+                    {ifoodConnected ? "iFood conectado" : "Conectar iFood"}
                   </button>
                 ) : integration.connectable ? (
                   <button
@@ -332,7 +405,7 @@ export function ProjectIntegrations({
             <li><span>2</span><p><strong>Abrir o Portal do Parceiro iFood.</strong><small>Use o botão abaixo para acessar a página oficial.</small></p></li>
             <li><span>3</span><p><strong>Autorizar o acesso da aplicação.</strong><small>Confirme a vinculação dentro do portal.</small></p></li>
             <li><span>4</span><p><strong>Receber um código de autorização.</strong><small>O iFood exibirá esse código após a confirmação.</small></p></li>
-            <li><span>5</span><p><strong>Inserir o código no LAOS.</strong><small>A troca por token será habilitada na próxima etapa.</small></p></li>
+            <li><span>5</span><p><strong>Inserir o código no LAOS.</strong><small>O servidor conclui a autenticação e protege as credenciais.</small></p></li>
           </ol>
           {!ifoodCode ? (
             <div className="pj-ifood-generate">
@@ -350,7 +423,11 @@ export function ProjectIntegrations({
               </button>
             </div>
           ) : (
-            <div className="pj-ifood-code-panel" aria-live="polite">
+            <form
+              className="pj-ifood-code-panel"
+              aria-live="polite"
+              onSubmit={(event) => void completeIfoodIntegration(event)}
+            >
               <div className="pj-ifood-code-heading">
                 <div>
                   <span className="pj-section-label">CÓDIGO DE VINCULAÇÃO</span>
@@ -361,7 +438,7 @@ export function ProjectIntegrations({
                   onClick={async () => {
                     try {
                       await navigator.clipboard.writeText(ifoodCode.userCode);
-                      setIfoodCopied(true);
+                      setIfoodToast("Código do iFood copiado");
                       setIfoodError("");
                     } catch {
                       setIfoodError("Não foi possível copiar automaticamente. Selecione o código e copie manualmente.");
@@ -390,35 +467,55 @@ export function ProjectIntegrations({
                 Código de autorização
                 <input
                   type="text"
-                  disabled
-                  placeholder="Disponível na próxima etapa"
+                  name="ifood_authorization_code"
+                  value={ifoodAuthorizationCode}
+                  onChange={(event) => setIfoodAuthorizationCode(event.currentTarget.value)}
+                  disabled={ifoodLoading}
+                  autoComplete="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  required
+                  minLength={4}
+                  maxLength={2048}
+                  placeholder="Cole o código fornecido pelo iFood"
                 />
                 <FieldMessage>
-                  Após autorizar no portal, a inserção e a troca por token serão implementadas na próxima etapa.
+                  Este código será enviado somente ao servidor e não ficará salvo no navegador.
                 </FieldMessage>
               </label>
-              <button
-                type="button"
-                disabled={ifoodLoading}
-                onClick={() => void generateIfoodCode()}
-              >
-                {ifoodLoading ? "Gerando outro código…" : "Gerar outro código"}
-              </button>
-            </div>
+              <div className="pj-ifood-actions">
+                <button
+                  type="button"
+                  disabled={ifoodLoading}
+                  onClick={() => void generateIfoodCode()}
+                >
+                  Gerar outro código
+                </button>
+                <button
+                  type="submit"
+                  className="primary"
+                  disabled={ifoodLoading || !ifoodAuthorizationCode.trim()}
+                >
+                  {ifoodLoading ? "Concluindo integração…" : "Concluir integração"}
+                </button>
+              </div>
+            </form>
           )}
           {ifoodError ? (
             <div className="pj-warning" role="alert">
               <strong>Não foi possível continuar.</strong>
               <p>{ifoodError}</p>
-              <button type="button" disabled={ifoodLoading} onClick={() => void generateIfoodCode()}>
-                Tentar novamente
-              </button>
+              {!ifoodCode ? (
+                <button type="button" disabled={ifoodLoading} onClick={() => void generateIfoodCode()}>
+                  Gerar novo código
+                </button>
+              ) : null}
             </div>
           ) : null}
         </Dialog>
       ) : null}
-      {ifoodCopied ? (
-        <Toast message="Código do iFood copiado" close={() => setIfoodCopied(false)} />
+      {ifoodToast ? (
+        <Toast message={ifoodToast} close={() => setIfoodToast("")} />
       ) : null}
     </div>
   );

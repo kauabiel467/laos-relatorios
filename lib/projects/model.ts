@@ -235,6 +235,7 @@ export interface ProjectDocument {
   config: AnalysisConfig;
   data: AnalysisData | null;
   status: "draft" | "published";
+  share_token: string | null;
   created_at: string;
   updated_at: string;
 }

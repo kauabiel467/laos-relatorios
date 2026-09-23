@@ -9,7 +9,9 @@ const dir = fs.mkdtempSync(path.join(os.tmpdir(), "laos-ifood-oauth-test-"));
 const originalResolve = Module._resolveFilename;
 const previousEnv = {
   clientId: process.env.IFOOD_CLIENT_ID,
+  clientSecret: process.env.IFOOD_CLIENT_SECRET,
   stateSecret: process.env.IFOOD_OAUTH_STATE_SECRET,
+  tokenSecret: process.env.IFOOD_TOKEN_ENCRYPTION_KEY,
   apiBaseUrl: process.env.IFOOD_API_BASE_URL,
 };
 
@@ -32,7 +34,9 @@ function compile(source) {
 (async () => {
   try {
     process.env.IFOOD_CLIENT_ID = "client-id-only-on-server";
+    process.env.IFOOD_CLIENT_SECRET = "client-secret-only-on-server";
     process.env.IFOOD_OAUTH_STATE_SECRET = "test-secret-with-more-than-thirty-two-characters";
+    process.env.IFOOD_TOKEN_ENCRYPTION_KEY = "different-token-key-with-more-than-thirty-two-characters";
     delete process.env.IFOOD_API_BASE_URL;
 
     const envOutput = compile("lib/env.ts");
@@ -73,6 +77,70 @@ function compile(source) {
     assert.equal(capturedInit.body.get("clientId"), "client-id-only-on-server");
     assert.equal(capturedInit.body.size, 1, "nenhum secret deve ser enviado para gerar o código");
     assert.deepEqual(result, fixture);
+
+    let tokenUrl = "";
+    let tokenInit;
+    const tokenFixture = {
+      accessToken: "ifood-access-token-never-sent-to-browser",
+      refreshToken: "ifood-refresh-token-never-sent-to-browser",
+      expiresIn: 3600,
+      type: "bearer",
+    };
+    const token = await oauth.requestIfoodAccessToken(
+      "authorization-code-from-user",
+      fixture.authorizationCodeVerifier,
+      async (url, init) => {
+        tokenUrl = String(url);
+        tokenInit = init;
+        return new Response(JSON.stringify(tokenFixture), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      },
+    );
+    assert.equal(
+      tokenUrl,
+      "https://merchant-api.ifood.com.br/authentication/v1.0/oauth/token",
+    );
+    assert.equal(tokenInit.method, "POST");
+    assert.equal(tokenInit.body.get("grantType"), "authorization_code");
+    assert.equal(tokenInit.body.get("clientId"), "client-id-only-on-server");
+    assert.equal(tokenInit.body.get("clientSecret"), "client-secret-only-on-server");
+    assert.equal(tokenInit.body.get("authorizationCode"), "authorization-code-from-user");
+    assert.equal(
+      tokenInit.body.get("authorizationCodeVerifier"),
+      fixture.authorizationCodeVerifier,
+    );
+    assert.equal(tokenInit.body.size, 5);
+    assert.deepEqual(token, tokenFixture);
+
+    const sealedAccessToken = oauth.sealIfoodCredential(token.accessToken);
+    assert.doesNotMatch(sealedAccessToken, /ifood-access-token/);
+    assert.equal(oauth.unsealIfoodCredential(sealedAccessToken), token.accessToken);
+    assert.throws(
+      () => oauth.unsealIfoodCredential(`${sealedAccessToken.slice(0, -1)}x`),
+      /credenciais armazenadas.*inválidas/i,
+    );
+
+    await assert.rejects(
+      () => oauth.requestIfoodAccessToken(
+        "expired-code",
+        fixture.authorizationCodeVerifier,
+        async () => new Response(
+          JSON.stringify({ error: "invalid_grant", error_description: "authorization code expired" }),
+          { status: 400 },
+        ),
+      ),
+      (error) => error.code === "authorization_code_expired",
+    );
+    await assert.rejects(
+      () => oauth.requestIfoodAccessToken(
+        "invalid-code",
+        fixture.authorizationCodeVerifier,
+        async () => new Response(JSON.stringify({ error: "invalid_grant" }), { status: 400 }),
+      ),
+      (error) => error.code === "invalid_authorization_code",
+    );
 
     const now = Date.now();
     const state = {
@@ -119,19 +187,53 @@ function compile(source) {
     assert.equal(cookieOptions.path, "/api/integrations/ifood");
     assert.equal(cookieOptions.maxAge, 600);
 
+    const completeRoute = fs.readFileSync(
+      "app/api/integrations/ifood/complete/route.ts",
+      "utf8",
+    );
+    assert.match(completeRoute, /authorizationCodeVerifier: state\.authorizationCodeVerifier/);
+    assert.match(completeRoute, /state\.userId !== user\.id \|\| state\.projectId !== input\.projectId/);
+    assert.match(completeRoute, /\{ connection \}/, "o navegador recebe somente o resumo da conexão");
+    assert.doesNotMatch(
+      completeRoute,
+      /NextResponse\.json\([^)]*(?:accessToken|refreshToken|clientSecret)/s,
+      "tokens e client secret nunca podem entrar na resposta pública",
+    );
+
+    const storage = fs.readFileSync("lib/projects/ifood.ts", "utf8");
+    assert.match(storage, /access_token_ciphertext: sealIfoodCredential\(token\.accessToken\)/);
+    assert.match(storage, /refresh_token_ciphertext: sealIfoodCredential\(token\.refreshToken\)/);
+    assert.match(storage, /connection_already_exists/);
+
+    const migration = fs.readFileSync(
+      "supabase/migrations/20260922144219_agency_ifood_connections.sql",
+      "utf8",
+    );
+    assert.match(migration, /alter table public\.agency_ifood_connections enable row level security/i);
+    assert.match(migration, /revoke all on table public\.agency_ifood_connections from public, anon, authenticated/i);
+    assert.match(migration, /grant all on table public\.agency_ifood_connections to service_role/i);
+    assert.match(migration, /access_token_ciphertext text/i);
+    assert.match(migration, /refresh_token_ciphertext text/i);
+
     const component = fs.readFileSync("components/projects/project-integrations.tsx", "utf8");
     assert.match(component, /Conectar iFood/);
     assert.match(component, /title="Integrar iFood"/);
     assert.match(component, /verificationUrlComplete \?\? ifoodCode\.verificationUrl/);
-    assert.match(component, /A troca por token será habilitada na próxima etapa/);
+    assert.match(component, /Código de autorização/);
+    assert.match(component, /Concluir integração/);
+    assert.match(component, /iFood conectado/);
 
-    console.log("PASS: início do OAuth iFood usa endpoint oficial, estado cifrado e resposta pública mínima");
+    console.log("PASS: OAuth distribuído iFood troca tokens no servidor e persiste somente credenciais cifradas");
   } finally {
     Module._resolveFilename = originalResolve;
     if (previousEnv.clientId === undefined) delete process.env.IFOOD_CLIENT_ID;
     else process.env.IFOOD_CLIENT_ID = previousEnv.clientId;
+    if (previousEnv.clientSecret === undefined) delete process.env.IFOOD_CLIENT_SECRET;
+    else process.env.IFOOD_CLIENT_SECRET = previousEnv.clientSecret;
     if (previousEnv.stateSecret === undefined) delete process.env.IFOOD_OAUTH_STATE_SECRET;
     else process.env.IFOOD_OAUTH_STATE_SECRET = previousEnv.stateSecret;
+    if (previousEnv.tokenSecret === undefined) delete process.env.IFOOD_TOKEN_ENCRYPTION_KEY;
+    else process.env.IFOOD_TOKEN_ENCRYPTION_KEY = previousEnv.tokenSecret;
     if (previousEnv.apiBaseUrl === undefined) delete process.env.IFOOD_API_BASE_URL;
     else process.env.IFOOD_API_BASE_URL = previousEnv.apiBaseUrl;
     fs.rmSync(dir, { recursive: true, force: true });

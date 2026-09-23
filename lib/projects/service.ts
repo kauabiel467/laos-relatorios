@@ -3,6 +3,7 @@ import type {
   AgencyRecord,
   ProjectClientAccess,
   ProjectClientInvitation,
+  ProjectIfoodConnection,
   ProjectMetaConnection,
 } from "@/lib/agency/types";
 import { getTeamContext } from "@/lib/team/server";
@@ -52,6 +53,7 @@ export async function loadProjectWorkspace(clientId?: string, documentId?: strin
   let clientAccess: ProjectClientAccess[] = [];
   let clientInvitations: ProjectClientInvitation[] = [];
   let projectMetaConnection: ProjectMetaConnection | null = null;
+  let projectIfoodConnection: ProjectIfoodConnection | null = null;
   if (clientId && activeAccess?.role) {
     const [membersResult, accessResult, invitationsResult] = await Promise.all([
       db
@@ -80,15 +82,35 @@ export async function loadProjectWorkspace(clientId?: string, documentId?: strin
 
     const admin = getSupabaseAdminClient();
     if (admin) {
-      const { data: connection, error: connectionError } = await admin
-        .from("agency_meta_connections")
-        .select(
-          "account_id,account_name,account_currency,account_timezone,account_status,connection_status,connected_at,last_checked_at,last_success_at,last_error_category,last_error_message",
-        )
-        .eq("client_id", clientId)
-        .maybeSingle();
-      if (connectionError) throw Error("Não foi possível carregar o estado da integração Meta.");
-      projectMetaConnection = connection as ProjectMetaConnection | null;
+      const [metaResult, ifoodResult] = await Promise.all([
+        admin
+          .from("agency_meta_connections")
+          .select(
+            "account_id,account_name,account_currency,account_timezone,account_status,connection_status,connected_at,last_checked_at,last_success_at,last_error_category,last_error_message",
+          )
+          .eq("client_id", clientId)
+          .maybeSingle(),
+        admin
+          .from("agency_ifood_connections")
+          .select(
+            "connection_status,token_expires_at,connected_at,updated_at,last_error",
+          )
+          .eq("client_id", clientId)
+          .maybeSingle(),
+      ]);
+      if (metaResult.error) throw Error("Não foi possível carregar o estado da integração Meta.");
+      // Keep the existing workspace available during a rolling deploy where
+      // the application may start before the additive migration is applied.
+      if (
+        ifoodResult.error &&
+        !["42P01", "PGRST205"].includes(ifoodResult.error.code)
+      ) {
+        throw Error("Não foi possível carregar o estado da integração iFood.");
+      }
+      projectMetaConnection = metaResult.data as ProjectMetaConnection | null;
+      projectIfoodConnection = ifoodResult.error
+        ? null
+        : ifoodResult.data as ProjectIfoodConnection | null;
     }
   }
   const workspace: AgencyData = {
@@ -106,6 +128,7 @@ export async function loadProjectWorkspace(clientId?: string, documentId?: strin
     clientAccess,
     clientInvitations,
     projectMetaConnection,
+    projectIfoodConnection,
     isStaff: teamIds.length > 0,
     userName: user.email?.split("@")[0] ?? "Minha conta",
   };

@@ -153,6 +153,9 @@ export function AnalysisView({
     [reportCopied, setReportCopied] = useState(false),
     [reportCopyError, setReportCopyError] = useState(""),
     [link, setLink] = useState(""),
+    [publicLink, setPublicLink] = useState(""),
+    [publicCopied, setPublicCopied] = useState(false),
+    [publicCopyError, setPublicCopyError] = useState(""),
     [draggedMetric, setDraggedMetric] = useState(""),
     [dropTargetMetric, setDropTargetMetric] = useState(""),
     [resizingMetric, setResizingMetric] = useState(""),
@@ -189,6 +192,10 @@ export function AnalysisView({
         ),
       ),
     [doc.id, doc.client_id, doc.kind],
+  );
+  useEffect(
+    () => setPublicLink(doc.share_token ? `${window.location.origin}/report/${doc.share_token}` : ""),
+    [doc.share_token],
   );
   useEffect(() => {
     if (!menu) return;
@@ -2383,9 +2390,65 @@ export function AnalysisView({
       )}
       {share && (
         <Dialog title="Compartilhar análise" close={() => setShare(false)}>
+          {doc.kind === "dashboard" && (
+            <div className="pj-public-share-section">
+              <h4>Link público</h4>
+              {doc.share_token ? (
+                <>
+                  <p>
+                    Quem tiver este link abre o dashboard sem fazer login.
+                    Revogue a qualquer momento para encerrar o acesso.
+                  </p>
+                  <input readOnly value={publicLink} aria-label="Link público do dashboard" />
+                  <div className="pj-share-grid">
+                    <button
+                      disabled={busy}
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(publicLink);
+                          setPublicCopied(true);
+                          setPublicCopyError("");
+                        } catch {
+                          setPublicCopied(false);
+                          setPublicCopyError("Não foi possível copiar automaticamente. Selecione o endereço acima e copie manualmente.");
+                        }
+                      }}
+                    >
+                      {publicCopied ? "Link copiado ✓" : "Copiar link público"}
+                    </button>
+                    <button
+                      className="danger"
+                      disabled={busy}
+                      onClick={() => void action("revoke_link")}
+                    >
+                      Revogar link
+                    </button>
+                  </div>
+                  {publicCopyError ? <FieldMessage error>{publicCopyError}</FieldMessage> : null}
+                </>
+              ) : (
+                <>
+                  <p>
+                    Gere um link para compartilhar este dashboard com o cliente
+                    sem exigir login. Só funciona com o dashboard publicado.
+                  </p>
+                  <button
+                    className="primary"
+                    disabled={busy || doc.status !== "published"}
+                    onClick={() => void action("share_link")}
+                  >
+                    Gerar link público
+                  </button>
+                  {doc.status !== "published" && (
+                    <p className="pj-muted">Publique o dashboard para poder gerar o link público.</p>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           <p>
-            O link exige login e acesso autorizado ao projeto. Apenas documentos
-            publicados ficam disponíveis para o cliente.
+            Link interno: exige login e acesso autorizado ao projeto. Apenas
+            documentos publicados ficam disponíveis para o cliente.
           </p>
           <input readOnly value={link} aria-label="Link do documento" />
           <div className="pj-share-grid">
@@ -2420,7 +2483,7 @@ export function AnalysisView({
                   rel="noreferrer"
                   href={
                     "https://wa.me/?text=" +
-                    encodeURIComponent(doc.title + "\n" + link)
+                    encodeURIComponent(doc.title + "\n" + (publicLink || link))
                   }
                 >
                   Abrir WhatsApp
@@ -2431,7 +2494,7 @@ export function AnalysisView({
                     "mailto:?subject=" +
                     encodeURIComponent(doc.title) +
                     "&body=" +
-                    encodeURIComponent("Confira a análise:\n" + link)
+                    encodeURIComponent("Confira a análise:\n" + (publicLink || link))
                   }
                 >
                   Preparar e-mail
@@ -2441,8 +2504,9 @@ export function AnalysisView({
           </div>
           {copyError ? <FieldMessage error>{copyError}</FieldMessage> : null}
           <p className="pj-muted">
-            WhatsApp e e-mail abrem uma mensagem para você revisar e enviar. O
-            acesso é controlado nas configurações do projeto.
+            WhatsApp e e-mail abrem uma mensagem para você revisar e enviar,
+            usando o link público quando disponível. O acesso ao link interno é
+            controlado nas configurações do projeto.
           </p>
         </Dialog>
       )}

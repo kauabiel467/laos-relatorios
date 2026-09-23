@@ -1809,6 +1809,19 @@
   gap: 13px;
   margin: 20px 0;
 }
+.pj-public-share-section {
+  padding-bottom: 16px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--pj-line);
+}
+.pj-public-share-section h4 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #336499;
+}
+.pj-public-share-section .pj-share-grid {
+  margin: 12px 0 0;
+}
 .pj-custom-kind {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -4890,6 +4903,29 @@
   display: grid;
 }
 
+.projects .pj-ifood-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.projects .pj-integration-card .pj-ifood-card-success,
+.projects .pj-integration-card .pj-ifood-card-error {
+  margin: -6px 0 14px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.projects .pj-integration-card .pj-ifood-card-success {
+  color: var(--pj-success);
+}
+
+.projects .pj-integration-card .pj-ifood-card-error {
+  color: var(--pj-danger);
+}
+
 @media screen and (max-width: 900px) {
   .projects .pj-ifood-steps {
     grid-template-columns: 1fr;
@@ -4923,9 +4959,15 @@
 
   .projects .pj-ifood-code-heading button,
   .projects .pj-ifood-portal,
-  .projects .pj-ifood-generate button {
+  .projects .pj-ifood-generate button,
+  .projects .pj-ifood-actions button {
     width: 100%;
     justify-content: center;
+  }
+
+  .projects .pj-ifood-actions {
+    align-items: stretch;
+    flex-direction: column-reverse;
   }
 }
 
@@ -6507,5 +6549,107 @@
 
   .projects .pj-period-presets {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Public, unauthenticated dashboard link (app/report/[token]). Read-only:
+   no toolbar, no editing chrome - just the client header and metric cards. */
+.pj-public-page {
+  min-height: 100vh;
+  background: #edf1f5;
+  padding: 35px;
+}
+
+.pj-public-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  max-width: 1200px;
+  margin: 0 auto 25px;
+  padding: 20px 24px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--pj-line);
+}
+
+.pj-public-header > img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.pj-public-header > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.pj-public-header > div > strong {
+  display: block;
+  font-size: 12px;
+  color: #7c92ab;
+}
+
+.pj-public-header > div > h1 {
+  margin: 2px 0;
+  font-size: 20px;
+}
+
+.pj-public-header > div > span {
+  font-size: 11px;
+  color: #8298af;
+}
+
+.pj-public-page .pj-metric-grid {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pj-public-page .pj-skeleton-card {
+  max-width: 1200px;
+  margin: 60px auto;
+  min-height: 200px;
+}
+
+.pj-public-error {
+  max-width: 480px;
+  margin: 20vh auto;
+  text-align: center;
+  padding: 32px;
+  background: white;
+  border-radius: 12px;
+  border: 1px solid var(--pj-line);
+  display: grid;
+  gap: 8px;
+}
+
+.pj-public-error strong {
+  font-size: 16px;
+}
+
+.pj-public-error p {
+  color: #7c92ab;
+  font-size: 13px;
+}
+
+@media print {
+  .pj-public-page {
+    background: white;
+    padding: 0;
+  }
+
+  .pj-public-header .pj-button {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .pj-public-header {
+    flex-wrap: wrap;
+  }
+
+  .pj-public-header .pj-button {
+    flex-basis: 100%;
   }
 }

@@ -5,6 +5,7 @@ import type {
   AgencyClient,
   ProjectClientAccess,
   ProjectClientInvitation,
+  ProjectIfoodConnection,
   ProjectMetaConnection,
 } from "@/lib/agency/types";
 import type { TeamMember } from "@/lib/team/types";
@@ -78,6 +79,7 @@ export function ProjectSetupFlow({
   clientAccess,
   invitations,
   connection,
+  ifoodConnection,
   canManageAccess,
   canConfigureIntegration,
   canUnlink,
@@ -94,6 +96,7 @@ export function ProjectSetupFlow({
   onConnect,
   onTest,
   onUnlink,
+  onIfoodConnected,
   onAdvance,
   onFinish,
   onExit,
@@ -105,6 +108,7 @@ export function ProjectSetupFlow({
   clientAccess: ProjectClientAccess[];
   invitations: ProjectClientInvitation[];
   connection: ProjectMetaConnection | null;
+  ifoodConnection: ProjectIfoodConnection | null;
   canManageAccess: boolean;
   canConfigureIntegration: boolean;
   canUnlink: boolean;
@@ -121,6 +125,7 @@ export function ProjectSetupFlow({
   onConnect: () => void;
   onTest: () => void;
   onUnlink: () => void;
+  onIfoodConnected: (connection: ProjectIfoodConnection) => void;
   onAdvance: (step: 2 | 3 | 4) => Promise<void>;
   onFinish: (kind: "dashboard" | "report") => Promise<void>;
   onExit: () => void;
@@ -202,6 +207,7 @@ export function ProjectSetupFlow({
           <ProjectIntegrations
             project={project}
             connection={connection}
+            ifoodConnection={ifoodConnection}
             canConfigure={canConfigureIntegration}
             canUnlink={canUnlink}
             busy={busy}
@@ -210,6 +216,7 @@ export function ProjectSetupFlow({
             onConnect={onConnect}
             onTest={onTest}
             onUnlink={onUnlink}
+            onIfoodConnected={onIfoodConnected}
           />
           {notice ? <div className="pj-feedback" role="status">{notice}</div> : null}
           <div className="pj-actions">
