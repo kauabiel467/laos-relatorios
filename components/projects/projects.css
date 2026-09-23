@@ -6552,104 +6552,264 @@
   }
 }
 
-/* Public, unauthenticated dashboard link (app/report/[token]). Read-only:
-   no toolbar, no editing chrome - just the client header and metric cards. */
+/* Client-facing report (public share link and the manager's private
+   "ver como cliente" preview). Read-only: no toolbar, no editing chrome. It is
+   always rendered light, regardless of the theme of whoever shared it. */
 .pj-public-page {
   min-height: 100vh;
   background: #edf1f5;
   padding: 35px;
 }
 
-.pj-public-header {
+.pj-public-page > * {
+  max-width: 1200px;
+  margin-inline: auto;
+}
+
+.pj-client-preview-note {
+  background: #1d3557;
+  color: #eef4ff;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 9px 16px;
+  text-align: center;
+}
+
+.pj-client-periods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 32px;
+  margin-bottom: 18px;
+}
+
+.pj-client-periods span {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #7c92ab;
+}
+
+.pj-client-periods strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #243e60;
+  font-variant-numeric: tabular-nums;
+}
+
+.pj-client-cover {
   display: flex;
   align-items: center;
-  gap: 16px;
-  max-width: 1200px;
-  margin: 0 auto 25px;
-  padding: 20px 24px;
+  gap: 18px;
+  padding: 22px 26px;
+  margin-bottom: 24px;
   background: white;
   border-radius: 12px;
   border: 1px solid var(--pj-line);
 }
 
-.pj-public-header > img {
+.pj-client-cover > img {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
-  object-fit: cover;
+  border-radius: 12px;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
-.pj-public-header > div {
+.pj-client-cover > div {
   min-width: 0;
-  flex: 1;
 }
 
-.pj-public-header > div > strong {
-  display: block;
+.pj-client-cover h1 {
+  margin: 0;
+  font-size: 24px;
+  color: #243e60;
+  overflow-wrap: anywhere;
+}
+
+.pj-client-cover h2 {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #6e829a;
+}
+
+.pj-client-cover p {
+  margin: 8px 0 0;
   font-size: 12px;
-  color: #7c92ab;
+  color: #91a0b1;
+  overflow-wrap: anywhere;
 }
 
-.pj-public-header > div > h1 {
-  margin: 2px 0;
-  font-size: 20px;
+.pj-client-sections {
+  display: grid;
+  /* minmax(0, 1fr), not the implicit auto column: an auto track grows to the
+     widest chart/table inside it and pushes the whole page past a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
 }
 
-.pj-public-header > div > span {
+.pj-public-page .pj-metric-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (max-width: 900px) {
+  .pj-public-page .pj-metric-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.pj-client-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 28px;
   font-size: 11px;
   color: #8298af;
 }
 
-.pj-public-page .pj-metric-grid {
-  max-width: 1200px;
-  margin: 0 auto;
-}
-
 .pj-public-page .pj-skeleton-card {
-  max-width: 1200px;
-  margin: 60px auto;
   min-height: 200px;
 }
 
 .pj-public-error {
-  max-width: 480px;
-  margin: 20vh auto;
-  text-align: center;
-  padding: 32px;
-  background: white;
-  border-radius: 12px;
-  border: 1px solid var(--pj-line);
   display: grid;
-  gap: 8px;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  min-height: 100vh;
+  text-align: center;
 }
 
 .pj-public-error strong {
-  font-size: 16px;
+  font-size: 18px;
+  color: #243e60;
 }
 
 .pj-public-error p {
-  color: #7c92ab;
+  max-width: 420px;
+  margin: 0;
   font-size: 13px;
+  color: #6e829a;
+}
+
+@media (max-width: 640px) {
+  .pj-public-page {
+    padding: 16px;
+  }
+
+  .pj-client-cover {
+    padding: 16px;
+    gap: 14px;
+  }
+
+  .pj-client-cover h1 {
+    font-size: 19px;
+  }
+
+  .pj-client-footer .pj-button {
+    width: 100%;
+  }
 }
 
 @media print {
+  @page {
+    margin: 12mm;
+  }
+
+  .pj-client-preview-note,
+  .pj-client-footer .pj-button {
+    display: none !important;
+  }
+
   .pj-public-page {
     background: white;
     padding: 0;
+    min-height: 0;
   }
 
-  .pj-public-header .pj-button {
+  .pj-client-cover {
+    border: 0;
+    padding-inline: 0;
+  }
+
+  .pj-client-sections .pj-block,
+  .pj-client-sections .pj-progress-metric-item {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  .pj-client-sections .pj-block details:not([open]) {
     display: none;
   }
 }
 
-@media (max-width: 640px) {
-  .pj-public-header {
-    flex-wrap: wrap;
-  }
+/* "Compartilhar" dropdown for dashboards. The panel itself reuses the
+   .pj-copy-report-menu look; this only adds the anchor and the link row. */
+.projects .pj-share-menu {
+  position: relative;
+}
 
-  .pj-public-header .pj-button {
-    flex-basis: 100%;
-  }
+.projects .pj-share-menu > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.projects .pj-share-panel .pj-share-link {
+  display: grid;
+  gap: 8px;
+  margin: 8px 4px 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--pj-border);
+}
+
+.projects .pj-share-panel .pj-share-link input {
+  width: 100%;
+  font-size: 12px;
+}
+
+.projects .pj-share-panel .pj-share-link > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.projects .pj-share-panel .pj-share-link > div > button {
+  /* Override the menu-item look inherited from .pj-copy-report-menu: these are
+     real buttons, not list rows. */
+  width: auto;
+  flex: 1 1 auto;
+  display: inline-flex;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid var(--pj-border-strong);
+  background: var(--pj-surface-raised);
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.projects .pj-share-panel .pj-share-link > div > button.danger {
+  color: var(--pj-danger);
+}
+
+/* Two-class-plus-element selectors so they beat ".pj-copy-report-menu p", which
+   paints every paragraph in the menu with the error color. */
+.projects .pj-share-panel p.pj-share-note,
+.projects .pj-share-panel p.pj-share-feedback {
+  margin: 8px 4px 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--pj-text-muted);
+}
+
+.projects .pj-share-panel p.pj-share-feedback {
+  color: var(--pj-text-secondary);
+  font-weight: 600;
 }

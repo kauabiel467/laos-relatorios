@@ -10,6 +10,7 @@ import {
   IconCheck,
   IconChevronDown,
   IconCopy,
+  IconMail,
   IconDots,
   IconDownload,
   IconEdit,
@@ -99,7 +100,8 @@ export type InterfaceIconName =
   | "star"
   | "star-filled"
   | "resize"
-  | "calculator";
+  | "calculator"
+  | "mail";
 
 const ICONS: Record<InterfaceIconName, ComponentType<IconProps>> = {
   overview: IconLayoutDashboard,
@@ -151,6 +153,7 @@ const ICONS: Record<InterfaceIconName, ComponentType<IconProps>> = {
   "star-filled": IconStarFilled,
   resize: IconArrowsDiagonal2,
   calculator: IconCalculator,
+  mail: IconMail,
 };
 
 export function InterfaceIcon({

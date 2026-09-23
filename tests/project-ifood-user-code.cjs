@@ -5,6 +5,16 @@ const path = require("node:path");
 const Module = require("node:module");
 const ts = require("typescript");
 
+// Swap one character in the middle of a sealed value for a different one. The old
+// "replace the last character with x" was a silent no-op whenever the last
+// character already was "x" (or only touched unused base64 padding bits), which
+// made the tamper-detection assertions randomly fail.
+function tamper(value) {
+  const index = Math.floor(value.length / 2);
+  return `${value.slice(0, index)}${value[index] === "A" ? "B" : "A"}${value.slice(index + 1)}`;
+}
+
+
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "laos-ifood-oauth-test-"));
 const originalResolve = Module._resolveFilename;
 const previousEnv = {
@@ -118,7 +128,7 @@ function compile(source) {
     assert.doesNotMatch(sealedAccessToken, /ifood-access-token/);
     assert.equal(oauth.unsealIfoodCredential(sealedAccessToken), token.accessToken);
     assert.throws(
-      () => oauth.unsealIfoodCredential(`${sealedAccessToken.slice(0, -1)}x`),
+      () => oauth.unsealIfoodCredential(tamper(sealedAccessToken)),
       /credenciais armazenadas.*inválidas/i,
     );
 
@@ -156,7 +166,7 @@ function compile(source) {
     assert.doesNotMatch(sealed, /11111111-1111/);
     assert.deepEqual(oauth.unsealIfoodOAuthState(sealed), state);
     assert.throws(
-      () => oauth.unsealIfoodOAuthState(`${sealed.slice(0, -1)}x`),
+      () => oauth.unsealIfoodOAuthState(tamper(sealed)),
       /Estado de autorização inválido/,
       "estado adulterado deve ser rejeitado",
     );

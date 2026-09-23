@@ -236,6 +236,11 @@ export interface ProjectDocument {
   data: AnalysisData | null;
   status: "draft" | "published";
   share_token: string | null;
+  published_at: string | null;
+  content_hash: string | null;
+  published_hash: string | null;
+  published_since: string | null;
+  published_until: string | null;
   created_at: string;
   updated_at: string;
 }
