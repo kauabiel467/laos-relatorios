@@ -15,13 +15,20 @@ export const metadata: Metadata = {
   referrer: "no-referrer",
 };
 
-export default async function PublicReportPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function PublicReportPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { token } = await params;
+  const { print } = await searchParams;
   const limit = rateLimit(`public-report:${requestIp({ headers: await headers() })}`, 120, 60_000);
   if (!limit.allowed) {
     return <ReportUnavailable title="Muitas tentativas." message="Aguarde um momento e abra o link novamente." />;
   }
   const report = await loadPublishedReportByToken(token);
   if (!report) return <ReportUnavailable />;
-  return <ClientReportView report={report} mode="public" />;
+  return <ClientReportView report={report} mode="public" autoPrint={print === "1"} />;
 }

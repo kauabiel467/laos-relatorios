@@ -2,13 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgencyRecord } from "@/lib/agency/types";
 import { normalizeAnalysisConfig, type AnalysisConfig, type ProjectDocument } from "@/lib/projects/model";
+import { reportPeriod } from "@/lib/projects/publication";
 import { collectAnalysis } from "@/lib/projects/meta";
 import { ProjectAccessError } from "@/lib/projects/access";
 
 // published_snapshot is deliberately absent: it duplicates title/config/data
 // and only the public RPC needs it, so it never travels to the browser.
 export const DOCUMENT_COLUMNS =
-  "id,client_id,kind,title,config,data,status,share_token,published_at,content_hash,published_hash,created_by,created_at,updated_at";
+  "id,client_id,kind,title,config,data,status,share_token,published_at,content_hash,published_hash,published_since,published_until,created_by,created_at,updated_at";
 
 export async function listProjectDocuments(db: SupabaseClient, clientId?: string) {
   let query = db
@@ -90,6 +91,7 @@ export async function setProjectDocumentPublication(
   if (!published && (!document || document.kind !== "dashboard")) throw Error("Relatórios publicados permanecem preservados.");
   if (!document) throw Error("Documento não encontrado.");
   const isDashboard = document.kind === "dashboard";
+  const period = reportPeriod(document.config, document.data);
   const publication = published
     ? {
         status: "published",
@@ -98,10 +100,14 @@ export async function setProjectDocumentPublication(
               published_snapshot: { title: document.title, config: document.config, data: document.data },
               published_at: new Date().toISOString(),
               published_hash: document.content_hash,
+              // Everything shared (link, PDF, WhatsApp, e-mail) describes this
+              // publication, so its period is stored with it.
+              published_since: period.since,
+              published_until: period.until,
             }
           : {}),
       }
-    : { status: "draft", published_snapshot: null, published_at: null, published_hash: null };
+    : { status: "draft", published_snapshot: null, published_at: null, published_hash: null, published_since: null, published_until: null };
   const { data, error } = await db
     .from("agency_documents")
     .update(publication)

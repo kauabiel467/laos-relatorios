@@ -880,8 +880,6 @@ export function AnalysisView({
             <ShareMenu
               doc={doc}
               clientName={clientName}
-              since={effectiveSince}
-              until={effectiveUntil}
               busy={busy}
               onAction={(a) => action(a)}
             />

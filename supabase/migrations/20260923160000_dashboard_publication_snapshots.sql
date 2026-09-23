@@ -8,7 +8,9 @@ alter table public.agency_documents
   add column if not exists published_snapshot jsonb,
   add column if not exists published_at timestamptz,
   add column if not exists content_hash text,
-  add column if not exists published_hash text;
+  add column if not exists published_hash text,
+  add column if not exists published_since date,
+  add column if not exists published_until date;
 
 -- content_hash fingerprints the editable content (title + config + data).
 -- Comparing it with published_hash tells the editor, without shipping the whole
@@ -46,7 +48,17 @@ set content_hash = md5(
 update public.agency_documents
 set published_snapshot = jsonb_build_object('title', title, 'config', config, 'data', data),
     published_at = updated_at,
-    published_hash = content_hash
+    published_hash = content_hash,
+    -- In an UPDATE the right-hand side sees the OLD row, so the period is read
+    -- from data/config (the very content being snapshotted), not from the new snapshot.
+    published_since = coalesce(
+      (data -> 'effective_period' ->> 'since')::date,
+      (config ->> 'since')::date
+    ),
+    published_until = coalesce(
+      (data -> 'effective_period' ->> 'until')::date,
+      (config ->> 'until')::date
+    )
 where kind = 'dashboard'
   and status = 'published'
   and data is not null
@@ -95,5 +107,9 @@ comment on column public.agency_documents.content_hash is
   'Impressão digital de title+config+data, mantida por trigger. Comparada com published_hash para detectar alterações não publicadas.';
 comment on column public.agency_documents.published_hash is
   'content_hash no momento da última publicação.';
+comment on column public.agency_documents.published_since is
+  'Início do período da última publicação. Alimenta as mensagens de WhatsApp/e-mail sem enviar o snapshot ao navegador.';
+comment on column public.agency_documents.published_until is
+  'Fim do período da última publicação.';
 
 commit;

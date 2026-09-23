@@ -4,6 +4,7 @@
 import { useEffect } from "react";
 import type { AnalysisConfig, AnalysisData, SectionKey } from "@/lib/projects/model";
 import type { ClientReport } from "@/lib/projects/public-report";
+import { reportPeriod } from "@/lib/projects/publication";
 import ProgressMetricCard, { type CardSize } from "@/components/ui/progress-metric-card";
 import { deriveMetricCard, resolveMetricOrder } from "./metric-cards";
 import { ReportBlock, SectionHeading } from "./report-blocks";
@@ -72,10 +73,7 @@ export function ClientReportView({
 }) {
   const { config, data, clientName, clientLogoUrl } = report;
   const currency = data.currency || "BRL";
-  const since = data.effective_period?.since ?? config.since;
-  const until = data.effective_period?.until ?? config.until;
-  const compareSince = data.effective_period?.compare_since ?? config.compare_since;
-  const compareUntil = data.effective_period?.compare_until ?? config.compare_until;
+  const { since, until, compareSince, compareUntil } = reportPeriod(config, data);
   const showComparison = config.comparison !== "none" && Boolean(data.previous) && Boolean(compareSince && compareUntil);
   const sections: SectionKey[] = config.sections.length ? config.sections : ["metrics"];
 

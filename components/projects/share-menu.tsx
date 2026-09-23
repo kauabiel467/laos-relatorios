@@ -2,32 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { ProjectDocument } from "@/lib/projects/model";
-import {
-  clientPreviewPath,
-  hasPublishedVersion,
-  hasUnpublishedChanges,
-  publicReportPath,
-} from "@/lib/projects/publication";
+import { hasPublishedVersion, hasUnpublishedChanges, publicReportPath } from "@/lib/projects/publication";
 import { buildEmailShareUrl, buildWhatsAppShareUrl } from "@/lib/projects/share-messages";
 import { InterfaceIcon } from "./interface-icon";
 
 type ShareAction = (action: string) => Promise<ProjectDocument | undefined>;
 
-// "Compartilhar" for dashboards: link, PDF, WhatsApp and e-mail, all built on the
-// one stable public link (the last PUBLISHED version). The link is created the
-// first time it is needed and reused afterwards; only "Desativar" removes it.
+// "Compartilhar" for dashboards: link, PDF, WhatsApp and e-mail. All four describe
+// the same thing - the last PUBLISHED version - and nothing here reads the
+// editor's current state: the PDF is the print of the public page, and the
+// message period comes from the publication (published_since/until), so a period
+// changed but not yet published never leaks into what gets sent. The link is
+// created the first time it is needed and reused afterwards; only "Desativar"
+// removes it.
 export function ShareMenu({
   doc,
   clientName,
-  since,
-  until,
   busy,
   onAction,
 }: {
   doc: ProjectDocument;
   clientName: string;
-  since: string;
-  until: string;
   busy: boolean;
   onAction: ShareAction;
 }) {
@@ -42,6 +37,8 @@ export function ShareMenu({
   const pending = hasUnpublishedChanges(doc);
   const link = doc.share_token && typeof window !== "undefined" ? `${window.location.origin}${publicReportPath(doc.share_token)}` : "";
   const disabled = busy || working;
+  const since = doc.published_since;
+  const until = doc.published_until;
   const lockedHint = "Publique o relatório para compartilhar.";
 
   useEffect(() => {
@@ -95,13 +92,17 @@ export function ShareMenu({
     }
   }
 
-  async function shareVia(kind: "whatsapp" | "email") {
-    // Open the WhatsApp tab synchronously (inside the click) so pop-up blockers
-    // allow it even when the link still has to be created first.
-    const tab = kind === "whatsapp" && !doc.share_token ? window.open("", "_blank") : null;
+  async function shareVia(kind: "whatsapp" | "email" | "pdf") {
+    if (kind !== "pdf" && (!since || !until)) {
+      setFeedback("Não foi possível ler o período da publicação. Publique novamente.");
+      return;
+    }
+    // Open the new tab synchronously (inside the click) so pop-up blockers allow
+    // it even when the link still has to be created first.
+    const tab = kind !== "email" && !doc.share_token ? window.open("", "_blank") : null;
     if (tab) tab.opener = null;
     setWorking(true);
-    setFeedback("Preparando mensagem…");
+    setFeedback(kind === "pdf" ? "Preparando PDF…" : "Preparando mensagem…");
     try {
       const url = await ensureLink();
       if (!url) {
@@ -109,23 +110,22 @@ export function ShareMenu({
         setFeedback("Não foi possível gerar o link.");
         return;
       }
-      const input = { clientName, since, until, link: url };
-      if (kind === "whatsapp") {
-        const target = buildWhatsAppShareUrl(input);
-        if (tab) tab.location.href = target;
-        else window.open(target, "_blank", "noopener,noreferrer");
-      } else {
-        window.location.href = buildEmailShareUrl(input);
+      if (kind === "email") {
+        window.location.href = buildEmailShareUrl({ clientName, since: since!, until: until!, link: url });
+        setFeedback("Abrindo seu aplicativo de e-mail.");
+        return;
       }
-      setFeedback(kind === "whatsapp" ? "WhatsApp aberto em outra aba." : "Abrindo seu aplicativo de e-mail.");
+      // The PDF is the public page itself (published version) opened straight
+      // into the print dialog; "Salvar como PDF" produces the file.
+      const target = kind === "pdf"
+        ? `${url}?print=1`
+        : buildWhatsAppShareUrl({ clientName, since: since!, until: until!, link: url });
+      if (tab) tab.location.href = target;
+      else window.open(target, "_blank", "noopener,noreferrer");
+      setFeedback(kind === "pdf" ? "Na janela que abrir, escolha “Salvar como PDF”." : "WhatsApp aberto em outra aba.");
     } finally {
       setWorking(false);
     }
-  }
-
-  function sharePdf() {
-    window.open(`${clientPreviewPath(doc.client_id, doc.id)}?print=1`, "_blank", "noopener,noreferrer");
-    setFeedback("Na janela que abrir, escolha “Salvar como PDF”.");
   }
 
   async function deactivate() {
@@ -147,7 +147,7 @@ export function ShareMenu({
     run: () => void;
   }> = [
     { key: "link", icon: "link", label: "Compartilhar por link", hint: "Copia o link público do relatório", run: () => void copyLink() },
-    { key: "pdf", icon: "download", label: "Compartilhar via PDF", hint: "Abre a visão do cliente para salvar em PDF", run: sharePdf },
+    { key: "pdf", icon: "download", label: "Compartilhar via PDF", hint: "Versão publicada, pronta para salvar em PDF", run: () => void shareVia("pdf") },
     { key: "whatsapp", icon: "messages", label: "Compartilhar por WhatsApp", hint: "Mensagem pronta com o link", run: () => void shareVia("whatsapp") },
     { key: "email", icon: "mail", label: "Compartilhar por e-mail", hint: "Assunto e texto prontos com o link", run: () => void shareVia("email") },
   ];
@@ -174,7 +174,7 @@ export function ShareMenu({
         <div ref={menuRef} id="share-menu" className="pj-copy-report-menu pj-share-panel" role="menu" aria-label="Opções de compartilhamento">
           <header>
             <strong>Compartilhar relatório</strong>
-            <span>{published ? "O link mostra sempre a última versão publicada." : lockedHint}</span>
+            <span>{published ? "Link, PDF, WhatsApp e e-mail usam sempre a última versão publicada." : lockedHint}</span>
           </header>
           {items.map((item) => (
             <button
@@ -211,7 +211,7 @@ export function ShareMenu({
           ) : null}
           {pending ? (
             <p className="pj-share-note">
-              Há alterações ainda não publicadas. O link utiliza a última versão publicada.
+              Há alterações ainda não publicadas. O link, o PDF e as mensagens utilizam a última versão publicada.
             </p>
           ) : null}
           {feedback ? <p className="pj-share-feedback" role="status" aria-live="polite">{feedback}</p> : null}

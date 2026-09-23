@@ -75,7 +75,7 @@ function teamDatabase() {
 async function main() {
   for (const file of [
     ...["catalog", "meta-events", "engine", "dates"].map((name) => `lib/metrics/${name}.ts`),
-    ...["model", "routes", "access", "documents"].map((name) => `lib/projects/${name}.ts`),
+    ...["model", "routes", "publication", "access", "documents"].map((name) => `lib/projects/${name}.ts`),
     "lib/auth-invitations.ts",
     "lib/team/server.ts",
     "lib/integrations/meta-graph.ts",

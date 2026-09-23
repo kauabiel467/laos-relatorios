@@ -130,6 +130,31 @@ async function main() {
   assert.equal(publication.publicReportPath("11111111-2222-4333-8444-555555555555"), "/report/11111111-2222-4333-8444-555555555555");
   assert.equal(publication.clientPreviewPath("c 1", "d/2"), "/projects/c%201/preview/d%2F2");
 
+  // The stored period uses what the data was collected for when it differs from the configured dates.
+  assert.deepEqual(
+    publication.reportPeriod(
+      { since: "2026-09-01", until: "2026-09-30", compare_since: "2026-08-01", compare_until: "2026-08-31" },
+      { effective_period: { since: "2026-09-02", until: "2026-09-21", compare_since: "2026-08-12", compare_until: "2026-09-01" } },
+    ),
+    { since: "2026-09-02", until: "2026-09-21", compareSince: "2026-08-12", compareUntil: "2026-09-01" },
+  );
+  assert.deepEqual(
+    publication.reportPeriod({ since: "2026-09-01", until: "2026-09-30" }, null),
+    { since: "2026-09-01", until: "2026-09-30", compareSince: undefined, compareUntil: undefined },
+  );
+
+  // Central rule: sharing (link, PDF, WhatsApp, e-mail) describes the PUBLISHED version
+  // and never the editor's state; the private preview is a separate thing.
+  const shareMenuSource = fs.readFileSync("components/projects/share-menu.tsx", "utf8");
+  assert.doesNotMatch(shareMenuSource, /clientPreviewPath|\/preview\//, "the share menu must not use the private preview");
+  assert.doesNotMatch(shareMenuSource, /effective_period|config\.since|config\.until/, "share messages must not read the editor's current period");
+  assert.match(shareMenuSource, /published_since/);
+  assert.match(shareMenuSource, /\?print=1/, "the shared PDF is the public page opened for printing");
+  const publicPageSource = fs.readFileSync("app/report/[token]/page.tsx", "utf8");
+  assert.match(publicPageSource, /autoPrint=\{print === "1"\}/);
+  const analysisSource = fs.readFileSync("components/projects/analysis-view.tsx", "utf8");
+  assert.match(analysisSource, /clientPreviewPath\(doc\.client_id, doc\.id\)/, "'ver como cliente' keeps using the private preview");
+
   // ---- publish / share / revoke lifecycle ---------------------------------------
   const cid = "aecc0000-0000-4000-8000-000000000001";
   const rows = [];
@@ -151,6 +176,8 @@ async function main() {
   assert.ok(!("published_snapshot" in published), "the snapshot must never be returned to the browser");
   assert.deepEqual(dashboard.published_snapshot, { title: "Vendas", config: { since: "2026-09-01", until: "2026-09-21", note: "v1" }, data: { current: { spend: 100 } } });
   assert.equal(publication.hasUnpublishedChanges(published), false);
+  assert.equal(published.published_since, "2026-09-01", "the publication remembers its own period");
+  assert.equal(published.published_until, "2026-09-21");
 
   // The link is created once and then reused: same URL every time.
   const shared = await documents.setProjectDocumentShareToken(db, published, true);
@@ -165,12 +192,18 @@ async function main() {
   const snapshotBefore = JSON.stringify(dashboard.published_snapshot);
   assert.equal(publication.hasUnpublishedChanges({ ...dashboard }), true);
   assert.equal(JSON.stringify(dashboard.published_snapshot), snapshotBefore, "saving must not touch the published snapshot");
+  // A period changed in the editor but not published yet must not reach WhatsApp/e-mail/PDF.
+  db.edit(dashboard, { config: { since: "2026-10-01", until: "2026-10-31", note: "v2 - not published" } });
+  assert.equal(dashboard.published_since, "2026-09-01", "editing never rewrites the published period");
+  assert.equal(dashboard.published_until, "2026-09-21");
+  db.edit(dashboard, { config: { since: "2026-09-01", until: "2026-09-21", note: "v2 - not published" } });
   assert.equal(dashboard.published_snapshot.config.note, "v1");
 
   // Publishing again replaces the snapshot but keeps the very same link.
   const republished = await documents.setProjectDocumentPublication(db, { ...dashboard }, true);
   assert.equal(dashboard.published_snapshot.config.note, "v2 - not published");
   assert.equal(republished.share_token, shared.share_token);
+  assert.equal(republished.published_since, "2026-09-01");
   assert.equal(publication.hasUnpublishedChanges(republished), false);
 
   // Publishing needs saved results.
@@ -187,6 +220,8 @@ async function main() {
   const restricted = await documents.setProjectDocumentPublication(db, { ...fresh }, false);
   assert.equal(restricted.status, "draft");
   assert.equal(restricted.published_at, null);
+  assert.equal(restricted.published_since, null);
+  assert.equal(restricted.published_until, null);
   assert.equal(dashboard.published_snapshot, null);
   await assert.rejects(documents.setProjectDocumentShareToken(db, restricted, true), /Publique este relatório antes de compartilhá-lo/);
 
