@@ -362,17 +362,19 @@ export function ProjectsWorkspace({
     if (!r.ok) throw Error(d.error);
     return d;
   };
-  async function run(fn: () => Promise<void>) {
-    if (busyRef.current) return;
+  async function run<T>(fn: () => Promise<T>): Promise<T | undefined> {
+    if (busyRef.current) return undefined;
     busyRef.current = true;
     setBusy(true);
     setNotice("");
     try {
-      await fn();
+      const result = await fn();
       await reload();
+      return result;
     } catch (e) {
       const message = e instanceof Error ? e.message : "Não foi possível concluir.";
       setNotice(`${message} Revise os dados e tente novamente.`);
+      return undefined;
     } finally {
       busyRef.current = false;
       setBusy(false);
@@ -466,7 +468,7 @@ export function ProjectsWorkspace({
     action: string,
     extra?: Record<string, unknown>,
   ) {
-    await run(async () => {
+    return run(async () => {
       const d = await request("/api/projects", {
         action,
         client_id: cid,
@@ -484,6 +486,7 @@ export function ProjectsWorkspace({
               ? "Documento adicionado ao histórico."
               : "Alterações salvas.",
         );
+      return d as ProjectDocument;
     });
   }
   async function projectSettings(e: FormEvent<HTMLFormElement>) {

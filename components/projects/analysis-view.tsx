@@ -136,7 +136,7 @@ export function AnalysisView({
   busy: boolean;
   initialPreview?: boolean;
   onBack: () => void;
-  onAction: (action: string, extra?: Record<string, unknown>) => Promise<void>;
+  onAction: (action: string, extra?: Record<string, unknown>) => Promise<ProjectDocument | undefined>;
 }) {
   const [auto, setAuto] = useState(false);
   const [config, setConfig] = useState(normalizeAnalysisConfig(doc.config)),
@@ -679,7 +679,7 @@ export function AnalysisView({
   };
   const action = async (a: string) => {
     setMenu(false);
-    await onAction(
+    return onAction(
       a,
       a === "save" || a === "refresh"
         ? {
@@ -691,6 +691,18 @@ export function AnalysisView({
           }
         : {},
     );
+  };
+  // "Ver como cliente" opens the read-only client view without going through
+  // the public share link - a dashboard's own team can always see it, no
+  // token required. Reports and drafts keep the old authenticated preview,
+  // since the client-view route only serves published dashboards.
+  const viewAsClient = () => {
+    if (doc.kind !== "dashboard" || doc.status !== "published") {
+      window.open(link, "_blank", "noopener,noreferrer");
+      return;
+    }
+    const previewPath = `/projects/${encodeURIComponent(doc.client_id)}/preview/${encodeURIComponent(doc.id)}`;
+    window.open(`${window.location.origin}${previewPath}`, "_blank", "noopener,noreferrer");
   };
   const refreshRef = useRef(() => {});
   refreshRef.current = () => {
@@ -1284,15 +1296,10 @@ export function AnalysisView({
             </button>
           )}
           {staff && !preview && (
-            <a
-              className="pj-button"
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+            <button type="button" className="pj-button" onClick={viewAsClient}>
               Ver como cliente
               <InterfaceIcon name="external" size={18} />
-            </a>
+            </button>
           )}
           <div className="pj-copy-report">
             <button
