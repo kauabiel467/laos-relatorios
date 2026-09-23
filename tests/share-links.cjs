@@ -155,6 +155,12 @@ async function main() {
   const analysisSource = fs.readFileSync("components/projects/analysis-view.tsx", "utf8");
   assert.match(analysisSource, /clientPreviewPath\(doc\.client_id, doc\.id\)/, "'ver como cliente' keeps using the private preview");
 
+  // The client view shows the client's own logo (any https URL) and Meta ad thumbnails; a CSP
+  // limited to self/data: silently blocks both.
+  const nextConfig = fs.readFileSync("next.config.ts", "utf8");
+  assert.match(nextConfig, /"img-src 'self' data: https:"/, "CSP must let https images (client logo, Meta thumbnails) load");
+  assert.doesNotMatch(nextConfig, /script-src[^\n]*https:/, "only images were loosened, never scripts");
+
   // ---- publish / share / revoke lifecycle ---------------------------------------
   const cid = "aecc0000-0000-4000-8000-000000000001";
   const rows = [];

@@ -21,7 +21,11 @@ const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""}`,
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // https: (not a fixed host list) because the images are not ours: client logos
+  // are any https URL the agency pastes in, and Meta ad thumbnails come from
+  // rotating fbcdn hosts. Images cannot run script, so this only loosens where
+  // pictures may load from; script-src, connect-src and the rest are unchanged.
+  "img-src 'self' data: https:",
   "font-src 'self'",
   `connect-src ${connectSrc}`,
   "object-src 'none'",
