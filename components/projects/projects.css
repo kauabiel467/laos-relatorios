@@ -785,20 +785,28 @@
   background: #f5f9ff;
 }
 .pj-connected {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 18px;
   border-bottom: 1px solid var(--pj-line);
   padding: 16px 0 30px;
   margin-bottom: 30px;
 }
-.pj-connected > div {
-  flex: 1;
+.pj-connected > .pj-meta {
+  grid-row: 1 / -1;
+}
+.pj-connected-summary {
+  min-width: 0;
+}
+.pj-connected-summary strong {
+  display: block;
+  font-size: 15px;
 }
 .pj-connected p {
   margin: 5px 0;
   font-size: 11px;
-  color: #8b9cb0;
+  color: var(--pj-muted);
 }
 .pj-connected-status {
   font-size: 11px;
@@ -966,8 +974,7 @@
   gap: 22px;
 }
 .pj-integration-card-header,
-.pj-badge-row,
-.pj-account-metadata {
+.pj-badge-row {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1028,24 +1035,37 @@
   max-width: 520px;
 }
 .pj-connected-detailed {
-  align-items: flex-start;
   border-bottom: 0;
   margin: 0;
   padding: 10px 0 0;
 }
-.pj-connected-detailed > div:nth-child(2) {
+.pj-account-metadata {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 20px;
+  margin-top: 6px;
+}
+.pj-account-field {
   min-width: 0;
+  display: grid;
+  gap: 3px;
 }
-.pj-connected-detailed > .pj-inline-actions {
-  flex: 0 0 100%;
-  margin-left: 52px;
-}
-.pj-account-metadata span {
-  border-radius: 6px;
-  background: #eef3f8;
-  padding: 4px 7px;
+.pj-account-field span {
   color: #6b7f94;
   font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pj-account-field strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+.pj-connected-detailed > .pj-inline-actions {
+  grid-column: 2;
+  margin-top: 8px;
 }
 .pj-access-list {
   display: grid;
@@ -2029,8 +2049,15 @@
     grid-column: 2 / -1;
     justify-self: start;
   }
+  .pj-connected {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pj-connected > .pj-meta {
+    grid-row: auto;
+  }
+  .pj-account-metadata,
   .pj-connected-detailed > .pj-inline-actions {
-    margin-left: 0;
+    grid-column: 1;
   }
   .pj-wizard > aside {
     margin-bottom: 30px;
@@ -2587,11 +2614,18 @@
   .projects:is(.theme-light, .theme-dark) .pj-empty > span,
   .projects:is(.theme-light, .theme-dark) .pj-template > span,
   .projects:is(.theme-light, .theme-dark) .pj-document-icon,
-  .projects:is(.theme-light, .theme-dark) .pj-badge,
-  .projects:is(.theme-light, .theme-dark) .pj-account-metadata span {
+  .projects:is(.theme-light, .theme-dark) .pj-badge {
     border: 1px solid var(--pj-primary-border);
     background: var(--pj-primary-soft);
     color: var(--pj-primary);
+  }
+
+  .projects:is(.theme-light, .theme-dark) .pj-account-field span {
+    color: var(--pj-text-muted);
+  }
+
+  .projects:is(.theme-light, .theme-dark) .pj-account-field strong {
+    color: var(--pj-text);
   }
 
   .projects:is(.theme-light, .theme-dark) .pj-document-icon.report,
@@ -4662,33 +4696,18 @@
   }
 }
 
-/* Official iFood authorization entry point. The branded red surface is kept
- * separate from semantic success/error colors used elsewhere in the product. */
-.projects .pj-integration-card.is-ifood {
-  border-color: color-mix(in srgb, #ea1d2c 38%, var(--pj-border));
-  background:
-    linear-gradient(#ea1d2c 0 68px, var(--pj-surface-raised) 68px);
-}
-
-.projects .pj-integration-card.is-ifood .pj-integration-card-header {
-  min-height: 38px;
-}
-
-.projects .pj-integration-brand.is-ifood {
-  background: #ea1d2c !important;
-}
-
+/* iFood's mark ships as a single-color red SVG (see public/brands/ifood.svg).
+ * Every integration badge is a solid brand-color circle with a white mark on
+ * top (Tabler icons get that via color:#fff + currentColor); since this one
+ * is an <img>, invert its luminance to get the same white-on-brand-color
+ * result instead of a red mark on a red circle. The card itself stays the
+ * same white/bordered shell as every other integration, no special-casing. */
 .projects .pj-integration-brand.is-ifood img {
   width: 26px;
   height: 26px;
   display: block;
   object-fit: contain;
   filter: brightness(0) invert(1);
-}
-
-.projects .pj-integration-card.is-ifood .pj-status-badge {
-  border-color: rgb(255 255 255 / 0.42);
-  background: rgb(255 255 255 / 0.94);
 }
 
 .projects .pj-ifood-intro {
