@@ -19,7 +19,7 @@ import {
   revokeProjectClient,
   revokeProjectInvitation,
 } from "@/lib/projects/service";
-import { copyProjectDocument, getProjectDocument, deleteProjectDocument, setProjectDocumentPublication, saveProjectDocument } from "@/lib/projects/documents";
+import { copyProjectDocument, getProjectDocument, deleteProjectDocument, setProjectDocumentPublication, setProjectDocumentShareToken, saveProjectDocument } from "@/lib/projects/documents";
 import { configSchema } from "@/lib/projects/schema";
 import {
   normalizeAnalysisConfig,
@@ -30,6 +30,7 @@ import {
   projectCreateSchema,
   projectDetailsSchema,
 } from "@/lib/projects/config";
+import { rateLimit, requestIp, tooManyRequestsResponse } from "@/lib/utils/rate-limit";
 export const maxDuration = 60;
 const uuid = z.string().uuid();
 const recordSchema = z.object({
@@ -62,6 +63,8 @@ const fail = (e: unknown) =>
     { status: e instanceof ProjectAccessError ? e.status : e instanceof Error && e.message === "UNAUTHORIZED" ? 401 : 400 },
   );
 export async function GET(req: NextRequest) {
+  const limit = rateLimit(`projects:get:${requestIp(req)}`, 120, 60_000);
+  if (!limit.allowed) return tooManyRequestsResponse(limit);
   try {
     if (req.nextUrl.searchParams.get("campaigns"))
       return NextResponse.json(
@@ -86,6 +89,8 @@ export async function GET(req: NextRequest) {
   }
 }
 export async function POST(req: NextRequest) {
+  const limit = rateLimit(`projects:post:${requestIp(req)}`, 60, 60_000);
+  if (!limit.allowed) return tooManyRequestsResponse(limit);
   try {
     const b = await req.json();
     if (b.action === "client") {
@@ -187,6 +192,12 @@ export async function POST(req: NextRequest) {
     }
     if (b.action === "unpublish") {
       return NextResponse.json(await setProjectDocumentPublication(db, existing, false));
+    }
+    if (b.action === "share_link") {
+      return NextResponse.json(await setProjectDocumentShareToken(db, existing, true));
+    }
+    if (b.action === "revoke_link") {
+      return NextResponse.json(await setProjectDocumentShareToken(db, existing, false));
     }
     if (!["create", "save", "refresh"].includes(b.action))
       throw Error("Ação não reconhecida.");

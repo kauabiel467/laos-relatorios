@@ -20,8 +20,17 @@ import { ProjectDetailsFields } from "./project-details-fields";
 import { ProjectAccessPanel } from "./project-access-panel";
 import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
-import { Dialog, Empty, FieldMessage, LoadingState, MetaMark, Toast, shortDate } from "./ui";
-import { WorkspaceNavIcon, type WorkspaceNavIconName } from "./workspace-nav-icon";
+import { WorkspaceTemplatesView } from "./workspace-templates-view";
+import { WorkspaceTeamView } from "./workspace-team-view";
+import { WorkspaceProjectsView } from "./workspace-projects-view";
+import { WorkspaceOverviewView } from "./workspace-overview-view";
+import { ProjectOverviewView } from "./project-overview-view";
+import { ProjectTimelineGoalsView } from "./project-timeline-goals-view";
+import { WorkspaceMetaModal } from "./workspace-meta-modal";
+import { GoalUpdateDialog, RecordCreateDialog } from "./workspace-record-dialogs";
+import { WorkspaceShell } from "./workspace-shell";
+import { Empty, FieldMessage, LoadingState, Toast } from "./ui";
+import type { WorkspaceNavIconName } from "./workspace-nav-icon";
 import { InterfaceIcon } from "./interface-icon";
 import "./projects.css";
 const viewLabels: Record<WorkspaceView, string> = {
@@ -716,167 +725,34 @@ export function ProjectsWorkspace({
           <span aria-hidden="true" />
         </div>
       ) : null}
-      <a className="pj-skip-link" href="#workspace-main">Pular para o conteúdo</a>
-      {sidebarOpen ? (
-        <button
-          className="pj-sidebar-backdrop"
-          aria-label="Fechar menu"
-          onClick={() => setSidebarOpen(false)}
-        />
-      ) : null}
-      <aside
-        id="workspace-sidebar"
-        className={`pj-sidebar ${sidebarOpen ? "is-open" : ""}`}
-        aria-label="Navegação principal"
-      >
-        <div className="pj-sidebar-header">
-          <button className="pj-brand" aria-label="Ir para meus projetos" onClick={() => navigate({})}>
-            <span className="pj-brand-mark" aria-hidden="true">la</span>
-            <span className="pj-brand-copy">
-              <strong>laos</strong>
-              <small>relatórios</small>
-            </span>
-          </button>
-          <button
-            className="pj-sidebar-collapse"
-            aria-label={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-            title={sidebarCollapsed ? "Expandir menu" : "Recolher menu"}
-            aria-pressed={sidebarCollapsed}
-            onClick={toggleSidebar}
-          >
-            <InterfaceIcon name={sidebarCollapsed ? "expand" : "collapse"} />
-          </button>
-          <button
-            className="pj-sidebar-close"
-            aria-label="Fechar menu"
-            onClick={() => setSidebarOpen(false)}
-          >
-            <WorkspaceNavIcon name="close" />
-          </button>
-        </div>
-
-        <div className="pj-sidebar-scroll">
-          <span className="pj-sidebar-label">Workspace</span>
-          <nav className="pj-global-nav" aria-label="Navegação do workspace">
-            {globalNavigation
-              .filter((item) => item.visible !== false)
-              .map((item) => (
-                <button
-                  key={item.label}
-                  className={item.active ? "active" : ""}
-                  aria-current={item.active ? "page" : undefined}
-                  onClick={() => navigate(item.values)}
-                  title={sidebarCollapsed ? item.label : undefined}
-                >
-                  <WorkspaceNavIcon name={item.icon} />
-                  <span>{item.label}</span>
-                </button>
-              ))}
-          </nav>
-
-          {project ? (
-            <div className="pj-sidebar-project">
-              <span className="pj-sidebar-label">Projeto ativo</span>
-              <button
-                className="pj-active-project"
-                title={`Abrir visão geral de ${project.name}`}
-                aria-label={`Projeto ativo: ${project.name}. Abrir visão geral.`}
-                onClick={() => navigate({ project: cid })}
-              >
-                <span className="pj-project-avatar" aria-hidden="true">
-                  {project.logo_url ? <img src={project.logo_url} alt="" /> : project.name.slice(0, 1).toUpperCase()}
-                </span>
-                <span>
-                  <strong>{project.name}</strong>
-                  <small>{project.segment || "Projeto de mídia"}</small>
-                </span>
-              </button>
-              <nav className="pj-sidebar-project-nav" aria-label={`Áreas de ${project.name}`}>
-                {projectNavigation
-                  .filter((item) => item.visible !== false)
-                  .map((item) => (
-                    <button
-                      key={item.view}
-                      className={view === item.view ? "active" : ""}
-                      aria-current={view === item.view ? "page" : undefined}
-                      onClick={() => navigate({ project: cid, view: item.view })}
-                      title={sidebarCollapsed ? item.label : undefined}
-                    >
-                      <WorkspaceNavIcon name={item.icon} />
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-              </nav>
-            </div>
-          ) : null}
-        </div>
-
-        <div className="pj-sidebar-footer" ref={accountMenuRef}>
-          <button
-            type="button"
-            className="pj-account-trigger"
-            aria-haspopup="menu"
-            aria-expanded={accountMenuOpen}
-            title={sidebarCollapsed ? "Abrir menu da conta" : undefined}
-            onClick={() => setAccountMenuOpen((open) => !open)}
-          >
-            <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
-            <span className="pj-sidebar-user">
-              <strong>{data.userName || "Minha conta"}</strong>
-              <small>{workspaceLabel}</small>
-            </span>
-            <InterfaceIcon name="chevron-down" size={16} />
-          </button>
-          {accountMenuOpen ? (
-            <div className="pj-account-menu" role="menu" aria-label="Menu da conta">
-              <div className="pj-account-menu-identity">
-                <span className="pj-small-avatar">{data.userName.slice(0, 1).toUpperCase() || "L"}</span>
-                <span><strong>{data.userName || "Minha conta"}</strong><small>{workspaceLabel}</small></span>
-              </div>
-              {data.isStaff ? (
-                <button type="button" role="menuitem" onClick={() => {
-                  setAccountMenuOpen(false);
-                  navigate({ view: "team" });
-                }}>
-                  <InterfaceIcon name="settings" size={18} />
-                  Configurações
-                </button>
-              ) : null}
-              <div className="pj-account-menu-separator" role="separator" />
-              <button type="button" role="menuitem" className="danger" onClick={() => void signOut()}>
-                <InterfaceIcon name="logout" size={18} />
-                Sair
-              </button>
-            </div>
-          ) : null}
-        </div>
-      </aside>
-      <header className="pj-topnav">
-        <button
-          className="pj-mobile-menu"
-          aria-label="Abrir menu"
-          aria-controls="workspace-sidebar"
-          aria-expanded={sidebarOpen}
-          onClick={() => setSidebarOpen(true)}
-        >
-          <WorkspaceNavIcon name="menu" />
-        </button>
-        <div className="pj-topbar-context">
-          <strong>{pageTitle}</strong>
-          <span>{pageContext}</span>
-        </div>
-        <div className="pj-account">
-          <button
-            className="pj-theme-toggle"
-            aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-            aria-pressed={theme === "dark"}
-            title={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-            onClick={toggleTheme}
-          >
-            <InterfaceIcon name={theme === "dark" ? "sun" : "moon"} />
-          </button>
-        </div>
-      </header>
+      <WorkspaceShell
+        theme={theme}
+        sidebarOpen={sidebarOpen}
+        sidebarCollapsed={sidebarCollapsed}
+        accountMenuOpen={accountMenuOpen}
+        accountMenuRef={accountMenuRef}
+        project={project}
+        cid={cid}
+        view={view}
+        isStaff={data.isStaff}
+        userName={data.userName}
+        workspaceLabel={workspaceLabel}
+        globalNavigation={globalNavigation}
+        projectNavigation={projectNavigation}
+        pageTitle={pageTitle}
+        pageContext={pageContext}
+        onNavigate={navigate}
+        onCloseSidebar={() => setSidebarOpen(false)}
+        onOpenSidebar={() => setSidebarOpen(true)}
+        onToggleSidebarCollapse={toggleSidebar}
+        onToggleAccountMenu={() => setAccountMenuOpen((open) => !open)}
+        onOpenTeamSettings={() => {
+          setAccountMenuOpen(false);
+          navigate({ view: "team" });
+        }}
+        onToggleTheme={toggleTheme}
+        onSignOut={() => void signOut()}
+      />
       <div id="workspace-main" className="pj-main-slot">
       {notice && creating !== "project" && !onboardingValue && (
         <div className="pj-notice" role="alert">
@@ -1219,152 +1095,24 @@ export function ProjectsWorkspace({
                     </div>
                   ) : null}
                 </nav>
-                {view === "overview" &&
-                staff &&
-                !project.onboarding_completed_at ? (
-                  <section className="pj-setup-resume" aria-labelledby="setup-resume-title">
-                    <div>
-                      <span className="pj-section-label">CONFIGURAÇÃO PENDENTE</span>
-                      <h2 id="setup-resume-title">
-                        Continue preparando {project.name}
-                      </h2>
-                      <p>
-                        O projeto foi preservado. Retome na etapa{" "}
-                        {project.onboarding_step} de 4 para testar a integração e
-                        criar a primeira análise.
-                      </p>
-                    </div>
-                    <button
-                      className="accent"
-                      onClick={() =>
-                        navigateSetup(
-                          Math.min(
-                            Math.max(project.onboarding_step, 1),
-                            4,
-                          ) as 1 | 2 | 3 | 4,
-                        )
-                      }
-                    >
-                      Continuar configuração
-                    </button>
-                  </section>
-                ) : null}
                 {(view === "overview" || view === "dashboards" || view === "reports") && (
-                  <>
-                    <div className="pj-list-toolbar">
-                      <input
-                        className="pj-search"
-                        placeholder={
-                          view === "dashboards"
-                            ? "Buscar dashboard…"
-                            : view === "reports"
-                              ? "Buscar relatório…"
-                              : "Buscar dashboard ou relatório…"
-                        }
-                        aria-label="Buscar documento"
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                      />
-                      <span>{visibleProjectDocs.length} documentos</span>
-                    </div>
-                    <div className="pj-document-grid">
-                      {visibleProjectDocs
-                        .filter((d) =>
-                          d.title.toLowerCase().includes(search.toLowerCase()),
-                        )
-                        .map((d) => (
-                          <button
-                            key={d.id}
-                            className="pj-document-card"
-                            onClick={() =>
-                              navigate({ project: cid, document: d.id })
-                            }
-                          >
-                            <span className={"pj-document-icon " + d.kind}>
-                              {d.kind === "dashboard" ? "◴" : "▤"}
-                            </span>
-                            <div>
-                              <span className="pj-section-label">
-                                {d.kind === "dashboard"
-                                  ? "DASHBOARD"
-                                  : "RELATÓRIO"}
-                              </span>
-                              <h3>{d.title}</h3>
-                              <p>
-                                {shortDate(d.config.since)} a{" "}
-                                {shortDate(d.config.until)}
-                              </p>
-                              <small>
-                                {d.config.metrics.length} indicadores ·{" "}
-                                {d.status === "published"
-                                  ? "Publicado para o cliente"
-                                  : "Rascunho da equipe"}
-                              </small>
-                            </div>
-                            <InterfaceIcon name="forward" size={18} />
-                          </button>
-                        ))}
-                      {view === "reports" &&
-                        legacyReports
-                          .filter((record) =>
-                            record.title.toLowerCase().includes(search.toLowerCase()),
-                          )
-                          .map((record) => (
-                            <button className="pj-document-card pj-legacy-document" key={record.id} onClick={() => navigate({ project: cid, view: "reports", legacyDocument: record.id })}>
-                              <span className="pj-document-icon report">▤</span>
-                              <div>
-                                <span className="pj-section-label">RELATÓRIO LEGADO PRESERVADO</span>
-                                <h3>{record.title}</h3>
-                                <p>{shortDate(record.created_at)}</p>
-                                <small>
-                                  {record.status === "published" ? "Publicado" : "Rascunho"} · somente leitura
-                                </small>
-                              </div>
-                            </button>
-                          ))}
-                    </div>
-                    {!visibleProjectDocs.length && !(view === "reports" && legacyReports.length) && (
-                      <Empty title="Tudo pronto para sua primeira análise">
-                        <p>
-                          {data.projectMetaConnection?.connection_status ===
-                          "connected"
-                            ? "Escolha um modelo, defina o período e gere os resultados deste cliente."
-                            : "Conecte a conta Meta para começar a gerar dashboards e relatórios."}
-                        </p>
-                        {staff && !canCreateDocumentFromScreen && (
-                          <button
-                            className="accent"
-                            onClick={() =>
-                              data.projectMetaConnection?.connection_status ===
-                              "connected"
-                                ? newDocument("dashboard")
-                                : navigate({
-                                    project: cid,
-                                    view: "integrations",
-                                  })
-                            }
-                          >
-                            {data.projectMetaConnection?.connection_status ===
-                            "connected"
-                              ? "Criar dashboard"
-                              : "Conectar integração"}
-                          </button>
-                        )}
-                      </Empty>
-                    )}
-                    {view === "overview" && data.records.some((record) => record.kind === "automation" && record.client_id === cid) ? (
-                      <section className="pj-panel">
-                        <h2>Planejamentos históricos de automação</h2>
-                        <p className="pj-muted">Configurações legadas preservadas. Não há execução ou envio automático nesta etapa.</p>
-                        {data.records.filter((record) => record.kind === "automation" && record.client_id === cid).map((record) => (
-                          <details key={record.id} className="pj-history-item">
-                            <summary>{record.title} · {record.status === "paused" ? "Pausado" : record.status}</summary>
-                            <pre>{JSON.stringify(record.payload, null, 2)}</pre>
-                          </details>
-                        ))}
-                      </section>
-                    ) : null}
-                  </>
+                  <ProjectOverviewView
+                    view={view}
+                    project={project}
+                    staff={staff}
+                    search={search}
+                    visibleProjectDocs={visibleProjectDocs}
+                    legacyReports={legacyReports}
+                    automationRecords={data.records.filter((record) => record.kind === "automation" && record.client_id === cid)}
+                    metaConnected={data.projectMetaConnection?.connection_status === "connected"}
+                    canCreateDocumentFromScreen={canCreateDocumentFromScreen}
+                    onSearch={setSearch}
+                    onOpen={(documentId) => navigate({ project: cid, document: documentId })}
+                    onOpenLegacy={(legacyDocumentId) => navigate({ project: cid, view: "reports", legacyDocument: legacyDocumentId })}
+                    onContinueSetup={navigateSetup}
+                    onCreateDashboard={() => newDocument("dashboard")}
+                    onGoToIntegrations={() => navigate({ project: cid, view: "integrations" })}
+                  />
                 )}
                 {view === "integrations" && (
                   <div className="pj-project-section">
@@ -1448,307 +1196,53 @@ export function ProjectsWorkspace({
                   />
                 )}
                 {(view === "timeline" || view === "goals") && (
-                  <section className="pj-panel">
-                    <div className="pj-list-toolbar">
-                      <h2>
-                        {view === "timeline"
-                          ? "Linha do tempo"
-                          : "Metas do projeto"}
-                      </h2>
-                      {staff && (
-                        <button
-                          className="accent"
-                          onClick={() =>
-                            setModal(view === "timeline" ? "timeline" : "goal")
-                          }
-                        >
-                          <InterfaceIcon name="plus" size={18} />{" "}
-                          {view === "timeline"
-                            ? "Registrar ação"
-                            : "Criar meta"}
-                        </button>
-                      )}
-                    </div>
-                    {data.records
-                      .filter(
-                        (r) =>
-                          r.client_id === cid &&
-                          r.kind ===
-                            (view === "timeline" ? "timeline" : "goal"),
-                      )
-                      .map((r) => (
-                        <article className="pj-history-item" key={r.id}>
-                          <small>
-                            {shortDate(r.created_at)} ·{" "}
-                            {r.visibility === "shared"
-                              ? "Compartilhado"
-                              : "Interno"}
-                          </small>
-                          <h3>{r.title}</h3>
-                          <p>{r.payload.description}</p>
-                          {r.kind === "goal" && (
-                            <div><p>
-                              {r.payload.metric}: {r.payload.actual ?? 0} /{" "}
-                              {r.payload.target} · Prazo:{" "}
-                              {r.payload.deadline
-                                ? shortDate(r.payload.deadline)
-                                : "—"}
-                            </p>{staff && <button onClick={() => setGoalId(r.id)}>Atualizar realizado</button>}</div>
-                          )}
-                        </article>
-                      ))}
-                    {!data.records.some(
-                      (r) =>
-                        r.client_id === cid &&
-                        r.kind === (view === "timeline" ? "timeline" : "goal"),
-                    ) && (
-                      <Empty
-                        title={
-                          view === "timeline"
-                            ? "O histórico deste projeto começa aqui"
-                            : "Defina os objetivos deste cliente"
-                        }
-                      >
-                        <p>Os registros ficam organizados dentro do projeto.</p>
-                      </Empty>
+                  <ProjectTimelineGoalsView
+                    view={view}
+                    staff={staff}
+                    records={data.records.filter(
+                      (r) => r.client_id === cid && r.kind === (view === "timeline" ? "timeline" : "goal"),
                     )}
-                  </section>
+                    onCreate={() => setModal(view === "timeline" ? "timeline" : "goal")}
+                    onUpdateGoal={setGoalId}
+                  />
                 )}
               </>
             ) : view === "overview" ? (
-              <>
-                <div className="pj-overview-grid">
-                  {[
-                    ["Projetos", data.clients.length],
-                    [
-                      "Dashboards",
-                      docs.filter((d) => d.kind === "dashboard").length,
-                    ],
-                    [
-                      "Relatórios publicados",
-                      docs.filter(
-                          (d) => d.kind === "report" && d.status === "published",
-                        ).length + legacyDocs.filter((record) => record.status === "published").length,
-                    ],
-                    [
-                      "Contas Meta vinculadas",
-                      data.clients.filter((c) => c.meta_account_id).length,
-                    ],
-                  ].map(([label, value]) => (
-                    <article className="pj-panel" key={label}>
-                      <p>{label}</p>
-                      <strong>{value}</strong>
-                    </article>
-                  ))}
-                </div>
-                <section className="pj-panel">
-                  <h2>Últimas entregas</h2>
-                  {docs
-                    .filter((d) => d.kind !== "template")
-                    .slice(0, 10)
-                    .map((d) => (
-                      <button
-                        className="pj-overview-row"
-                        key={d.id}
-                        onClick={() =>
-                          navigate({ project: d.client_id, document: d.id })
-                        }
-                      >
-                        <strong>{d.title}</strong>
-                        <span>
-                          {data.clients.find((c) => c.id === d.client_id)?.name}
-                        </span>
-                        <small>{shortDate(d.updated_at)}</small>
-                        <InterfaceIcon name="forward" size={18} />
-                      </button>
-                    ))}
-                  <p className="pj-muted">
-                    Visão das entregas da agência. Indicadores de plataformas
-                    diferentes permanecem separados por projeto.
-                  </p>
-                </section>
-              </>
+              <WorkspaceOverviewView
+                data={data}
+                docs={docs}
+                legacyDocs={legacyDocs}
+                onOpen={(clientId, documentId) => navigate({ project: clientId, document: documentId })}
+              />
             ) : view === "templates" ? (
-              <>
-                <div className="pj-list-toolbar">
-                  <input
-                    className="pj-search"
-                    placeholder="Buscar template…"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    aria-label="Buscar template da equipe"
-                  />
-                </div>
-                <div className="pj-document-grid">
-                  {docs
-                    .filter(
-                      (d) =>
-                        d.kind === "template" &&
-                        d.title.toLowerCase().includes(search.toLowerCase()),
-                    )
-                    .map((d) => (
-                      <button
-                        className="pj-document-card"
-                        key={d.id}
-                        onClick={() =>
-                          navigate({ project: d.client_id, document: d.id })
-                        }
-                      >
-                        <span className="pj-document-icon">▦</span>
-                        <div>
-                          <h3>{d.title}</h3>
-                          <p>
-                            {d.config.metrics.length} indicadores ·{" "}
-                            {d.config.sections.length} blocos
-                          </p>
-                          <small>Modelo reutilizável da equipe</small>
-                        </div>
-                      </button>
-                    ))}
-                </div>
-                {!docs.some((d) => d.kind === "template") && (
-                  <Empty title="Sua biblioteca de templates">
-                    <p>
-                      Monte uma análise e escolha “Salvar como template”. O
-                      modelo ficará disponível ao criar documentos em outros
-                      projetos.
-                    </p>
-                  </Empty>
-                )}
-              </>
+              <WorkspaceTemplatesView
+                docs={docs}
+                search={search}
+                onSearch={setSearch}
+                onOpen={(clientId, documentId) => navigate({ project: clientId, document: documentId })}
+              />
             ) : view === "team" ? (
-              <section className="pj-panel pj-team-settings">
-                <span className="pj-section-label">WORKSPACE DA AGÊNCIA</span>
-                <h2>Equipe e configurações</h2>
-                <p>
-                  Convide gestores e operadores e defina as permissões da equipe responsável pelos projetos.
-                </p>
-                {data.isStaff ? (
-                  <>
-                  <label>Workspace
-                    <select value={selectedTeamId ?? ""} onChange={(event) => navigate({ view: "team", team: event.target.value })}>
-                      {!selectedTeam ? <option value={selectedTeamId ?? ""} disabled>Workspace indisponível</option> : null}
-                      {data.teams.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-                    </select>
-                  </label>
-                  <button className="accent" disabled={!selectedTeam} onClick={() => setTeam(true)}>
-                    Gerenciar membros e convites
-                  </button>
-                  </>
-                ) : (
-                  <p className="pj-muted">
-                    Seu acesso é de cliente. Apenas a equipe da agência pode gerenciar membros.
-                  </p>
-                )}
-              </section>
+              <WorkspaceTeamView
+                isStaff={data.isStaff}
+                teams={data.teams}
+                selectedTeamId={selectedTeamId}
+                hasSelectedTeam={Boolean(selectedTeam)}
+                onSelectTeam={(teamId) => navigate({ view: "team", team: teamId })}
+                onManageTeam={() => setTeam(true)}
+              />
             ) : (
-              <>
-                <div className="pj-list-toolbar">
-                  <input
-                    className="pj-search"
-                    placeholder="Buscar projeto…"
-                    aria-label="Buscar projeto"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                  <label className="pj-sort">
-                    Ordenar por
-                    <select
-                      value={sort}
-                      onChange={(e) => setSort(e.target.value)}
-                    >
-                      <option value="recent">Último documento criado</option>
-                      <option value="name">Nome do projeto</option>
-                    </select>
-                  </label>
-                  <span className="pj-result-count" aria-live="polite">
-                    {filtered.length} {filtered.length === 1 ? "projeto" : "projetos"}
-                  </span>
-                </div>
-                <div className="pj-project-grid">
-                  {filtered.map((c) => {
-                    const documents = docs.filter(
-                      (d) => d.client_id === c.id && d.kind !== "template",
-                    );
-                    const dashboardCount = documents.filter(
-                      (d) => d.kind === "dashboard",
-                    ).length;
-                    const reportCount =
-                      documents.filter((d) => d.kind === "report").length +
-                      legacyDocs.filter((record) => record.client_id === c.id)
-                        .length;
-                    const lastActivity = latest(c.id);
-                    const status = c.meta_account_id
-                      ? { label: "Meta conectada", tone: "connected" }
-                      : c.onboarding_completed_at
-                        ? { label: "Sem integração", tone: "unavailable" }
-                        : { label: "Configuração pendente", tone: "beta" };
-                    return (
-                      <button
-                        className="pj-project-card"
-                        key={c.id}
-                        aria-label={`Abrir projeto ${c.name}`}
-                        onClick={() => navigate({ project: c.id })}
-                      >
-                        <span className="pj-project-avatar">
-                          {c.name.slice(0, 1).toUpperCase()}
-                        </span>
-                        <div className="pj-project-card-content">
-                          <div className="pj-project-card-heading">
-                            <h3>{c.name}</h3>
-                            <span className={`pj-status-badge ${status.tone}`}>
-                              {status.label}
-                            </span>
-                          </div>
-                          <div className="pj-card-integrations">
-                            {c.meta_account_id ? (
-                              <span className="pj-integration-pill">
-                                <MetaMark />
-                                Meta Ads
-                              </span>
-                            ) : (
-                              <small>Nenhuma fonte conectada</small>
-                            )}
-                          </div>
-                          <div className="pj-project-card-meta">
-                            <span>{dashboardCount} dashboards</span>
-                            <span>{reportCount} relatórios</span>
-                          </div>
-                          <div className="pj-project-card-footer">
-                            <small>
-                              Última atividade{" "}
-                              <b>{lastActivity ? shortDate(lastActivity) : "indisponível"}</b>
-                            </small>
-                            <span className="pj-open-project">
-                              Abrir projeto <InterfaceIcon name="forward" size={18} />
-                            </span>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {!filtered.length && (
-                  <Empty
-                    title={
-                      search
-                        ? "Nenhum projeto encontrado"
-                        : "Seus projetos aparecem aqui"
-                    }
-                  >
-                    <p>
-                      {data.isStaff
-                        ? "Crie um projeto para cada cliente e organize suas análises."
-                        : "A agência precisa liberar o acesso aos seus projetos. Se você é gestor, crie sua equipe para começar."}
-                    </p>
-                    {!data.isStaff && (
-                      <a className="pj-button" href="/new-workspace">
-                        Criar minha equipe
-                      </a>
-                    )}
-                  </Empty>
-                )}
-              </>
+              <WorkspaceProjectsView
+                filtered={filtered}
+                docs={docs}
+                legacyDocs={legacyDocs}
+                search={search}
+                sort={sort}
+                isStaff={data.isStaff}
+                lastActivity={latest}
+                onSearch={setSearch}
+                onSort={setSort}
+                onOpen={(clientId) => navigate({ project: clientId })}
+              />
             )}
           </main>
         </>
@@ -1765,249 +1259,70 @@ export function ProjectsWorkspace({
           void reload().catch(e => setNotice(e.message));
         }}
       />}
-      {goalId && <Dialog title="Atualizar meta" close={() => setGoalId("")} busy={busy}>
-        <form onSubmit={e => {e.preventDefault(); const actual = Number(new FormData(e.currentTarget).get("actual")); void run(async () => {await request("/api/projects", {action:"progress", client_id:cid, id:goalId, actual}); setGoalId("");});}}>
-          <label>Valor realizado<input data-autofocus name="actual" type="number" min="0" step="any" required defaultValue={data.records.find(r => r.id === goalId)?.payload.actual ?? 0}/><FieldMessage>Informe o resultado acumulado até agora.</FieldMessage></label>
-          <div className="pj-actions"><button type="button" disabled={busy} onClick={() => setGoalId("")}>Cancelar</button><button disabled={busy} className="primary">{busy ? "Salvando…" : "Salvar resultado"}</button></div>
-        </form>
-      </Dialog>}
+      {goalId && (
+        <GoalUpdateDialog
+          busy={busy}
+          defaultActual={data.records.find((r) => r.id === goalId)?.payload.actual ?? 0}
+          onClose={() => setGoalId("")}
+          onSubmit={(actual) =>
+            void run(async () => {
+              await request("/api/projects", { action: "progress", client_id: cid, id: goalId, actual });
+              setGoalId("");
+            })
+          }
+        />
+      )}
       {modal === "meta" && (
-        <Dialog title="Conectar Meta Ads" close={() => setModal("")} busy={busy} wide>
-          <p>
-            Selecione a conta de anúncios que pertence a{" "}
-            <strong>{project?.name}</strong>.
-          </p>
-          {metaLoading ? (
-            <div className="pj-empty pj-empty-compact" role="status">
-              <MetaMark />
-              <h3>Consultando sua autorização Meta…</h3>
-              <p>Estamos carregando as contas disponíveis.</p>
-            </div>
-          ) : metaError ? (
-            <div className="pj-warning" role="alert">
-              <strong>Não foi possível carregar as contas.</strong>
-              <p>{metaError}</p>
-              <button type="button" onClick={() => void openMeta()}>
-                Tentar novamente
-              </button>
-            </div>
-          ) : meta?.stage === "connected" || meta?.stage === "needs_selection" ? (
-            <>
-              <label className="pj-search-label">
-                Buscar conta de anúncios
-                <input
-                  className="pj-search"
-                  type="search"
-                  placeholder="Nome ou ID da conta"
-                  value={accountSearch}
-                  onChange={(e) => setAccountSearch(e.target.value)}
-                />
-              </label>
-              <div
-                className="pj-account-grid"
-                role="radiogroup"
-                aria-label="Contas de anúncios disponíveis"
-              >
-                {meta.accounts
-                  .filter((a) =>
-                    (a.name + " " + a.id)
-                      .toLowerCase()
-                      .includes(accountSearch.toLowerCase()),
-                  )
-                  .map((a) => (
-                    <button
-                      type="button"
-                      role="radio"
-                      aria-checked={account === a.id}
-                      className={
-                        "pj-source " + (account === a.id ? "selected" : "")
-                      }
-                      key={a.id}
-                      onClick={() => setAccount(a.id)}
-                    >
-                      <MetaMark />
-                      <div>
-                        <strong>{a.name}</strong>
-                        <small>{a.id}</small>
-                        <small>
-                          {[a.currency, a.timezoneName, "Status " + a.status]
-                            .filter(Boolean)
-                            .join(" · ")}
-                        </small>
-                      </div>
-                      {account === a.id && <span><InterfaceIcon name="check" size={18} /></span>}
-                    </button>
-                  ))}
-              </div>
-              {!meta.accounts.some((a) =>
-                (a.name + " " + a.id)
-                  .toLowerCase()
-                  .includes(accountSearch.toLowerCase()),
-              ) ? (
-                <div className="pj-empty pj-empty-compact">
-                  <h3>Nenhuma conta encontrada</h3>
-                  <p>
-                    Confira a pesquisa ou autorize outro usuário Meta que tenha
-                    acesso à conta.
-                  </p>
-                </div>
-              ) : null}
-              <div className="pj-actions">
-                <button
-                  type="button"
-                  onClick={() => {
-                    window.location.href =
-                      "/api/integrations/meta/start?returnTo=" +
-                      encodeURIComponent(
-                        workspaceHref("integrations", {
-                          projectId: cid,
-                          onboarding: onboardingValue ?? undefined,
-                        }),
-                      );
-                  }}
-                >
-                  Autorizar outras contas
-                </button>
-                <button
-                  type="button"
-                  className="accent"
-                  disabled={busy || !account}
-                  onClick={() => void bind()}
-                >
-                  {busy ? "Vinculando…" : "Vincular ao projeto"}
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="pj-empty">
-              <MetaMark />
-              <h3>Autorize o acesso pelo Facebook</h3>
-              <p>
-                {meta?.error ??
-                  "Depois da autorização, você volta para escolher a conta deste projeto."}
-              </p>
-              <button
-                type="button"
-                className="primary"
-                disabled={meta?.stage === "missing_config"}
-                onClick={() => {
-                  window.location.href =
-                    "/api/integrations/meta/start?returnTo=" +
-                    encodeURIComponent(
-                      workspaceHref("integrations", {
-                        projectId: cid,
-                        onboarding: onboardingValue ?? undefined,
-                      }),
-                    );
-                }}
-              >
-                Continuar com o Facebook
-              </button>
-            </div>
-          )}
-          {notice && (
-            <p role="status" className="pj-warning">
-              {notice}
-            </p>
-          )}
-        </Dialog>
+        <WorkspaceMetaModal
+          projectName={project?.name}
+          projectId={cid}
+          onboardingValue={onboardingValue}
+          busy={busy}
+          metaLoading={metaLoading}
+          metaError={metaError}
+          meta={meta}
+          accountSearch={accountSearch}
+          account={account}
+          notice={notice}
+          onClose={() => setModal("")}
+          onRetry={() => void openMeta()}
+          onSearchAccount={setAccountSearch}
+          onSelectAccount={setAccount}
+          onBind={() => void bind()}
+        />
       )}
       {(modal === "goal" || modal === "timeline") && (
-        <Dialog
-          title={modal === "goal" ? "Nova meta" : "Registrar ação"}
-          close={() => setModal("")}
+        <RecordCreateDialog
+          kind={modal}
           busy={busy}
-        >
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              void run(async () => {
-                await request("/api/projects", {
-                  action: "record",
-                  value: {
-                    client_id: cid,
-                    kind: modal,
-                    title: f.get("title"),
-                    visibility: f.get("visibility"),
-                    payload: {
-                      description: f.get("description"),
-                      ...(modal === "goal"
-                        ? {
-                            metric: f.get("metric"),
-                            target: Number(f.get("target")),
-                            actual: Number(f.get("actual")),
-                            deadline: f.get("deadline"),
-                            direction: "above",
-                          }
-                        : {}),
-                    },
+          onClose={() => setModal("")}
+          onSubmit={(f) =>
+            void run(async () => {
+              await request("/api/projects", {
+                action: "record",
+                value: {
+                  client_id: cid,
+                  kind: modal,
+                  title: f.get("title"),
+                  visibility: f.get("visibility"),
+                  payload: {
+                    description: f.get("description"),
+                    ...(modal === "goal"
+                      ? {
+                          metric: f.get("metric"),
+                          target: Number(f.get("target")),
+                          actual: Number(f.get("actual")),
+                          deadline: f.get("deadline"),
+                          direction: "above",
+                        }
+                      : {}),
                   },
-                });
-                setModal("");
+                },
               });
-            }}
-          >
-            <label>
-              Título
-              <input data-autofocus name="title" required maxLength={180} aria-describedby="record-title-help" />
-              <FieldMessage id="record-title-help">Use um título curto e fácil de reconhecer no histórico.</FieldMessage>
-            </label>
-            {modal === "goal" && (
-              <>
-                <label>
-                  Indicador
-                  <input
-                    name="metric"
-                    required
-                    placeholder="Ex.: Compras no site"
-                  />
-                </label>
-                <div className="pj-form-row">
-                  <label>
-                    Meta
-                    <input
-                      name="target"
-                      type="number"
-                      min="0.01"
-                      step="any"
-                      required
-                    />
-                  </label>
-                  <label>
-                    Realizado
-                    <input
-                      name="actual"
-                      type="number"
-                      min="0"
-                      step="any"
-                      defaultValue="0"
-                      required
-                    />
-                  </label>
-                </div>
-                <label>
-                  Prazo
-                  <input name="deadline" type="date" required />
-                </label>
-              </>
-            )}
-            <label>
-              Descrição
-              <textarea name="description" rows={4} />
-            </label>
-            <label>
-              Visibilidade
-              <select name="visibility">
-                <option value="internal">Interno da equipe</option>
-                <option value="shared">Compartilhado com o cliente</option>
-              </select>
-            </label>
-            <button className="accent" disabled={busy}>
-              {busy ? "Salvando…" : modal === "goal" ? "Criar meta" : "Registrar ação"}
-            </button>
-          </form>
-        </Dialog>
+              setModal("");
+            })
+          }
+        />
       )}
       {toast ? <Toast message={toast} close={() => setToast("")} /> : null}
     </div>

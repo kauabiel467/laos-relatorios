@@ -191,21 +191,36 @@ export function ProjectIntegrations({
           </div>
           <div className="pj-connected pj-connected-detailed">
             <MetaMark />
-            <div>
+            <div className="pj-connected-summary">
               <strong>{connection.account_name ?? "Conta Meta"}</strong>
-              <p>{connection.account_id}</p>
               <p>{connectionMessage(connection)}</p>
-              <div className="pj-account-metadata">
-                <span>Moeda: {connection.account_currency ?? "não informada"}</span>
-                <span>Fuso: {connection.account_timezone ?? "não informado"}</span>
-                <span>Status Meta: {connection.account_status ?? "não informado"}</span>
+            </div>
+            <div className="pj-account-metadata">
+              <div className="pj-account-field">
+                <span>ID da conta</span>
+                <strong>{connection.account_id}</strong>
+              </div>
+              <div className="pj-account-field">
+                <span>Moeda</span>
+                <strong>{connection.account_currency ?? "não informada"}</strong>
+              </div>
+              <div className="pj-account-field">
+                <span>Fuso horário</span>
+                <strong>{connection.account_timezone ?? "não informado"}</strong>
+              </div>
+              <div className="pj-account-field">
+                <span>Status na Meta</span>
+                <strong>{connection.account_status ?? "não informado"}</strong>
+              </div>
+              <div className="pj-account-field">
+                <span>Última verificação</span>
+                <strong>
+                  {connection.last_checked_at
+                    ? shortDate(connection.last_checked_at)
+                    : "Ainda não testada"}
+                </strong>
               </div>
             </div>
-            <small>
-              {connection.last_checked_at
-                ? `Último teste em ${shortDate(connection.last_checked_at)}`
-                : "Ainda não testada"}
-            </small>
             {canConfigure ? (
               <div className="pj-inline-actions">
                 <button type="button" disabled={busy} onClick={onTest}>
