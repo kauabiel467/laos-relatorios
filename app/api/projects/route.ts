@@ -19,7 +19,7 @@ import {
   revokeProjectClient,
   revokeProjectInvitation,
 } from "@/lib/projects/service";
-import { copyProjectDocument, getProjectDocument, deleteProjectDocument, setProjectDocumentPublication, saveProjectDocument } from "@/lib/projects/documents";
+import { copyProjectDocument, getProjectDocument, deleteProjectDocument, setProjectDocumentPublication, setProjectDocumentShareToken, saveProjectDocument } from "@/lib/projects/documents";
 import { configSchema } from "@/lib/projects/schema";
 import {
   normalizeAnalysisConfig,
@@ -192,6 +192,12 @@ export async function POST(req: NextRequest) {
     }
     if (b.action === "unpublish") {
       return NextResponse.json(await setProjectDocumentPublication(db, existing, false));
+    }
+    if (b.action === "share_link") {
+      return NextResponse.json(await setProjectDocumentShareToken(db, existing, true));
+    }
+    if (b.action === "revoke_link") {
+      return NextResponse.json(await setProjectDocumentShareToken(db, existing, false));
     }
     if (!["create", "save", "refresh"].includes(b.action))
       throw Error("Ação não reconhecida.");

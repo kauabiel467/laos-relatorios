@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AgencyRecord } from "@/lib/agency/types";
 import { normalizeAnalysisConfig, type AnalysisConfig, type ProjectDocument } from "@/lib/projects/model";
@@ -81,6 +82,30 @@ export async function setProjectDocumentPublication(
   const { data, error } = await db.from("agency_documents").update({ status: published ? "published" : "draft" }).eq("id", document.id).eq("client_id", document.client_id).select().single();
   if (error) throw Error(published ? "Não foi possível publicar." : "Não foi possível restringir o acesso.");
   return data as ProjectDocument;
+}
+
+// The token is the sole credential for the public link (see get_public_dashboard
+// in the public_dashboard_links migration), so it is generated app-side with
+// crypto randomness rather than left to the client. share_token is unique, so a
+// collision fails the update and we retry with a fresh token a few times before
+// giving up - astronomically unlikely with a random UUID, but cheap to guard.
+export async function setProjectDocumentShareToken(
+  db: SupabaseClient,
+  document: ProjectDocument | null,
+  share: boolean,
+) {
+  if (!document || document.kind !== "dashboard") throw Error("Apenas dashboards podem gerar link público.");
+  if (!share) {
+    const { data, error } = await db.from("agency_documents").update({ share_token: null }).eq("id", document.id).eq("client_id", document.client_id).select().single();
+    if (error) throw Error("Não foi possível revogar o link público.");
+    return data as ProjectDocument;
+  }
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data, error } = await db.from("agency_documents").update({ share_token: randomUUID() }).eq("id", document.id).eq("client_id", document.client_id).select().single();
+    if (!error) return data as ProjectDocument;
+    if (error.code !== "23505") throw Error("Não foi possível gerar o link público.");
+  }
+  throw Error("Não foi possível gerar o link público. Tente novamente.");
 }
 
 export async function saveProjectDocument(
