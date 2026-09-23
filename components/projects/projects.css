@@ -54,6 +54,26 @@
   --pj-font-brand: var(--font-brand), "Avenir Next", "Segoe UI", sans-serif;
   --pj-font-ui: var(--font-sans), ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
+  /* App-chrome z-index scale. Values are unchanged from before this was named —
+     each variable documents where a layer sits, it doesn't reorder anything.
+     Sticky-table and drag/resize z-indexes (1-21) stay as local literals: they
+     only need to out-rank their own siblings, never this global stack. */
+  --pj-z-context-menu: 75;
+  --pj-z-topnav-mosaic: 80;
+  --pj-z-topnav-theme: 90;
+  --pj-z-sidebar-backdrop: 100;
+  --pj-z-sidebar: 110;
+  --pj-z-analysis-toolbar: 120;
+  --pj-z-route-progress: 120;
+  --pj-z-copy-report-menu: 170;
+  --pj-z-account-menu: 180;
+  --pj-z-overlay-base: 200;
+  --pj-z-menu: 240;
+  --pj-z-skip-link: 300;
+  --pj-z-metric-library: 380;
+  --pj-z-overlay: 500;
+  --pj-z-toast: 700;
+
   /* Compatibility aliases while legacy selectors move to semantic tokens. */
   --pj-blue: var(--pj-primary);
   --pj-green: var(--pj-success);
@@ -785,20 +805,28 @@
   background: #f5f9ff;
 }
 .pj-connected {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 10px 18px;
   border-bottom: 1px solid var(--pj-line);
   padding: 16px 0 30px;
   margin-bottom: 30px;
 }
-.pj-connected > div {
-  flex: 1;
+.pj-connected > .pj-meta {
+  grid-row: 1 / -1;
+}
+.pj-connected-summary {
+  min-width: 0;
+}
+.pj-connected-summary strong {
+  display: block;
+  font-size: 15px;
 }
 .pj-connected p {
   margin: 5px 0;
   font-size: 11px;
-  color: #8b9cb0;
+  color: var(--pj-muted);
 }
 .pj-connected-status {
   font-size: 11px;
@@ -966,8 +994,7 @@
   gap: 22px;
 }
 .pj-integration-card-header,
-.pj-badge-row,
-.pj-account-metadata {
+.pj-badge-row {
   display: flex;
   align-items: center;
   gap: 7px;
@@ -1028,24 +1055,37 @@
   max-width: 520px;
 }
 .pj-connected-detailed {
-  align-items: flex-start;
   border-bottom: 0;
   margin: 0;
   padding: 10px 0 0;
 }
-.pj-connected-detailed > div:nth-child(2) {
+.pj-account-metadata {
+  grid-column: 2;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 14px 20px;
+  margin-top: 6px;
+}
+.pj-account-field {
   min-width: 0;
+  display: grid;
+  gap: 3px;
 }
-.pj-connected-detailed > .pj-inline-actions {
-  flex: 0 0 100%;
-  margin-left: 52px;
-}
-.pj-account-metadata span {
-  border-radius: 6px;
-  background: #eef3f8;
-  padding: 4px 7px;
+.pj-account-field span {
   color: #6b7f94;
   font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pj-account-field strong {
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+.pj-connected-detailed > .pj-inline-actions {
+  grid-column: 2;
+  margin-top: 8px;
 }
 .pj-access-list {
   display: grid;
@@ -1197,7 +1237,7 @@
   position: fixed;
   inset: 0;
   background: #1a2c4680;
-  z-index: 200;
+  z-index: var(--pj-z-overlay-base);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1299,7 +1339,7 @@
   align-items: center;
   padding: 17px 35px;
   position: relative;
-  z-index: 120;
+  z-index: var(--pj-z-analysis-toolbar);
   flex-wrap: wrap;
 }
 .pj-analysis-toolbar > strong {
@@ -1368,7 +1408,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 10px);
-  z-index: 240;
+  z-index: var(--pj-z-menu);
   box-shadow: 0 12px 40px #0a285f25;
   background: white;
   border: 1px solid var(--pj-line);
@@ -2029,8 +2069,15 @@
     grid-column: 2 / -1;
     justify-self: start;
   }
+  .pj-connected {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pj-connected > .pj-meta {
+    grid-row: auto;
+  }
+  .pj-account-metadata,
   .pj-connected-detailed > .pj-inline-actions {
-    margin-left: 0;
+    grid-column: 1;
   }
   .pj-wizard > aside {
     margin-bottom: 30px;
@@ -2483,7 +2530,7 @@
   .projects:is(.theme-light, .theme-dark) .pj-topnav {
     position: sticky;
     top: 0;
-    z-index: 90;
+    z-index: var(--pj-z-topnav-theme);
     min-height: 72px;
     height: auto;
     padding-top: env(safe-area-inset-top, 0px);
@@ -2587,11 +2634,18 @@
   .projects:is(.theme-light, .theme-dark) .pj-empty > span,
   .projects:is(.theme-light, .theme-dark) .pj-template > span,
   .projects:is(.theme-light, .theme-dark) .pj-document-icon,
-  .projects:is(.theme-light, .theme-dark) .pj-badge,
-  .projects:is(.theme-light, .theme-dark) .pj-account-metadata span {
+  .projects:is(.theme-light, .theme-dark) .pj-badge {
     border: 1px solid var(--pj-primary-border);
     background: var(--pj-primary-soft);
     color: var(--pj-primary);
+  }
+
+  .projects:is(.theme-light, .theme-dark) .pj-account-field span {
+    color: var(--pj-text-muted);
+  }
+
+  .projects:is(.theme-light, .theme-dark) .pj-account-field strong {
+    color: var(--pj-text);
   }
 
   .projects:is(.theme-light, .theme-dark) .pj-document-icon.report,
@@ -2797,7 +2851,7 @@
 
   .pj-route-progress {
     position: fixed;
-    z-index: 120;
+    z-index: var(--pj-z-route-progress);
     top: 0;
     right: 0;
     left: 0;
@@ -3045,7 +3099,7 @@
 
 .pj-context-menu > div {
   position: absolute;
-  z-index: 75;
+  z-index: var(--pj-z-context-menu);
   top: calc(100% + 8px);
   right: 0;
   width: max-content;
@@ -3695,7 +3749,7 @@
 
 .projects .pj-metric-library {
   position: fixed;
-  z-index: 380;
+  z-index: var(--pj-z-metric-library);
   top: 0;
   bottom: 0;
   left: 0;
@@ -4662,33 +4716,18 @@
   }
 }
 
-/* Official iFood authorization entry point. The branded red surface is kept
- * separate from semantic success/error colors used elsewhere in the product. */
-.projects .pj-integration-card.is-ifood {
-  border-color: color-mix(in srgb, #ea1d2c 38%, var(--pj-border));
-  background:
-    linear-gradient(#ea1d2c 0 68px, var(--pj-surface-raised) 68px);
-}
-
-.projects .pj-integration-card.is-ifood .pj-integration-card-header {
-  min-height: 38px;
-}
-
-.projects .pj-integration-brand.is-ifood {
-  background: #ea1d2c !important;
-}
-
+/* iFood's mark ships as a single-color red SVG (see public/brands/ifood.svg).
+ * Every integration badge is a solid brand-color circle with a white mark on
+ * top (Tabler icons get that via color:#fff + currentColor); since this one
+ * is an <img>, invert its luminance to get the same white-on-brand-color
+ * result instead of a red mark on a red circle. The card itself stays the
+ * same white/bordered shell as every other integration, no special-casing. */
 .projects .pj-integration-brand.is-ifood img {
   width: 26px;
   height: 26px;
   display: block;
   object-fit: contain;
   filter: brightness(0) invert(1);
-}
-
-.projects .pj-integration-card.is-ifood .pj-status-badge {
-  border-color: rgb(255 255 255 / 0.42);
-  background: rgb(255 255 255 / 0.94);
 }
 
 .projects .pj-ifood-intro {
@@ -4928,7 +4967,7 @@
 /* Interaction surfaces: one modal, menu and feedback language across the workspace. */
 @media screen {
   .projects .pj-overlay {
-    z-index: 500;
+    z-index: var(--pj-z-overlay);
     align-items: center;
     justify-content: center;
     overflow: hidden;
@@ -5053,7 +5092,7 @@
 
   .projects .pj-toast {
     position: fixed;
-    z-index: 700;
+    z-index: var(--pj-z-toast);
     right: max(20px, env(safe-area-inset-right, 0px));
     bottom: max(20px, env(safe-area-inset-bottom, 0px));
     width: min(420px, calc(100vw - 40px));
@@ -5259,9 +5298,15 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .projects .pj-dialog,
-  .projects .pj-toast {
+  /* The override flag below is required: the theme-scoped rule at
+     .projects:is(.theme-light, .theme-dark) .pj-dialog (3 classes) outranks
+     this 2-class selector on specificity alone. */
+  .projects .pj-dialog {
     transition: none !important;
+  }
+
+  .projects .pj-toast {
+    transition: none;
   }
 }
 
@@ -5282,7 +5327,7 @@
 
   .pj-mosaic-shell .pj-skip-link {
     position: fixed;
-    z-index: 300;
+    z-index: var(--pj-z-skip-link);
     top: 10px;
     left: 272px;
     padding: 10px 14px;
@@ -5301,7 +5346,7 @@
 
   .pj-mosaic-shell .pj-sidebar {
     position: sticky;
-    z-index: 110;
+    z-index: var(--pj-z-sidebar);
     top: 0;
     grid-column: 1;
     grid-row: 1 / span 2;
@@ -5310,11 +5355,11 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    border-right: 1px solid rgb(255 255 255 / 0.07);
+    border-right: 1px solid var(--pj-border);
     background:
-      radial-gradient(circle at 0 0, rgb(59 130 246 / 0.18), transparent 18rem),
-      #111827;
-    color: #d8e0ed;
+      radial-gradient(circle at 0 0, color-mix(in srgb, var(--pj-primary) 18%, transparent), transparent 18rem),
+      var(--pj-surface);
+    color: var(--pj-text);
     box-shadow: 12px 0 34px rgb(15 23 42 / 0.08);
   }
 
@@ -5325,7 +5370,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 14px 16px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.07);
+    border-bottom: 1px solid var(--pj-border);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-brand {
@@ -5337,7 +5382,7 @@
     padding: 4px;
     border: 0;
     background: transparent;
-    color: #fff;
+    color: var(--pj-text);
     box-shadow: none;
   }
 
@@ -5349,7 +5394,7 @@
     place-items: center;
     border: 0;
     background: transparent;
-    color: #60a5fa;
+    color: var(--pj-primary);
     font-family: var(--pj-font-brand);
     font-size: 17px;
     font-weight: 750;
@@ -5365,7 +5410,7 @@
   }
 
   .pj-brand-copy strong {
-    color: #fff;
+    color: var(--pj-text);
     font-family: var(--pj-font-brand);
     font-size: 20px;
     letter-spacing: -0.04em;
@@ -5373,7 +5418,7 @@
 
   .pj-brand-copy small {
     margin-top: 3px;
-    color: #8290a7;
+    color: var(--pj-text-muted);
     font-size: 10px;
     font-weight: 650;
     letter-spacing: 0.08em;
@@ -5390,9 +5435,11 @@
     box-shadow: none;
   }
 
+  /* Needs the override flag: the generic ".projects button" reset (a class +
+     an element selector, 0-1-1) otherwise outranks this bare class (0-1-0). */
   .pj-sidebar-close {
     display: none !important;
-    color: #9eabc0 !important;
+    color: var(--pj-text-secondary) !important;
   }
 
   .pj-mobile-menu {
@@ -5413,13 +5460,13 @@
     overscroll-behavior: contain;
     padding: 20px 14px 24px;
     scrollbar-width: thin;
-    scrollbar-color: #31405a transparent;
+    scrollbar-color: var(--pj-border-strong) transparent;
   }
 
   .pj-sidebar-label {
     display: block;
     margin: 0 10px 8px;
-    color: #718096;
+    color: var(--pj-text-muted);
     font-size: 10px;
     font-weight: 750;
     letter-spacing: 0.08em;
@@ -5439,10 +5486,10 @@
     justify-content: stretch;
     gap: 11px;
     padding: 9px 11px;
-    border: 1px solid transparent;
+    border: 1px solid transparent !important;
     border-radius: 9px;
-    background: transparent;
-    color: #9eabc0;
+    background: transparent !important;
+    color: var(--pj-text-secondary) !important;
     box-shadow: none;
     font-size: 13px;
     font-weight: 560;
@@ -5452,29 +5499,29 @@
   .projects.pj-mosaic-shell .pj-sidebar nav button svg {
     width: 19px;
     height: 19px;
-    color: #718096;
+    color: var(--pj-text-muted);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button:hover {
-    background: rgb(255 255 255 / 0.055);
-    color: #edf3fb;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button.active {
-    border-color: rgb(96 165 250 / 0.16);
-    background: linear-gradient(90deg, rgb(37 99 235 / 0.23), rgb(37 99 235 / 0.08));
-    color: #fff;
-    box-shadow: inset 3px 0 0 #3b82f6;
+    border-color: color-mix(in srgb, var(--pj-primary) 30%, transparent) !important;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--pj-primary) 23%, transparent), color-mix(in srgb, var(--pj-primary) 8%, transparent)) !important;
+    color: var(--pj-text) !important;
+    box-shadow: inset 3px 0 0 var(--pj-primary);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar nav button.active svg {
-    color: #60a5fa;
+    color: var(--pj-primary);
   }
 
   .pj-sidebar-project {
     margin-top: 25px;
     padding-top: 20px;
-    border-top: 1px solid rgb(255 255 255 / 0.07);
+    border-top: 1px solid var(--pj-border);
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-active-project {
@@ -5487,15 +5534,15 @@
     justify-content: stretch;
     margin-bottom: 12px;
     padding: 9px 10px;
-    border-color: rgb(255 255 255 / 0.07);
-    background: rgb(255 255 255 / 0.04);
-    color: #d8e0ed;
+    border-color: var(--pj-border) !important;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.pj-mosaic-shell .pj-sidebar .pj-active-project .pj-project-avatar {
     width: 38px;
     height: 38px;
-    border-color: rgb(147 197 253 / 0.28);
+    border-color: color-mix(in srgb, var(--pj-primary) 30%, transparent);
     font-size: 15px;
     box-shadow: none;
   }
@@ -5505,12 +5552,12 @@
   }
 
   .pj-sidebar .pj-active-project strong {
-    color: #f8fafc;
+    color: var(--pj-text);
     font-size: 12px;
   }
 
   .pj-sidebar .pj-active-project small {
-    color: #8290a7;
+    color: var(--pj-text-muted);
     font-size: 10px;
   }
 
@@ -5525,14 +5572,14 @@
     align-items: center;
     gap: 10px;
     padding: 12px 16px max(12px, env(safe-area-inset-bottom, 0px));
-    border-top: 1px solid rgb(255 255 255 / 0.07);
-    background: rgb(3 7 18 / 0.18);
+    border-top: 1px solid var(--pj-border);
+    background: var(--pj-surface-sunken);
   }
 
   .pj-mosaic-shell .pj-sidebar-footer .pj-small-avatar {
     width: 34px;
     height: 34px;
-    border-color: rgb(147 197 253 / 0.26);
+    border-color: color-mix(in srgb, var(--pj-primary) 26%, transparent);
     box-shadow: none;
   }
 
@@ -5550,23 +5597,25 @@
   }
 
   .pj-sidebar-user strong {
-    color: #e5eaf2;
+    color: var(--pj-text);
     font-size: 12px;
   }
 
   .pj-sidebar-user small {
     margin-top: 2px;
-    color: #718096;
+    color: var(--pj-text-muted);
     font-size: 10px;
   }
 
+  /* Needs the override flag: ".projects button" (0-1-1) otherwise beats this
+     bare class (0-1-0) since .pj-sidebar-backdrop is a <button>. */
   .pj-sidebar-backdrop {
     display: none !important;
   }
 
   .projects.pj-mosaic-shell .pj-topnav {
     position: sticky;
-    z-index: 80;
+    z-index: var(--pj-z-topnav-mosaic);
     top: 0;
     grid-column: 2;
     grid-row: 1;
@@ -5764,7 +5813,7 @@
 
   .projects.pj-mosaic-shell .pj-sidebar-backdrop {
     position: fixed;
-    z-index: 100;
+    z-index: var(--pj-z-sidebar-backdrop);
     inset: 0;
     min-height: 100dvh;
     display: block !important;
@@ -6050,15 +6099,15 @@
     display: inline-grid;
     place-items: center;
     padding: 0;
-    border-color: transparent;
-    background: transparent;
-    color: #9eabc0;
+    border-color: transparent !important;
+    background: transparent !important;
+    color: var(--pj-text-secondary) !important;
     box-shadow: none;
   }
 
   .projects .pj-sidebar-collapse:hover {
-    background: rgb(255 255 255 / 0.07);
-    color: #fff;
+    background: var(--pj-surface-hover) !important;
+    color: var(--pj-text) !important;
   }
 
   .projects.is-sidebar-collapsed .pj-sidebar-header {
@@ -6075,8 +6124,7 @@
   .projects.is-sidebar-collapsed .pj-sidebar-label,
   .projects.is-sidebar-collapsed .pj-sidebar nav button > span,
   .projects.is-sidebar-collapsed .pj-active-project > span:last-child,
-  .projects.is-sidebar-collapsed .pj-sidebar-user,
-  .projects.is-sidebar-collapsed .pj-account-trigger > svg {
+  .projects.is-sidebar-collapsed .pj-sidebar-user {
     display: none;
   }
 
@@ -6122,21 +6170,21 @@
     width: 100%;
     min-height: 48px;
     display: grid;
-    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    grid-template-columns: 34px minmax(0, 1fr);
     align-items: center;
     gap: 10px;
     padding: 6px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: #d8e0ed;
+    border: 1px solid transparent !important;
+    background: transparent !important;
+    color: var(--pj-text) !important;
     box-shadow: none;
     text-align: left;
   }
 
   .projects .pj-account-trigger:hover,
   .projects .pj-account-trigger[aria-expanded="true"] {
-    border-color: rgb(255 255 255 / 0.08);
-    background: rgb(255 255 255 / 0.055);
+    border-color: var(--pj-border) !important;
+    background: var(--pj-surface-hover) !important;
   }
 
   .projects.is-sidebar-collapsed .pj-account-trigger {
@@ -6146,17 +6194,17 @@
 
   .projects .pj-account-menu {
     position: absolute;
-    z-index: 180;
+    z-index: var(--pj-z-account-menu);
     right: 12px;
     bottom: calc(100% + 8px);
     left: 12px;
     min-width: 220px;
     padding: 7px;
-    border: 1px solid rgb(255 255 255 / 0.1);
+    border: 1px solid var(--pj-border);
     border-radius: 12px;
-    background: #172033;
-    color: #e5eaf2;
-    box-shadow: 0 18px 44px rgb(0 0 0 / 0.34);
+    background: var(--pj-surface-raised);
+    color: var(--pj-text);
+    box-shadow: var(--pj-shadow-md);
   }
 
   .projects.is-sidebar-collapsed .pj-account-menu {
@@ -6187,7 +6235,7 @@
 
   .projects .pj-account-menu-identity small {
     margin-top: 2px;
-    color: #8290a7;
+    color: var(--pj-text-muted);
   }
 
   .projects .pj-account-menu button {
@@ -6198,24 +6246,24 @@
     justify-content: flex-start;
     gap: 9px;
     padding: 9px 10px;
-    border: 0;
-    background: transparent;
-    color: #d8e0ed;
+    border: 0 !important;
+    background: transparent !important;
+    color: var(--pj-text) !important;
     box-shadow: none;
   }
 
   .projects .pj-account-menu button:hover {
-    background: rgb(255 255 255 / 0.06);
+    background: var(--pj-surface-hover) !important;
   }
 
   .projects .pj-account-menu button.danger {
-    color: #fca5a5;
+    color: var(--pj-danger) !important;
   }
 
   .projects .pj-account-menu-separator {
     height: 1px;
     margin: 5px 4px;
-    background: rgb(255 255 255 / 0.08);
+    background: var(--pj-border);
   }
 
   .projects .pj-theme-toggle {
@@ -6252,7 +6300,7 @@
 
   .projects .pj-copy-report-menu {
     position: absolute;
-    z-index: 170;
+    z-index: var(--pj-z-copy-report-menu);
     top: calc(100% + 8px);
     right: 0;
     width: min(340px, calc(100vw - 32px));
@@ -6422,8 +6470,7 @@
   .projects.is-sidebar-collapsed .pj-sidebar-label,
   .projects.is-sidebar-collapsed .pj-sidebar nav button > span,
   .projects.is-sidebar-collapsed .pj-active-project > span:last-child,
-  .projects.is-sidebar-collapsed .pj-sidebar-user,
-  .projects.is-sidebar-collapsed .pj-account-trigger > svg {
+  .projects.is-sidebar-collapsed .pj-sidebar-user {
     display: initial;
   }
 
@@ -6457,7 +6504,7 @@
   }
 
   .projects.is-sidebar-collapsed .pj-account-trigger {
-    grid-template-columns: 34px minmax(0, 1fr) 16px;
+    grid-template-columns: 34px minmax(0, 1fr);
   }
 
   .projects .pj-document-shell {

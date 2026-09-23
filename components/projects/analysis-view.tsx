@@ -1328,7 +1328,17 @@ export function AnalysisView({
                       onClick={() => void copyReport(template.id)}
                     >
                       <InterfaceIcon
-                        name={template.id === "sales" ? "sales" : template.id === "messages" ? "messages" : template.id === "followers" ? "followers" : "reports"}
+                        name={
+                          template.id === "sales"
+                            ? "sales"
+                            : template.id === "messages"
+                              ? "messages"
+                              : template.id === "followers"
+                                ? "followers"
+                                : template.id === "traffic"
+                                  ? "link"
+                                  : "reports"
+                        }
                         size={18}
                       />
                       <span>

@@ -2,10 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { inviteTeamMember } from "@/lib/team/server";
 import type { TeamRole } from "@/lib/team/types";
 import { z } from "zod";
+import { rateLimit, requestIp, tooManyRequestsResponse } from "@/lib/utils/rate-limit";
 
 const validRoles = new Set<TeamRole>(["owner", "manager", "operator"]);
 
 export async function POST(request: NextRequest) {
+  const limit = rateLimit(`team-invite:${requestIp(request)}`, 10, 60_000);
+  if (!limit.allowed) return tooManyRequestsResponse(limit);
   const body = (await request.json()) as { email?: string; role?: TeamRole; team_id?: string };
   const email = z
     .string()
