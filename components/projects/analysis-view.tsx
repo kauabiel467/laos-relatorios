@@ -5,27 +5,23 @@ import { flushSync } from "react-dom";
 import {
   METRICS,
   SECTIONS,
-  customMetricValue,
-  formatCustomMetric,
   formatMetric,
-  metricChange,
   normalizeAnalysisConfig,
   periodDates,
   comparisonDates,
   type AnalysisConfig,
   type ProjectDocument,
-  type InsightItem,
   type SectionKey,
   type MetricKey,
   type CustomMetricDefinition,
   type MetricSize,
   type MetricGoal,
-  type MetricValues,
 } from "@/lib/projects/model";
 import { PRIMARY_KPI_IDS, isPrimaryKpiId, type MetricUnit, type PrimaryKpiId } from "@/lib/metrics/catalog";
 import { inferCalculationFormat } from "@/lib/metrics/engine";
 import { Dialog, FieldMessage, MetaMark, Toast, shortDate } from "./ui";
-import { LineChart } from "./line-chart";
+import { deriveMetricCard, resolveMetricOrder } from "./metric-cards";
+import { ReportBlock, SectionHeading, funnelMetricsFor } from "./report-blocks";
 import { workspaceHref } from "@/lib/projects/routes";
 import {
   REPORT_MESSAGE_TEMPLATES,
@@ -35,10 +31,10 @@ import {
   type ReportMessageTemplateId,
 } from "@/lib/report-templates";
 import { InterfaceIcon } from "./interface-icon";
+import { ShareMenu } from "./share-menu";
+import { clientPreviewPath, hasPublishedVersion, hasUnpublishedChanges } from "@/lib/projects/publication";
 import ProgressMetricCard, {
   type CardSize,
-  type MetricAccent,
-  type SeriesPoint,
 } from "@/components/ui/progress-metric-card";
 
 const defaultCustomMetric = (): CustomMetricDefinition => ({
@@ -57,67 +53,12 @@ const defaultCustomMetric = (): CustomMetricDefinition => ({
   formula: "Valor informado manualmente",
 });
 
-const metricUnitLabel = (unit: MetricUnit | undefined, currency: string) => {
-  if (unit === "currency") return currency;
-  if (unit === "percent") return "percentual";
-  if (unit === "ratio") return "índice";
-  return "contagem";
-};
-
-const safeRatio = (numerator: number | null, denominator: number | null, multiplier = 1) =>
-  numerator != null && denominator != null && denominator !== 0
-    ? numerator / denominator * multiplier
-    : null;
-
-function aggregateCampaignMetrics(
-  campaigns: Array<{ metrics: MetricValues }>,
-): MetricValues {
-  const values = Object.fromEntries(
-    (Object.keys(METRICS) as MetricKey[]).map((metric) => [metric, null]),
-  ) as MetricValues;
-  for (const metric of Object.keys(METRICS) as MetricKey[]) {
-    if (METRICS[metric].aggregation !== "sum") continue;
-    values[metric] = campaigns.reduce((sum, campaign) => sum + (campaign.metrics[metric] ?? 0), 0);
-  }
-  values.ctr = safeRatio(values.link_clicks, values.impressions, 100);
-  values.cpc = safeRatio(values.spend, values.link_clicks);
-  values.cpm = safeRatio(values.spend, values.impressions, 1000);
-  values.roas = safeRatio(values.revenue, values.spend);
-  values.cpa = safeRatio(values.spend, values.purchases);
-  values.cost_message = safeRatio(values.spend, values.messages);
-  values.cpl = safeRatio(values.spend, values.leads);
-  // Alcance é único no nível da conta e não pode ser somado entre campanhas.
-  values.reach = null;
-  values.frequency = null;
-  return values;
-}
-
 const defaultMetricGoal = (): MetricGoal => ({
   type: "target",
   value: 0,
   cadence: "monthly",
   autoRenew: true,
 });
-
-function SectionHeading({
-  title,
-  description,
-  unit,
-}: {
-  title: string;
-  description: string;
-  unit?: string;
-}) {
-  return (
-    <header className="pj-block-heading">
-      <div>
-        <h3>{title}</h3>
-        <p>{description}</p>
-      </div>
-      {unit ? <span className="pj-chart-unit">Unidade: {unit}</span> : null}
-    </header>
-  );
-}
 
 export function AnalysisView({
   document: doc,
@@ -153,9 +94,6 @@ export function AnalysisView({
     [reportCopied, setReportCopied] = useState(false),
     [reportCopyError, setReportCopyError] = useState(""),
     [link, setLink] = useState(""),
-    [publicLink, setPublicLink] = useState(""),
-    [publicCopied, setPublicCopied] = useState(false),
-    [publicCopyError, setPublicCopyError] = useState(""),
     [draggedMetric, setDraggedMetric] = useState(""),
     [dropTargetMetric, setDropTargetMetric] = useState(""),
     [resizingMetric, setResizingMetric] = useState(""),
@@ -192,10 +130,6 @@ export function AnalysisView({
         ),
       ),
     [doc.id, doc.client_id, doc.kind],
-  );
-  useEffect(
-    () => setPublicLink(doc.share_token ? `${window.location.origin}/report/${doc.share_token}` : ""),
-    [doc.share_token],
   );
   useEffect(() => {
     if (!menu) return;
@@ -271,26 +205,8 @@ export function AnalysisView({
     setConfig((c) => ({ ...c, ...value }));
   const customMetrics = config.custom_metrics ?? [];
   const metricAliases = config.metric_aliases ?? {};
-  const availableMetricIds = [
-    ...config.metrics,
-    ...customMetrics.map((metric) => metric.id),
-    ...Object.keys(metricAliases),
-  ];
-  const metricOrder = [
-    ...(config.metric_order ?? []).filter((id) =>
-      availableMetricIds.includes(id),
-    ),
-    ...availableMetricIds.filter(
-      (id) => !(config.metric_order ?? []).includes(id),
-    ),
-  ];
-  const funnelMetrics: MetricKey[] = config.funnel_metrics?.length
-    ? config.funnel_metrics
-    : config.metrics.includes("purchases")
-      ? ["link_clicks", "landing_views", "checkouts", "purchases"]
-      : config.metrics.includes("messages")
-        ? ["impressions", "link_clicks", "messages"]
-        : ["impressions", "link_clicks", "leads"];
+  const metricOrder = resolveMetricOrder(config);
+  const funnelMetrics = funnelMetricsFor(config);
   const replaceMetric = (current: MetricKey, next: MetricKey) => {
     if (current === next || config.metrics.includes(next)) return;
     if (config.primary_metric === current && !isPrimaryKpiId(next)) return;
@@ -692,17 +608,14 @@ export function AnalysisView({
         : {},
     );
   };
-  // "Ver como cliente" opens the read-only client view without going through
-  // the public share link - a dashboard's own team can always see it, no
-  // token required. Reports and drafts keep the old authenticated preview,
-  // since the client-view route only serves published dashboards.
+  // "Ver como cliente": dashboards open the private, read-only client view of the
+  // CURRENT saved version in a new tab (it never creates a public link and never
+  // exposes a draft). Other document kinds keep the authenticated app preview.
   const viewAsClient = () => {
-    if (doc.kind !== "dashboard" || doc.status !== "published") {
-      window.open(link, "_blank", "noopener,noreferrer");
-      return;
-    }
-    const previewPath = `/projects/${encodeURIComponent(doc.client_id)}/preview/${encodeURIComponent(doc.id)}`;
-    window.open(`${window.location.origin}${previewPath}`, "_blank", "noopener,noreferrer");
+    const target = doc.kind === "dashboard"
+      ? `${window.location.origin}${clientPreviewPath(doc.client_id, doc.id)}`
+      : link;
+    window.open(target, "_blank", "noopener,noreferrer");
   };
   const refreshRef = useRef(() => {});
   refreshRef.current = () => {
@@ -755,88 +668,6 @@ export function AnalysisView({
       );
     }
   };
-  const row = (items: InsightItem[], name: string) => items.length ? (
-    <div
-      className="pj-table-scroll"
-      role="region"
-      aria-label={`Tabela de desempenho por ${name.toLowerCase()}`}
-      aria-busy={busy}
-      tabIndex={0}
-    >
-      {busy ? (
-        <div className="pj-table-loading" role="status" aria-live="polite">
-          Atualizando dados…
-        </div>
-      ) : null}
-      <p className="pj-table-hint" aria-hidden="true">
-        Deslize horizontalmente para ver todas as métricas →
-      </p>
-      <table>
-        <caption className="pj-sr-only">
-          Desempenho detalhado por {name.toLowerCase()}, com investimento e métricas configuradas.
-        </caption>
-        <thead>
-          <tr>
-            <th>{name}</th>
-            <th>Investimento</th>
-            {config.metrics
-              .filter((k) => !["spend", "reach", "impressions"].includes(k))
-              .slice(0, 4)
-              .map((k) => (
-                <th key={k}>{METRICS[k].label}</th>
-              ))}
-            <th>Impressões</th>
-          </tr>
-        </thead>
-        <tbody>
-          {items.map((item) => (
-            <tr key={item.id}>
-              <td>
-                {item.thumbnail && (
-                  <img
-                    className="pj-thumb"
-                    src={item.thumbnail}
-                    alt={"Criativo de " + item.name}
-                    referrerPolicy="no-referrer"
-                  />
-                )}
-                <strong>{item.name}</strong>
-                {name === "Anúncio" && !item.thumbnail && (
-                  <small>Prévia indisponível</small>
-                )}
-              </td>
-              <td>{formatMetric("spend", item.metrics.spend, currency)}</td>
-              {config.metrics
-                .filter((k) => !["spend", "reach", "impressions"].includes(k))
-                .slice(0, 4)
-                .map((k) => (
-                  <td key={k}>{formatMetric(k, item.metrics[k], currency)}</td>
-                ))}
-              <td>
-                {formatMetric(
-                  "impressions",
-                  item.metrics.impressions,
-                  currency,
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  ) : busy ? (
-    <div className="pj-table-skeleton" role="status" aria-live="polite" aria-label={`Carregando ${name.toLowerCase()}`}>
-      <span />
-      <span />
-      <span />
-      <span />
-    </div>
-  ) : (
-    <div className="pj-no-data" role="status">
-      <strong>Nenhum dado encontrado</strong>
-      <span>Não há resultados de {name.toLowerCase()} para este período e filtro.</span>
-    </div>
-  );
   function renderSection(section: SectionKey) {
     if (!data) return null;
     switch (section) {
@@ -844,93 +675,14 @@ export function AnalysisView({
         return (
           <div className="pj-metric-grid">
             {metricOrder.map((id) => {
-              const custom = customMetrics.find((metric) => metric.id === id);
-              const builtIn = id in METRICS
-                ? (id as MetricKey)
-                : metricAliases[id] ?? null;
-              if (!custom && !builtIn) return null;
-              const definition = builtIn ? METRICS[builtIn] : custom!;
+              const model = deriveMetricCard(id, config, data, currency);
+              if (!model) return null;
+              const builtIn = id in METRICS ? (id as MetricKey) : metricAliases[id] ?? null;
               const campaignIds = config.metric_campaign_filters?.[id] ?? [];
-              const filteredValues = campaignIds.length
-                ? aggregateCampaignMetrics(
-                    data.campaigns.filter((campaign) => campaignIds.includes(campaign.id)),
-                  )
-                : null;
-              const value = builtIn
-                ? filteredValues?.[builtIn] ?? (campaignIds.length ? null : data.current[builtIn])
-                : customMetricValue(custom!, filteredValues ?? data.current);
-              const previous = campaignIds.length
-                ? null
-                : builtIn
-                  ? data.previous?.[builtIn]
-                : custom?.kind === "calculated"
-                  ? customMetricValue(custom, data.previous)
-                  : null;
-              const delta = metricChange(value, previous);
-              const savedSize = config.metric_sizes?.[id] ?? "compact";
-              const size = resizePreview?.id === id ? resizePreview.size : savedSize;
-              const showChart = config.metric_charts?.[id] !== false;
-              const formatted = builtIn
-                ? formatMetric(builtIn, value, currency)
-                : formatCustomMetric(custom!, value, currency);
-              const formattedPrevious = builtIn
-                ? formatMetric(builtIn, previous, currency)
-                : formatCustomMetric(custom!, previous, currency);
-              const seriesData: SeriesPoint[] = campaignIds.length ? [] : data.daily.flatMap((day) => {
-                const pointValue = builtIn
-                  ? day.metrics[builtIn]
-                  : custom?.kind === "calculated"
-                    ? customMetricValue(custom, day.metrics)
-                    : null;
-                return typeof pointValue === "number" && Number.isFinite(pointValue)
-                  ? [{ date: day.date, value: pointValue }]
-                  : [];
-              });
-              const favorableDirection = builtIn
-                ? METRICS[builtIn].favorableDirection
-                : custom?.lower
-                  ? "decrease"
-                  : "increase";
-              const favorable = delta == null || delta === 0 || favorableDirection === "neutral"
-                ? null
-                : favorableDirection === "decrease"
-                  ? delta < 0
-                  : delta > 0;
-              const accent: MetricAccent = delta == null || delta === 0
-                ? "neutral"
-                : favorableDirection === "neutral"
-                  ? "blue"
-                : favorable
-                  ? "emerald"
-                  : "rose";
+              const showChart = model.props.showChart;
+              const label = model.props.title;
+              const size = resizePreview?.id === id ? resizePreview.size : model.savedSize;
               const cardSize: CardSize = size === "full" ? "lg" : size === "wide" ? "md" : "sm";
-              const effectiveSince = data.effective_period?.since ?? config.since;
-              const effectiveUntil = data.effective_period?.until ?? config.until;
-              const periodLabel = effectiveSince && effectiveUntil
-                ? `${shortDate(effectiveSince)} – ${shortDate(effectiveUntil)}`
-                : "Período atual";
-              const comparisonLabel = !data.previous
-                ? "Comparação desativada"
-                : campaignIds.length
-                  ? `${campaignIds.length} campanha${campaignIds.length === 1 ? "" : "s"} neste indicador`
-                : previous === 0 && value != null
-                  ? "O período anterior terminou em zero"
-                  : previous != null
-                    ? `${formattedPrevious} no período anterior`
-                    : "Sem dado no período anterior";
-              const statusLabel = delta == null
-                ? campaignIds.length
-                  ? "Filtro por campanha"
-                  : data.previous
-                  ? "Sem base comparável"
-                  : "Sem comparação"
-                : delta === 0
-                  ? "Sem variação"
-                  : favorable == null
-                    ? "Variação"
-                    : favorable
-                      ? "Melhora"
-                      : "Piora";
               return (
                 <div
                   className={`pj-progress-metric-item size-${size} ${id === config.primary_metric ? "is-primary" : ""} ${selectedMetric === id ? "is-selected" : ""} ${draggedMetric === id ? "is-dragging" : ""} ${dropTargetMetric === id ? "is-drop-target" : ""} ${resizingMetric === id ? "is-resizing" : ""}`}
@@ -961,48 +713,13 @@ export function AnalysisView({
                   }}
                 >
                   <ProgressMetricCard
-                    title={definition.label}
-                    description={definition.description || "Métrica personalizada"}
-                    total={formatted}
-                    percent={delta == null ? undefined : `${Math.abs(delta).toFixed(1).replace(".", ",")}%`}
-                    trend={delta == null || delta === 0 ? "flat" : delta > 0 ? "up" : "down"}
-                    statusLabel={statusLabel}
-                    comparisonLabel={comparisonLabel}
-                    period={periodLabel}
-                    unitLabel={metricUnitLabel(definition.unit, currency)}
-                    accent={accent}
-                    data={seriesData}
+                    {...model.props}
                     size={cardSize}
-                    showChart={showChart}
-                    featured={id === config.primary_metric}
-                    highlighted={(config.featured_metrics ?? []).includes(id)}
-                    goal={config.metric_goals?.[id] && value != null ? (() => {
-                      const goal = config.metric_goals![id];
-                      const progress = goal.value > 0 ? value / goal.value * 100 : 0;
-                      const reached = goal.type === "target" ? value >= goal.value : value <= goal.value;
-                      return {
-                        label: goal.type === "target" ? "Meta" : "Limite",
-                        valueLabel: builtIn
-                          ? formatMetric(builtIn, goal.value, currency)
-                          : formatCustomMetric(custom!, goal.value, currency),
-                        progress,
-                        status: reached
-                          ? goal.type === "target" ? "Meta atingida" : "Dentro do limite"
-                          : `${Math.min(Math.round(progress), 999)}% alcançado`,
-                      };
-                    })() : undefined}
-                    defaultIndex={Math.max(seriesData.length - 1, 0)}
-                    dateFormatter={shortDate}
-                    valueFormatter={(pointValue) =>
-                      builtIn
-                        ? formatMetric(builtIn, pointValue, currency)
-                        : formatCustomMetric(custom!, pointValue, currency)
-                    }
                     controls={editor && !preview && selectedMetric === id ? (
-                      <div className="pj-metric-controls" role="toolbar" aria-label={`Editar ${definition.label}`}>
+                      <div className="pj-metric-controls" role="toolbar" aria-label={`Editar ${label}`}>
                         <button
                           className="pj-drag-handle"
-                          aria-label={`Arrastar ${definition.label}`}
+                          aria-label={`Arrastar ${label}`}
                           title="Segure e arraste para reordenar"
                           onPointerDown={(event) => startMetricDrag(event, id)}
                         >
@@ -1010,18 +727,18 @@ export function AnalysisView({
                         </button>
                         <button
                           className={(config.featured_metrics ?? []).includes(id) ? "is-active" : ""}
-                          aria-label={`${(config.featured_metrics ?? []).includes(id) ? "Remover destaque de" : "Destacar"} ${definition.label}`}
+                          aria-label={`${(config.featured_metrics ?? []).includes(id) ? "Remover destaque de" : "Destacar"} ${label}`}
                           title="Destacar"
                           onClick={() => toggleFeatured(id)}
                         >
                           <InterfaceIcon name={(config.featured_metrics ?? []).includes(id) ? "star-filled" : "star"} size={18} />
                         </button>
                         {builtIn ? (
-                          <button aria-label={`Duplicar ${definition.label}`} title="Duplicar" onClick={() => duplicateMetric(id, builtIn)}><InterfaceIcon name="copy" size={18} /></button>
+                          <button aria-label={`Duplicar ${label}`} title="Duplicar" onClick={() => duplicateMetric(id, builtIn)}><InterfaceIcon name="copy" size={18} /></button>
                         ) : null}
                         {builtIn ? (
                           <button
-                            aria-label={`Trocar ${definition.label}`}
+                            aria-label={`Trocar ${label}`}
                             title="Trocar métrica"
                             onClick={() => {
                               setReplacingMetric(id);
@@ -1033,11 +750,11 @@ export function AnalysisView({
                             <InterfaceIcon name="settings" size={18} />
                           </button>
                         ) : null}
-                        <button aria-label={`Definir meta para ${definition.label}`} title="Meta ou limite" onClick={() => openMetricGoal(id)}><InterfaceIcon name="goals" size={18} /></button>
+                        <button aria-label={`Definir meta para ${label}`} title="Meta ou limite" onClick={() => openMetricGoal(id)}><InterfaceIcon name="goals" size={18} /></button>
                         {builtIn ? (
                           <button
                             className={campaignIds.length ? "is-active" : ""}
-                            aria-label={`Filtrar ${definition.label} por campanha`}
+                            aria-label={`Filtrar ${label} por campanha`}
                             title="Filtrar por campanha"
                             onClick={() => openCampaignFilter(id)}
                           >
@@ -1046,7 +763,7 @@ export function AnalysisView({
                         ) : null}
                         <button
                           className={showChart ? "is-active" : ""}
-                          aria-label={`${showChart ? "Ocultar" : "Exibir"} gráfico de ${definition.label}`}
+                          aria-label={`${showChart ? "Ocultar" : "Exibir"} gráfico de ${label}`}
                           aria-pressed={showChart}
                           title={showChart ? "Ocultar gráfico" : "Exibir gráfico"}
                           onClick={() => toggleMetricChart(id)}
@@ -1054,7 +771,7 @@ export function AnalysisView({
                           <InterfaceIcon name="chart-line" size={18} />
                         </button>
                         <button
-                          aria-label={`Alterar tamanho de ${definition.label}`}
+                          aria-label={`Alterar tamanho de ${label}`}
                           title="Alternar entre compacto, largo e largura total"
                           onClick={() => resizeMetric(id)}
                         >
@@ -1062,7 +779,7 @@ export function AnalysisView({
                         </button>
                         <button
                           className="danger"
-                          aria-label={`Remover ${definition.label}`}
+                          aria-label={`Remover ${label}`}
                           disabled={builtIn != null && config.metrics.length <= 1}
                           onClick={() => removeMetric(id)}
                         >
@@ -1075,7 +792,7 @@ export function AnalysisView({
                     <button
                       type="button"
                       className="pj-resize-handle"
-                      aria-label={`Redimensionar ${definition.label}`}
+                      aria-label={`Redimensionar ${label}`}
                       title="Arraste para a esquerda ou direita para alterar o tamanho"
                       onPointerDown={(event) => startMetricResize(event, id)}
                     >
@@ -1087,159 +804,15 @@ export function AnalysisView({
             })}
           </div>
         );
-      case "daily": {
-        return (
-          <section className="pj-block">
-            <SectionHeading
-              title="Investimento ao longo do período"
-              description="Evolução diária do valor registrado pela Meta para os filtros selecionados."
-              unit={currency}
-            />
-            {data.daily.length ? (
-              <>
-                <div className="pj-chart-legend" aria-label={`Legenda: investimento em ${currency}`}>
-                  <span><i className="investment" aria-hidden="true" /> Investimento</span>
-                </div>
-                <LineChart
-                  daily={data.daily}
-                  metric="spend"
-                  currency={currency}
-                  color="var(--pj-primary)"
-                  label="Investimento"
-                  unitLabel={currency}
-                />
-                <details>
-                  <summary>Ver valores por dia</summary>
-                  {row(
-                    data.daily.map((d) => ({
-                      id: d.date,
-                      name: shortDate(d.date),
-                      metrics: d.metrics,
-                    })),
-                    "Dia",
-                  )}
-                </details>
-              </>
-            ) : (
-              <div className="pj-no-data" role="status">
-                <strong>Sem evolução diária</strong>
-                <span>Não há investimento diário para o período e os filtros selecionados.</span>
-              </div>
-            )}
-          </section>
-        );
-      }
-      case "results": {
-        const metric = config.primary_metric;
-        return (
-          <section className="pj-block">
-            <SectionHeading
-              title={`${METRICS[metric].label} ao longo do período`}
-              description={`Evolução diária do KPI principal: ${METRICS[metric].description}`}
-              unit={metricUnitLabel(METRICS[metric].unit, currency)}
-            />
-            {data.daily.length ? (
-              <>
-                <div className="pj-chart-legend" aria-label={`Legenda: ${METRICS[metric].label}`}>
-                  <span><i aria-hidden="true" /> {METRICS[metric].label}</span>
-                </div>
-                <LineChart
-                  daily={data.daily}
-                  metric={metric}
-                  currency={currency}
-                  color="var(--pj-primary)"
-                  label={METRICS[metric].label}
-                  unitLabel={metricUnitLabel(METRICS[metric].unit, currency)}
-                />
-                <details>
-                  <summary>Ver valores do KPI por dia</summary>
-                  {row(
-                    data.daily.map((day) => ({
-                      id: day.date,
-                      name: shortDate(day.date),
-                      metrics: day.metrics,
-                    })),
-                    "Dia",
-                  )}
-                </details>
-              </>
-            ) : (
-              <div className="pj-no-data" role="status">
-                <strong>Sem evolução diária</strong>
-                <span>Não há dados diários do KPI principal para este período.</span>
-              </div>
-            )}
-          </section>
-        );
-      }
-      case "funnel": {
-        return (
-          <section className="pj-block">
-            <SectionHeading
-              title="Etapas de resultado"
-              description="Leitura das etapas reportadas pela Meta, sem inferir uma jornada individual entre elas."
-            />
-            <div className="pj-funnel">
-              {funnelMetrics.map((k, i) => (
-                <div
-                  key={k}
-                  style={{
-                    width: 100 - i * 13 + "%",
-                    background: ["#e4edff", "#b2cbf6", "#719de2", "#2457aa"][i],
-                    color: i > 1 ? "white" : "#1a3967",
-                  }}
-                >
-                  <span>{METRICS[k].label}</span>
-                  <strong>{formatMetric(k, data.current[k], currency)}</strong>
-                </div>
-              ))}
-            </div>
-            <p className="pj-footnote">
-              Eventos reportados pela Meta. As etapas não comprovam que as
-              mesmas pessoas percorreram todo o caminho.
-            </p>
-          </section>
-        );
-      }
+      case "daily":
+      case "results":
+      case "funnel":
       case "campaigns":
-        return (
-          <section className="pj-block">
-            <SectionHeading title="Campanhas em destaque" description="Onde investimento e resultados tiveram maior impacto no período." />
-            {row(data.campaigns, "Campanha")}
-          </section>
-        );
       case "adsets":
-        return (
-          <section className="pj-block">
-            <SectionHeading title="Conjuntos de anúncios" description="Detalhamento dos conjuntos que compõem o resultado da conta." />
-            {row(data.adsets, "Conjunto")}
-          </section>
-        );
       case "ads":
-        return (
-          <section className="pj-block">
-            <SectionHeading title="Criativos e anúncios" description="Desempenho dos anúncios e prévias disponibilizadas pela Meta." />
-            {row(data.ads, "Anúncio")}
-            <p className="pj-footnote">
-              Prévias disponíveis para até 12 anúncios com maior investimento. A
-              disponibilidade depende da Meta.
-            </p>
-          </section>
-        );
       case "platforms":
-        return (
-          <section className="pj-block">
-            <SectionHeading title="Desempenho por plataforma" description="Comparação dos resultados reportados em cada posicionamento de plataforma." />
-            {row(data.platforms, "Plataforma")}
-          </section>
-        );
       case "audience":
-        return (
-          <section className="pj-block">
-            <SectionHeading title="Público por idade e gênero" description="Distribuição dos resultados nos segmentos disponibilizados pela Meta." />
-            {row(data.audience, "Público")}
-          </section>
-        );
+        return <ReportBlock section={section} config={config} data={data} currency={currency} busy={busy} />;
       case "analysis":
         return (
           <section className={`pj-block pj-inline-analysis ${inlineAnalysis && editor && !preview ? "is-editing" : ""}`}>
@@ -1287,7 +860,9 @@ export function AnalysisView({
         </button>
         <strong>{title}</strong>
         <span className="pj-badge">
-          {doc.status === "published" ? "Publicado" : "Rascunho"}
+          {hasUnpublishedChanges(doc)
+            ? "Publicado · alterações não publicadas"
+            : doc.status === "published" ? "Publicado" : "Rascunho"}
         </span>
         <div className="pj-toolbar-right">
           {staff && preview && (
@@ -1300,6 +875,16 @@ export function AnalysisView({
               Ver como cliente
               <InterfaceIcon name="external" size={18} />
             </button>
+          )}
+          {staff && doc.kind === "dashboard" && (
+            <ShareMenu
+              doc={doc}
+              clientName={clientName}
+              since={effectiveSince}
+              until={effectiveUntil}
+              busy={busy}
+              onAction={(a) => action(a)}
+            />
           )}
           <div className="pj-copy-report">
             <button
@@ -1366,10 +951,12 @@ export function AnalysisView({
               </div>
             ) : null}
           </div>
-          <button onClick={() => setShare(true)}>
-            <InterfaceIcon name="share" size={18} />
-            Compartilhar
-          </button>
+          {!(staff && doc.kind === "dashboard") && (
+            <button onClick={() => setShare(true)}>
+              <InterfaceIcon name="share" size={18} />
+              Compartilhar
+            </button>
+          )}
           {staff && !preview && (
             <div className="pj-more-actions">
               <button
@@ -1426,7 +1013,7 @@ export function AnalysisView({
                   }}>
                     Adicionar à linha do tempo
                   </button>
-                  {doc.kind === "dashboard" && doc.status === "published" && (
+                  {doc.kind === "dashboard" && (doc.status === "published" || hasPublishedVersion(doc)) && (
                     <button role="menuitem" disabled={busy} onClick={() => {
                       setMenu(false);
                       menuButtonRef.current?.focus();
@@ -1518,13 +1105,13 @@ export function AnalysisView({
                   Salvar alterações
                 </button>
               )}
-              {doc.status === "draft" && (
+              {(doc.status === "draft" || hasUnpublishedChanges(doc)) && (
                 <button
                   className={!dirty ? "primary" : ""}
                   disabled={busy || !data || dirty}
                   onClick={() => void action("publish")}
                 >
-                  Publicar
+                  {hasPublishedVersion(doc) ? "Publicar alterações" : "Publicar"}
                 </button>
               )}
             </div>
@@ -2397,65 +1984,9 @@ export function AnalysisView({
       )}
       {share && (
         <Dialog title="Compartilhar análise" close={() => setShare(false)}>
-          {doc.kind === "dashboard" && (
-            <div className="pj-public-share-section">
-              <h4>Link público</h4>
-              {doc.share_token ? (
-                <>
-                  <p>
-                    Quem tiver este link abre o dashboard sem fazer login.
-                    Revogue a qualquer momento para encerrar o acesso.
-                  </p>
-                  <input readOnly value={publicLink} aria-label="Link público do dashboard" />
-                  <div className="pj-share-grid">
-                    <button
-                      disabled={busy}
-                      onClick={async () => {
-                        try {
-                          await navigator.clipboard.writeText(publicLink);
-                          setPublicCopied(true);
-                          setPublicCopyError("");
-                        } catch {
-                          setPublicCopied(false);
-                          setPublicCopyError("Não foi possível copiar automaticamente. Selecione o endereço acima e copie manualmente.");
-                        }
-                      }}
-                    >
-                      {publicCopied ? "Link copiado ✓" : "Copiar link público"}
-                    </button>
-                    <button
-                      className="danger"
-                      disabled={busy}
-                      onClick={() => void action("revoke_link")}
-                    >
-                      Revogar link
-                    </button>
-                  </div>
-                  {publicCopyError ? <FieldMessage error>{publicCopyError}</FieldMessage> : null}
-                </>
-              ) : (
-                <>
-                  <p>
-                    Gere um link para compartilhar este dashboard com o cliente
-                    sem exigir login. Só funciona com o dashboard publicado.
-                  </p>
-                  <button
-                    className="primary"
-                    disabled={busy || doc.status !== "published"}
-                    onClick={() => void action("share_link")}
-                  >
-                    Gerar link público
-                  </button>
-                  {doc.status !== "published" && (
-                    <p className="pj-muted">Publique o dashboard para poder gerar o link público.</p>
-                  )}
-                </>
-              )}
-            </div>
-          )}
           <p>
-            Link interno: exige login e acesso autorizado ao projeto. Apenas
-            documentos publicados ficam disponíveis para o cliente.
+            O link exige login e acesso autorizado ao projeto. Apenas documentos
+            publicados ficam disponíveis para o cliente.
           </p>
           <input readOnly value={link} aria-label="Link do documento" />
           <div className="pj-share-grid">
@@ -2490,7 +2021,7 @@ export function AnalysisView({
                   rel="noreferrer"
                   href={
                     "https://wa.me/?text=" +
-                    encodeURIComponent(doc.title + "\n" + (publicLink || link))
+                    encodeURIComponent(doc.title + "\n" + link)
                   }
                 >
                   Abrir WhatsApp
@@ -2501,7 +2032,7 @@ export function AnalysisView({
                     "mailto:?subject=" +
                     encodeURIComponent(doc.title) +
                     "&body=" +
-                    encodeURIComponent("Confira a análise:\n" + (publicLink || link))
+                    encodeURIComponent("Confira a análise:\n" + link)
                   }
                 >
                   Preparar e-mail
@@ -2511,9 +2042,8 @@ export function AnalysisView({
           </div>
           {copyError ? <FieldMessage error>{copyError}</FieldMessage> : null}
           <p className="pj-muted">
-            WhatsApp e e-mail abrem uma mensagem para você revisar e enviar,
-            usando o link público quando disponível. O acesso ao link interno é
-            controlado nas configurações do projeto.
+            WhatsApp e e-mail abrem uma mensagem para você revisar e enviar. O
+            acesso é controlado nas configurações do projeto.
           </p>
         </Dialog>
       )}

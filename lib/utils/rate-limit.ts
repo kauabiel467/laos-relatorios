@@ -39,7 +39,7 @@ export function rateLimit(key: string, limit: number, windowMs: number): RateLim
   return { allowed: true, remaining: limit - bucket.count, resetAt: bucket.resetAt };
 }
 
-export function requestIp(request: Request): string {
+export function requestIp(request: { headers: Headers }): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) return forwarded.split(",")[0]?.trim() || "unknown";
   return request.headers.get("x-real-ip") ?? "unknown";

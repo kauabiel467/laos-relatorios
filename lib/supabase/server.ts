@@ -52,3 +52,20 @@ export function getSupabaseAdminClient() {
     }
   });
 }
+
+// Anonymous, cookie-free client for pages that anyone can open (public report
+// links). It carries only the publishable key, so the database itself - not
+// application code - limits what it can read to the security-definer RPCs
+// explicitly granted to the anon role.
+export function getSupabasePublicClient() {
+  if (!hasSupabaseEnv()) {
+    return null;
+  }
+
+  return createClient(env.NEXT_PUBLIC_SUPABASE_URL!, getSupabaseBrowserKey()!, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+}
