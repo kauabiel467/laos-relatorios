@@ -18,6 +18,7 @@ export type AutomationDefinition = Pick<
   | "period_preset"
   | "comparison_enabled"
   | "include_detailed_report"
+  | "detailed_report_intro"
   | "timezone"
 >;
 
@@ -31,6 +32,7 @@ export interface AutomationRunPlan {
   messageTemplate: ReportMessageTemplateId;
   comparisonEnabled: boolean;
   includeDetailedReport: boolean;
+  detailedReportIntro: string | null;
 }
 
 // Fixes the period of a run at the moment it is planned, from the automation's
@@ -55,6 +57,7 @@ export function planAutomationRun(
     messageTemplate: automation.message_template,
     comparisonEnabled: automation.comparison_enabled,
     includeDetailedReport: automation.include_detailed_report,
+    detailedReportIntro: automation.detailed_report_intro ?? null,
   };
 }
 
@@ -89,7 +92,14 @@ export type RunMessageResult =
 // the automation only supplies client, period, metrics and comparison.
 export function buildRunMessage(
   plan: AutomationRunPlan,
-  input: { clientName: string; config: Pick<AnalysisConfig, "primary_metric" | "metrics">; data: AnalysisData },
+  input: {
+    clientName: string;
+    config: Pick<AnalysisConfig, "primary_metric" | "metrics">;
+    data: Pick<AnalysisData, "current" | "previous" | "currency">;
+    // The link of THIS run's own immutable report (or the preview placeholder).
+    // Only used when the automation asked for the detailed report.
+    detailedReportLink?: string;
+  },
 ): RunMessageResult {
   const messageInput = reportMessageInputFromAnalysis({
     clientName: input.clientName,
@@ -102,7 +112,24 @@ export function buildRunMessage(
   const template = REPORT_MESSAGE_TEMPLATES.find((item) => item.id === plan.messageTemplate);
   // Same availability rule as the editor: no metric for this template -> nothing honest to say.
   if (!template || !reportTemplateAvailable(template, messageInput)) return { ok: false, reason: "template_unavailable" };
-  return { ok: true, text: buildReportMessage(plan.messageTemplate, messageInput) };
+  const text = buildReportMessage(plan.messageTemplate, messageInput);
+  return {
+    ok: true,
+    text: plan.includeDetailedReport && input.detailedReportLink
+      ? appendDetailedReportLink(text, { intro: plan.detailedReportIntro, link: input.detailedReportLink })
+      : text,
+  };
+}
+
+export const DEFAULT_DETAILED_REPORT_INTRO = "📊 Relatório detalhado\nVeja todas as métricas, gráficos e informações:";
+// Shown in previews: the real link only exists once a run has created its own snapshot.
+export const DETAILED_REPORT_LINK_PLACEHOLDER = "[LINK GERADO NA EXECUÇÃO]";
+
+// Appends the detailed-report block to a message. The link must be the run's own
+// immutable report, never the dashboard's manual share link.
+export function appendDetailedReportLink(text: string, options: { intro?: string | null; link: string }) {
+  const intro = options.intro?.trim() || DEFAULT_DETAILED_REPORT_INTRO;
+  return `${text}\n\n${intro}\n\n${options.link}`;
 }
 
 // A frozen, independent copy of the detailed report. It is a deep copy on purpose:

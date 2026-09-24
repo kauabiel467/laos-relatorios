@@ -9,6 +9,7 @@ import {
   IconChartLine,
   IconCheck,
   IconChevronDown,
+  IconClockPlay,
   IconCopy,
   IconMail,
   IconDots,
@@ -101,7 +102,8 @@ export type InterfaceIconName =
   | "star-filled"
   | "resize"
   | "calculator"
-  | "mail";
+  | "mail"
+  | "automations";
 
 const ICONS: Record<InterfaceIconName, ComponentType<IconProps>> = {
   overview: IconLayoutDashboard,
@@ -154,6 +156,7 @@ const ICONS: Record<InterfaceIconName, ComponentType<IconProps>> = {
   resize: IconArrowsDiagonal2,
   calculator: IconCalculator,
   mail: IconMail,
+  automations: IconClockPlay,
 };
 
 export function InterfaceIcon({
