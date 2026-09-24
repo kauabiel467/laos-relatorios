@@ -12,7 +12,7 @@ export const AUTOMATION_COLUMNS =
 // report_snapshot is left out of listings: it can be large and the history view
 // only needs to know a run has one (report_share_token is set when it does).
 export const AUTOMATION_RUN_COLUMNS =
-  "id,automation_id,client_id,attempt,scheduled_for,status,started_at,finished_at,timezone,period_preset,period_since,period_until,compare_since,compare_until,message_template,message_text,error_code,error_message,provider_message_id,report_share_token,created_at,updated_at";
+  "id,automation_id,client_id,attempt,scheduled_for,status,started_at,finished_at,timezone,period_preset,period_since,period_until,compare_since,compare_until,message_template,message_text,error_code,error_message,provider_message_id,trigger_type,parent_run_id,recipient_label,provider,provider_status,retryable,retry_after,report_share_token,created_at,updated_at";
 
 // next_run_at only means something while an automation is active.
 export function computeNextRunAt(

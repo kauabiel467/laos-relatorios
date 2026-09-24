@@ -1,4 +1,4 @@
-import type { AutomationRow, AutomationRunRow, AutomationRunStatus } from "./model";
+import type { AutomationRow, AutomationRunRow, AutomationRunStatus, AutomationRunTrigger } from "./model";
 import type { AutomationPeriodPreset } from "./periods";
 
 // Everything a person reads about an automation, in pt-BR. Pure, so the exact
@@ -32,6 +32,23 @@ export const RUN_STATUS_LABELS: Record<AutomationRunStatus, string> = {
   failed: "Falhou",
   skipped: "Ignorada",
 };
+
+export const RUN_TRIGGER_LABELS: Record<AutomationRunTrigger, string> = {
+  scheduled: "Agendada",
+  manual: "Manual",
+  test: "Teste",
+};
+
+// The report link of a run. A retry reuses the report of the attempt it repeats,
+// so it has no token of its own: follow the chain to the run that created it.
+export function runReportToken(run: Pick<AutomationRunRow, "report_share_token" | "parent_run_id">, byId: Map<string, Pick<AutomationRunRow, "report_share_token" | "parent_run_id">>) {
+  let current: Pick<AutomationRunRow, "report_share_token" | "parent_run_id"> | undefined = run;
+  for (let depth = 0; current && depth < 10; depth += 1) {
+    if (current.report_share_token) return current.report_share_token;
+    current = current.parent_run_id ? byId.get(current.parent_run_id) : undefined;
+  }
+  return null;
+}
 
 // "Toda segunda às 09:00" / "Todo domingo às 18:30". Postgres returns time as HH:MM:SS.
 export function scheduleLabel(automation: Pick<AutomationRow, "run_weekday" | "run_time" | "frequency">) {

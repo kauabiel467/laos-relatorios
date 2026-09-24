@@ -1,7 +1,8 @@
 import { buildReportMessage, reportTemplateAvailable, REPORT_MESSAGE_TEMPLATES, type ReportMessageTemplateId } from "@/lib/report-templates";
 import { reportMessageInputFromAnalysis } from "@/lib/report-templates/from-analysis";
 import type { AnalysisConfig, AnalysisData } from "@/lib/projects/model";
-import type { AutomationRunStatus, AutomationRow } from "./model";
+import { dateInTimeZone } from "@/lib/metrics/dates";
+import type { AutomationRunRow, AutomationRunStatus, AutomationRow } from "./model";
 import { resolveAutomationPeriod, type AutomationPeriod } from "./periods";
 
 // The pure core of the automation engine. Given an automation and "now" it
@@ -65,6 +66,37 @@ export function planAutomationRun(
 // later "now", or a run delayed past midnight would silently cover another week.
 export function retryPlan(previous: AutomationRunPlan): AutomationRunPlan {
   return { ...previous, attempt: previous.attempt + 1 };
+}
+
+// The plan of a run that is being retried, rebuilt from the run it repeats. The
+// period, comparison and template are the ones the original attempt recorded, never
+// re-derived from "now": a retry on Wednesday still reports last weekend.
+export function planFromRun(
+  automation: Pick<AutomationDefinition, "id" | "client_id" | "document_id" | "include_detailed_report" | "detailed_report_intro">,
+  run: AutomationRunRow,
+  attempt: number = run.attempt + 1,
+): AutomationRunPlan {
+  const scheduledFor = new Date(run.scheduled_for);
+  return {
+    automationId: automation.id,
+    clientId: automation.client_id,
+    documentId: automation.document_id,
+    attempt,
+    scheduledFor,
+    period: {
+      preset: run.period_preset,
+      timezone: run.timezone,
+      runDate: dateInTimeZone(scheduledFor, run.timezone),
+      since: run.period_since,
+      until: run.period_until,
+      compareSince: run.compare_since,
+      compareUntil: run.compare_until,
+    },
+    messageTemplate: run.message_template,
+    comparisonEnabled: run.compare_since !== null,
+    includeDetailedReport: automation.include_detailed_report,
+    detailedReportIntro: automation.detailed_report_intro ?? null,
+  };
 }
 
 // The dashboard's own config with the period pinned to this run's exact dates, so

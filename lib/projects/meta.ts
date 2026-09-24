@@ -4,7 +4,7 @@ import {
   readMetaSessionToken,
   requireMetaUser,
 } from "@/lib/integrations/meta-oauth";
-import { fetchGraph, MetaGraphError } from "@/lib/integrations/meta-graph";
+import { fetchGraph, MetaConnectionError, MetaGraphError } from "@/lib/integrations/meta-graph";
 import {
   type AnalysisConfig,
   type AnalysisData,
@@ -173,8 +173,10 @@ export async function unlinkProjectMeta(cid: string) {
   const { error } = await db.rpc("agency_unlink_meta_connection", { cid });
   if (error) throw Error("Não foi possível desvincular a conta deste projeto.");
 }
-async function credentials(cid: string) {
-  await authorizeProject(cid);
+// The project's Meta credentials with no session check. Only code that has
+// already established who may act (a signed-in project member, or the report
+// executor running a stored automation) may call this.
+async function loadCredentials(cid: string) {
   const admin = getSupabaseAdminClient();
   if (!admin) throw Error("Serviço indisponível.");
   const { data: c } = await admin
@@ -183,7 +185,7 @@ async function credentials(cid: string) {
     .eq("client_id", cid)
     .single();
   if (!c)
-    throw Error("Vincule novamente a Meta nas integrações deste projeto.");
+    throw new MetaConnectionError("Vincule novamente a Meta nas integrações deste projeto.", "not_linked");
   const { data: s } = await admin
     .from("meta_integration_sessions")
     .select("access_token,stage,accounts")
@@ -196,8 +198,9 @@ async function credentials(cid: string) {
       (item) => item.id === c.account_id,
     )
   )
-    throw Error(
+    throw new MetaConnectionError(
       "A conexão expirou ou foi revogada. Reconecte a Meta nas integrações.",
+      "expired",
     );
   const metadata = (s.accounts as MetaAdAccount[] | null)?.find(
     (item) => item.id === c.account_id || `act_${item.accountId}` === c.account_id,
@@ -208,6 +211,10 @@ async function credentials(cid: string) {
     timezone: metadata?.timezoneName,
     currency: metadata?.currency,
   };
+}
+async function credentials(cid: string) {
+  await authorizeProject(cid);
+  return loadCredentials(cid);
 }
 
 export async function testProjectMetaConnection(cid: string) {
@@ -268,7 +275,23 @@ export async function collectAnalysis(
   cid: string,
   config: AnalysisConfig,
 ): Promise<AnalysisData> {
-  const credentialsResult = await credentials(cid);
+  return collectWithCredentials(await credentials(cid), config);
+}
+
+// The same collector for the report executor, which runs without a browser
+// session (scheduler) or after its own authorization (Executar agora). Never
+// expose this to a request handler that has not checked access to `cid`.
+export async function collectAnalysisForAutomation(
+  cid: string,
+  config: AnalysisConfig,
+): Promise<AnalysisData> {
+  return collectWithCredentials(await loadCredentials(cid), config);
+}
+
+async function collectWithCredentials(
+  credentialsResult: Awaited<ReturnType<typeof loadCredentials>>,
+  config: AnalysisConfig,
+): Promise<AnalysisData> {
   const { token, account } = credentialsResult;
   let timezone = credentialsResult.timezone;
   let currency = credentialsResult.currency;

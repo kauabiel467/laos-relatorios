@@ -33,7 +33,13 @@ const serverSchema = sharedSchema.extend({
   IFOOD_TOKEN_ENCRYPTION_KEY: optionalString,
   IFOOD_API_BASE_URL: optionalUrl,
   CARDAPIO_API_URL: optionalUrl,
-  CARDAPIO_API_TOKEN: optionalString
+  CARDAPIO_API_TOKEN: optionalString,
+  // Report automations: shared secret for the internal scheduler endpoint and
+  // the WhatsApp Cloud API credentials. Server-only; never NEXT_PUBLIC_.
+  CRON_SECRET: optionalString,
+  WHATSAPP_CLOUD_ACCESS_TOKEN: optionalString,
+  WHATSAPP_CLOUD_PHONE_NUMBER_ID: optionalString,
+  WHATSAPP_CLOUD_API_VERSION: optionalString
 });
 
 export const env = serverSchema.parse({
@@ -54,7 +60,11 @@ export const env = serverSchema.parse({
   IFOOD_TOKEN_ENCRYPTION_KEY: process.env.IFOOD_TOKEN_ENCRYPTION_KEY,
   IFOOD_API_BASE_URL: process.env.IFOOD_API_BASE_URL,
   CARDAPIO_API_URL: process.env.CARDAPIO_API_URL,
-  CARDAPIO_API_TOKEN: process.env.CARDAPIO_API_TOKEN
+  CARDAPIO_API_TOKEN: process.env.CARDAPIO_API_TOKEN,
+  CRON_SECRET: process.env.CRON_SECRET,
+  WHATSAPP_CLOUD_ACCESS_TOKEN: process.env.WHATSAPP_CLOUD_ACCESS_TOKEN,
+  WHATSAPP_CLOUD_PHONE_NUMBER_ID: process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID,
+  WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION
 });
 
 export function getSupabaseBrowserKey() {

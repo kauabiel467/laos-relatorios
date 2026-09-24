@@ -12,6 +12,19 @@ export class MetaGraphError extends Error {
   }
 }
 
+// The project has no usable Meta connection: never linked, or the authorization
+// was revoked/expired. Thrown by the credential lookup so callers (the report
+// executor) can tell it apart from a temporary outage without parsing messages.
+export class MetaConnectionError extends Error {
+  constructor(
+    message: string,
+    public readonly kind: "not_linked" | "expired",
+  ) {
+    super(message);
+    this.name = "MetaConnectionError";
+  }
+}
+
 async function graphPayload(response: Response) {
   const text = await response.text();
   if (!text) return {};

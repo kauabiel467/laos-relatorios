@@ -24,18 +24,12 @@ type PublicReportRow = {
   client_logo_url: string | null;
 };
 
-// Resolves a share token to the last PUBLISHED version of a dashboard. A wrong
-// token, a deactivated link and a dashboard that was restricted again all
-// return null, so callers cannot tell them apart. One row-limited RPC call and
-// nothing else: it never loads the workspace.
-export async function loadPublishedReportByToken(token: string): Promise<ClientReport | null> {
+async function loadReportViaRpc(rpc: "get_public_dashboard" | "get_public_automation_report", token: string): Promise<ClientReport | null> {
   const parsed = z.string().uuid().safeParse(token);
   if (!parsed.success) return null;
   const db = getSupabasePublicClient();
   if (!db) return null;
-  const { data, error } = await db
-    .rpc("get_public_dashboard", { p_token: parsed.data })
-    .maybeSingle<PublicReportRow>();
+  const { data, error } = await db.rpc(rpc, { p_token: parsed.data }).maybeSingle<PublicReportRow>();
   if (error || !data?.config || !data.data) return null;
   return {
     title: data.title,
@@ -45,6 +39,22 @@ export async function loadPublishedReportByToken(token: string): Promise<ClientR
     clientName: data.client_name,
     clientLogoUrl: data.client_logo_url,
   };
+}
+
+// Resolves a share token to the last PUBLISHED version of a dashboard. A wrong
+// token, a deactivated link and a dashboard that was restricted again all
+// return null, so callers cannot tell them apart. One row-limited RPC call and
+// nothing else: it never loads the workspace.
+export function loadPublishedReportByToken(token: string): Promise<ClientReport | null> {
+  return loadReportViaRpc("get_public_dashboard", token);
+}
+
+// Resolves the token of ONE automation run to that run's frozen report. It is a
+// different token space and a different function from the dashboard link: it
+// reads only the run's own snapshot and can never expose (or be changed by) the
+// dashboard's published version.
+export function loadAutomationRunReportByToken(token: string): Promise<ClientReport | null> {
+  return loadReportViaRpc("get_public_automation_report", token);
 }
 
 // The manager's private "ver como cliente": the CURRENT saved version, gated by
