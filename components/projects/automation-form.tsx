@@ -67,6 +67,75 @@ function initialState(initial: AutomationListItem | undefined, dashboards: Dashb
   };
 }
 
+// "Enviar teste": sends the automation as configured RIGHT NOW in this form (saved
+// or not) to a number typed here. It never touches the schedule, is recorded as a
+// test, and refuses the real recipient unless the person confirms it.
+function TestSend({ clientId, automation, overrides }: { clientId: string; automation: AutomationListItem; overrides: Record<string, unknown> }) {
+  const [phone, setPhone] = useState("");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
+  const [busy, setBusy] = useState(false);
+  const [needsConfirm, setNeedsConfirm] = useState(false);
+  const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
+
+  async function send(confirmProduction = false) {
+    if (busy) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const response = await fetch(`/api/projects/${clientId}/automations/${automation.id}/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "test",
+          request_id: requestId,
+          phone,
+          confirm_production_recipient: confirmProduction || undefined,
+          overrides: Object.fromEntries(Object.entries(overrides).filter(([, value]) => value !== undefined)),
+        }),
+      });
+      const body = await response.json();
+      if (response.status === 409 && body.code === "confirm_production_recipient") {
+        setNeedsConfirm(true);
+        setMessage({ error: true, text: body.error });
+        return;
+      }
+      if (!response.ok) throw Error(body.error || "Não foi possível enviar o teste.");
+      setNeedsConfirm(false);
+      setMessage(body.status === "sent"
+        ? { error: false, text: "Teste enviado. Ele aparece no histórico como “Teste”." }
+        : { error: true, text: body.run?.error_message || "O teste falhou." });
+      setRequestId(crypto.randomUUID());
+    } catch (caught) {
+      setMessage({ error: true, text: caught instanceof Error ? caught.message : "Não foi possível enviar o teste." });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <fieldset className="pj-auto-test">
+      <legend>Enviar teste</legend>
+      <p className="pj-hint">Envia esta configuração agora para o número abaixo (não para o cliente). A mensagem vem marcada como teste e o agendamento não muda.</p>
+      <div className="pj-auto-row">
+        <label>
+          Seu telefone com DDI
+          <input
+            value={phone}
+            onChange={(event) => { setPhone(event.target.value); setNeedsConfirm(false); }}
+            // Enter here must send the test, never submit (save) the whole form.
+            onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void send(false); } }}
+            inputMode="tel"
+            placeholder="+5511999999999"
+          />
+        </label>
+        <button type="button" disabled={busy || !phone.trim()} onClick={() => void send(false)}>{busy ? "Enviando…" : "Enviar teste"}</button>
+      </div>
+      {needsConfirm ? <button type="button" className="danger" disabled={busy} onClick={() => void send(true)}>Enviar mesmo assim ao destinatário real</button> : null}
+      {message ? <FieldMessage error={message.error}>{message.text}</FieldMessage> : null}
+    </fieldset>
+  );
+}
+
 const KIND_OPTIONS: Array<{ value: Kind; title: string; help: string }> = [
   { value: "single", title: "Automação única", help: "Um relatório, no dia e período que você escolher." },
   { value: "rotina_laos", title: "Rotina LAOS — 2 relatórios por semana", help: "Segunda (sexta → domingo) e sexta (segunda → quinta)." },
@@ -74,6 +143,7 @@ const KIND_OPTIONS: Array<{ value: Kind; title: string; help: string }> = [
 ];
 
 export function AutomationForm({
+  clientId,
   initial,
   dashboards,
   clientName,
@@ -83,6 +153,7 @@ export function AutomationForm({
   onCancel,
   onSubmit,
 }: {
+  clientId: string;
   initial?: AutomationListItem;
   dashboards: DashboardOption[];
   clientName: string;
@@ -258,7 +329,7 @@ export function AutomationForm({
               <input value={form.recipientName} onChange={(event) => set("recipientName", event.target.value)} maxLength={120} placeholder={clientName} />
             </label>
           </div>
-          <small>O envio real pelo WhatsApp entra na próxima etapa; aqui você só define quem vai receber.</small>
+          <small>O envio é feito pelo WhatsApp oficial da agência. Para testar antes de ativar, use “Enviar teste”, disponível ao editar a automação.</small>
         </fieldset>
 
         <fieldset className="pj-auto-step">
@@ -387,6 +458,14 @@ export function AutomationForm({
             {!editing && !form.activate ? <small>Sem ativar, a automação nasce pausada e nada é agendado até você ativá-la.</small> : null}
           </div>
         </fieldset>
+
+        {initial ? (
+          <TestSend
+            clientId={clientId}
+            automation={initial}
+            overrides={{ ...shared, recipient: undefined, name: undefined, period_preset: form.preset, run_weekday: form.weekday }}
+          />
+        ) : null}
 
         {localError || error ? <FieldMessage error>{localError || error}</FieldMessage> : null}
         <div className="pj-auto-actions">

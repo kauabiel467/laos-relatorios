@@ -13,6 +13,7 @@ import {
 } from "@/lib/automations/format";
 import { AutomationForm, type AutomationSubmit } from "./automation-form";
 import { AutomationHistory } from "./automation-history";
+import { AutomationRunDialog } from "./automation-run-dialog";
 import { Dialog, Empty, FieldMessage, LoadingState, Toast } from "./ui";
 import { InterfaceIcon } from "./interface-icon";
 
@@ -41,6 +42,7 @@ export function ProjectAutomationsView({
   const [toast, setToast] = useState("");
   const [confirmDelete, setConfirmDelete] = useState<AutomationListItem | null>(null);
   const [deleteError, setDeleteError] = useState("");
+  const [runNow, setRunNow] = useState<AutomationListItem | null>(null);
   const endpoint = `/api/projects/${clientId}/automations`;
 
   const load = useCallback(async () => {
@@ -133,6 +135,7 @@ export function ProjectAutomationsView({
           </div>
         </div>
         <AutomationForm
+          clientId={clientId}
           initial={editing}
           dashboards={payload.dashboards}
           clientName={payload.project.name || clientName}
@@ -147,7 +150,7 @@ export function ProjectAutomationsView({
   }
 
   if (mode.type === "history") {
-    return <AutomationHistory clientId={clientId} automation={mode.automation} onBack={() => setMode({ type: "list" })} />;
+    return <AutomationHistory clientId={clientId} automation={mode.automation} canManage={canManage} onBack={() => setMode({ type: "list" })} />;
   }
 
   return (
@@ -194,7 +197,7 @@ export function ProjectAutomationsView({
                 <footer className="pj-auto-card-actions">
                   <button type="button" disabled={!canManage} onClick={() => { setFormError(""); setMode({ type: "edit", automation }); }}>Editar</button>
                   <button type="button" disabled={!canManage || busy} onClick={() => toggle(automation)}>{automation.status === "active" ? "Pausar" : "Ativar"}</button>
-                  <button type="button" disabled title="A execução manual chega junto com o envio real, na próxima etapa.">Executar agora</button>
+                  <button type="button" disabled={!canManage || busy} title={canManage ? "Envia agora, pelo mesmo processo do envio agendado." : "Somente dono e gerente da equipe executam automações."} onClick={() => setRunNow(automation)}>Executar agora</button>
                   <button type="button" onClick={() => setMode({ type: "history", automation })}>Histórico</button>
                   <button type="button" className="danger" disabled={!canManage} onClick={() => { setDeleteError(""); setConfirmDelete(automation); }}>Excluir</button>
                 </footer>
@@ -215,6 +218,16 @@ export function ProjectAutomationsView({
             <button type="button" className="danger" disabled={busy} onClick={() => remove(confirmDelete)}>{busy ? "Excluindo…" : "Excluir automação"}</button>
           </div>
         </Dialog>
+      ) : null}
+      {runNow ? (
+        <AutomationRunDialog
+          clientId={clientId}
+          automation={runNow}
+          onClose={(changed) => {
+            setRunNow(null);
+            if (changed) void load();
+          }}
+        />
       ) : null}
       {toast ? <Toast message={toast} close={() => setToast("")} /> : null}
     </section>

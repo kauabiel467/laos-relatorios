@@ -13,6 +13,9 @@ export type AutomationStatus = (typeof AUTOMATION_STATUSES)[number];
 export const AUTOMATION_RUN_STATUSES = ["scheduled", "running", "sent", "failed", "skipped"] as const;
 export type AutomationRunStatus = (typeof AUTOMATION_RUN_STATUSES)[number];
 
+export const AUTOMATION_RUN_TRIGGERS = ["scheduled", "manual", "test"] as const;
+export type AutomationRunTrigger = (typeof AUTOMATION_RUN_TRIGGERS)[number];
+
 export const AUTOMATION_FREQUENCIES = ["weekly"] as const;
 export const AUTOMATION_CHANNELS = ["whatsapp"] as const;
 
@@ -107,6 +110,15 @@ export interface AutomationRunRow {
   error_code: string | null;
   error_message: string | null;
   provider_message_id: string | null;
+  trigger_type: AutomationRunTrigger;
+  parent_run_id: string | null;
+  requested_by: string | null;
+  idempotency_key: string | null;
+  recipient_label: string | null;
+  provider: string | null;
+  provider_status: string | null;
+  retryable: boolean;
+  retry_after: string | null;
   report_snapshot: { title: string; config: unknown; data: unknown } | null;
   report_share_token: string | null;
   created_at: string;
