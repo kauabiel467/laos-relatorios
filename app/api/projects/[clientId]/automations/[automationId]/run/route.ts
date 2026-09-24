@@ -3,6 +3,7 @@ import { z } from "zod";
 import { authorizeProject, ProjectAccessError } from "@/lib/projects/access";
 import { executeAutomationRun } from "@/lib/automations/executor";
 import { automationPatchSchema, type AutomationRow, type AutomationRunRow } from "@/lib/automations/model";
+import { listDeliverySummaries } from "@/lib/automations/delivery-store";
 import { createExecutorDeps } from "@/lib/automations/runtime";
 import { AUTOMATION_COLUMNS, AUTOMATION_RUN_COLUMNS } from "@/lib/automations/store";
 import { normalizePhone } from "@/lib/whatsapp/phone";
@@ -86,7 +87,9 @@ export async function POST(request: NextRequest, context: { params: Promise<{ cl
         .maybeSingle();
       if (!parentRow) throw new ProjectAccessError("Execução não encontrada ou inacessível.", 404);
       const parent = parentRow as unknown as AutomationRunRow;
-      if (parent.status !== "failed") throw Error("Só é possível tentar novamente uma execução que falhou.");
+      // A run can also be repeated when WhatsApp accepted it but then failed to deliver it.
+      const deliveryFailed = parent.status === "sent" && (await listDeliverySummaries(db, [parent.id])).get(parent.id)?.status === "failed";
+      if (parent.status !== "failed" && !deliveryFailed) throw Error("Só é possível tentar novamente uma execução que falhou.");
       if (parent.trigger_type === "test") throw Error("Testes não são repetidos: envie um novo teste.");
       outcome = await executeAutomationRun(deps, {
         automation, trigger: parent.trigger_type, scheduledFor: new Date(parent.scheduled_for), requestedBy: user.id, retryOf: parent,

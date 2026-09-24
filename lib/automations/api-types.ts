@@ -1,5 +1,11 @@
 import type { AutomationRow, AutomationRunRow } from "./model";
+import type { DeliverySummary } from "./delivery";
 import type { PreviewSample } from "./preview";
+
+// A run as the history screen receives it: with what WhatsApp reported afterwards.
+export interface AutomationRunWithDelivery extends AutomationRunRow {
+  delivery: DeliverySummary | null;
+}
 
 // The shape of GET /api/projects/[clientId]/automations, shared by the route and the screen.
 export interface AutomationListItem extends AutomationRow {

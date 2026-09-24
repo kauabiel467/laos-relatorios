@@ -39,7 +39,11 @@ const serverSchema = sharedSchema.extend({
   CRON_SECRET: optionalString,
   WHATSAPP_CLOUD_ACCESS_TOKEN: optionalString,
   WHATSAPP_CLOUD_PHONE_NUMBER_ID: optionalString,
-  WHATSAPP_CLOUD_API_VERSION: optionalString
+  WHATSAPP_CLOUD_API_VERSION: optionalString,
+  // Webhook de status de entrega do WhatsApp: token de verificação (GET) e segredo
+  // do app Meta que assina cada POST (X-Hub-Signature-256).
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: optionalString,
+  WHATSAPP_APP_SECRET: optionalString
 });
 
 export const env = serverSchema.parse({
@@ -64,7 +68,9 @@ export const env = serverSchema.parse({
   CRON_SECRET: process.env.CRON_SECRET,
   WHATSAPP_CLOUD_ACCESS_TOKEN: process.env.WHATSAPP_CLOUD_ACCESS_TOKEN,
   WHATSAPP_CLOUD_PHONE_NUMBER_ID: process.env.WHATSAPP_CLOUD_PHONE_NUMBER_ID,
-  WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION
+  WHATSAPP_CLOUD_API_VERSION: process.env.WHATSAPP_CLOUD_API_VERSION,
+  WHATSAPP_WEBHOOK_VERIFY_TOKEN: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN,
+  WHATSAPP_APP_SECRET: process.env.WHATSAPP_APP_SECRET
 });
 
 export function getSupabaseBrowserKey() {

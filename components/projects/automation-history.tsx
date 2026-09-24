@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { AutomationListItem } from "@/lib/automations/api-types";
-import type { AutomationRunRow, AutomationRunStatus } from "@/lib/automations/model";
+import type { AutomationListItem, AutomationRunWithDelivery } from "@/lib/automations/api-types";
+import { DELIVERY_LABELS } from "@/lib/automations/delivery";
+import type { AutomationRunStatus } from "@/lib/automations/model";
 import { CHANNEL_LABELS, formatInstantFull, formatPeriod, RUN_STATUS_LABELS, RUN_TRIGGER_LABELS, runReportToken } from "@/lib/automations/format";
 import { Empty, FieldMessage, LoadingState } from "./ui";
 
@@ -19,7 +20,7 @@ export function AutomationHistory({
   canManage: boolean;
   onBack: () => void;
 }) {
-  const [state, setState] = useState<{ status: "loading" } | { status: "error"; message: string } | { status: "ready"; runs: AutomationRunRow[] }>({ status: "loading" });
+  const [state, setState] = useState<{ status: "loading" } | { status: "error"; message: string } | { status: "ready"; runs: AutomationRunWithDelivery[] }>({ status: "loading" });
   const [retrying, setRetrying] = useState<string | null>(null);
   const [retryMessage, setRetryMessage] = useState<{ error: boolean; text: string } | null>(null);
 
@@ -28,7 +29,7 @@ export function AutomationHistory({
       const response = await fetch(`/api/projects/${clientId}/automations?runs=${automation.id}`, { cache: "no-store" });
       const body = await response.json();
       if (!response.ok) throw Error(body.error || "Não foi possível carregar o histórico.");
-      setState({ status: "ready", runs: body.runs as AutomationRunRow[] });
+      setState({ status: "ready", runs: body.runs as AutomationRunWithDelivery[] });
     } catch (error) {
       setState({ status: "error", message: error instanceof Error ? error.message : "Não foi possível carregar o histórico." });
     }
@@ -43,7 +44,7 @@ export function AutomationHistory({
   // A failed run can be retried until something already retried it.
   const retried = useMemo(() => new Set(runs.map((run) => run.parent_run_id).filter(Boolean) as string[]), [runs]);
 
-  async function retry(run: AutomationRunRow) {
+  async function retry(run: AutomationRunWithDelivery) {
     if (retrying) return;
     setRetrying(run.id);
     setRetryMessage(null);
@@ -88,7 +89,8 @@ export function AutomationHistory({
         <ol className="pj-auto-runs">
           {runs.map((run) => {
             const token = runReportToken(run, byId);
-            const canRetry = canManage && run.status === "failed" && run.trigger_type !== "test" && !retried.has(run.id);
+            const deliveryFailed = run.status === "sent" && run.delivery?.status === "failed";
+            const canRetry = canManage && (run.status === "failed" || deliveryFailed) && run.trigger_type !== "test" && !retried.has(run.id);
             return (
               <li key={run.id} className={`pj-auto-run is-${run.status}`}>
                 <div className="pj-auto-run-head">
@@ -102,9 +104,16 @@ export function AutomationHistory({
                   <div><dt>Canal</dt><dd>{CHANNEL_LABELS[automation.channel] ?? automation.channel}</dd></div>
                   <div><dt>Destinatário</dt><dd>{run.recipient_label ?? "—"}</dd></div>
                   <div><dt>Relatório detalhado</dt><dd>{token ? "Incluído" : "—"}</dd></div>
+                  {run.status === "sent" ? (
+                    <div>
+                      <dt>Entrega no WhatsApp</dt>
+                      <dd>{run.delivery ? DELIVERY_LABELS[run.delivery.status] : "Aguardando confirmação"}</dd>
+                    </div>
+                  ) : null}
                   {run.provider_message_id ? <div><dt>ID no WhatsApp</dt><dd className="pj-auto-mono">{run.provider_message_id}</dd></div> : null}
                 </dl>
                 {run.error_message ? <p className="pj-auto-run-error" role="alert">{run.error_message}</p> : null}
+                {run.delivery?.status === "failed" && run.delivery.error_message ? <p className="pj-auto-run-error" role="alert">{run.delivery.error_message}</p> : null}
                 {run.status === "failed" && run.retryable && run.retry_after && !retried.has(run.id) ? (
                   <p className="pj-hint">Nova tentativa automática após {formatInstantFull(run.retry_after, run.timezone)}.</p>
                 ) : null}
