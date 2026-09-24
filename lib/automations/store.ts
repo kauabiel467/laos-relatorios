@@ -7,7 +7,7 @@ import { nextRunAt } from "./schedule";
 // backend engine writes them, with the service role.
 
 export const AUTOMATION_COLUMNS =
-  "id,client_id,document_id,name,routine_key,message_template,period_preset,comparison_enabled,include_detailed_report,frequency,run_weekday,run_time,timezone,channel,recipient,status,created_by,created_at,updated_at,last_run_at,next_run_at";
+  "id,client_id,document_id,name,routine_key,message_template,period_preset,comparison_enabled,include_detailed_report,detailed_report_intro,frequency,run_weekday,run_time,timezone,channel,recipient,status,created_by,created_at,updated_at,last_run_at,next_run_at";
 
 // report_snapshot is left out of listings: it can be large and the history view
 // only needs to know a run has one (report_share_token is set when it does).
@@ -65,6 +65,58 @@ export async function createAutomation(
     .single();
   if (error) throw Error(friendlyError(error, "Não foi possível criar a automação."));
   return data as unknown as AutomationRow;
+}
+
+// Several automations in ONE statement, so a routine is created whole or not at all.
+export async function createAutomations(
+  db: SupabaseClient,
+  clientId: string,
+  actorId: string,
+  inputs: AutomationInput[],
+  now: Date = new Date(),
+) {
+  const { data, error } = await db
+    .from("agency_report_automations")
+    .insert(
+      inputs.map((input) => ({
+        client_id: clientId,
+        created_by: actorId,
+        ...input,
+        routine_key: input.routine_key ?? null,
+        next_run_at: computeNextRunAt(input, now),
+      })),
+    )
+    .select(AUTOMATION_COLUMNS);
+  if (error) throw Error(friendlyError(error, "Não foi possível criar as automações."));
+  return (data ?? []) as unknown as AutomationRow[];
+}
+
+export async function deleteAutomation(db: SupabaseClient, automation: Pick<AutomationRow, "id" | "client_id">) {
+  const { error } = await db
+    .from("agency_report_automations")
+    .delete()
+    .eq("id", automation.id)
+    .eq("client_id", automation.client_id);
+  if (!error) return;
+  // Runs keep their automation alive on purpose: history is never orphaned.
+  if (error.code === "23503") throw Error("Esta automação já tem histórico de execuções. Pause-a em vez de excluir.");
+  throw Error(friendlyError(error, "Não foi possível excluir a automação."));
+}
+
+// Most recent run of each automation of a project (the list shows "Última: enviado").
+export async function listLatestRuns(db: SupabaseClient, clientId: string) {
+  const { data, error } = await db
+    .from("agency_report_automation_runs")
+    .select(AUTOMATION_RUN_COLUMNS)
+    .eq("client_id", clientId)
+    .order("scheduled_for", { ascending: false })
+    .limit(500);
+  if (error) throw Error("Não foi possível carregar as execuções.");
+  const latest = new Map<string, AutomationRunRow>();
+  for (const run of (data ?? []) as unknown as AutomationRunRow[]) {
+    if (!latest.has(run.automation_id)) latest.set(run.automation_id, run);
+  }
+  return latest;
 }
 
 export async function updateAutomation(

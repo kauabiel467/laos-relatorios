@@ -18,6 +18,7 @@ import { AnalysisView } from "./analysis-view";
 import { PreservedReport } from "./preserved-report";
 import { ProjectDetailsFields } from "./project-details-fields";
 import { ProjectAccessPanel } from "./project-access-panel";
+import { ProjectAutomationsView } from "./project-automations-view";
 import { ProjectIntegrations } from "./project-integrations";
 import { ProjectSetupFlow } from "./project-setup-flow";
 import { WorkspaceTemplatesView } from "./workspace-templates-view";
@@ -39,6 +40,7 @@ const viewLabels: Record<WorkspaceView, string> = {
   dashboards: "Dashboards",
   reports: "Relatórios",
   integrations: "Integrações",
+  automations: "Automações",
   timeline: "Linha do tempo",
   goals: "Metas",
   settings: "Dados do projeto",
@@ -716,6 +718,7 @@ export function ProjectsWorkspace({
     { label: "Dashboards", icon: "dashboards", view: "dashboards" },
     { label: "Relatórios", icon: "reports", view: "reports" },
     { label: "Integrações", icon: "integrations", view: "integrations", visible: staff },
+    { label: "Automações", icon: "automations", view: "automations", visible: staff },
     { label: "Linha do tempo", icon: "timeline", view: "timeline" },
     { label: "Metas", icon: "goals", view: "goals" },
     { label: "Dados do projeto", icon: "settings", view: "settings", visible: staff },
@@ -1060,11 +1063,12 @@ export function ProjectsWorkspace({
                       ["dashboards", "Dashboards"],
                       ["reports", "Relatórios"],
                       ["integrations", "Integrações"],
+                      ["automations", "Automações"],
                       ["timeline", "Linha do tempo"],
                       ["goals", "Metas"],
                     ]
                       .filter(
-                        ([key]) => staff || key !== "integrations",
+                        ([key]) => staff || !["integrations", "automations"].includes(key),
                       )
                       .map(([key, label]) => (
                         <button
@@ -1183,6 +1187,9 @@ export function ProjectsWorkspace({
                       {busy ? "Salvando…" : "Salvar preferências"}
                     </button>
                   </form>
+                )}
+                {view === "automations" && staff && (
+                  <ProjectAutomationsView clientId={cid} clientName={project.name} canManage={canManageAccess} />
                 )}
                 {view === "access" && (
                   <ProjectAccessPanel

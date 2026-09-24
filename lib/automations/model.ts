@@ -47,6 +47,8 @@ export const automationInputSchema = z.object({
   period_preset: z.enum(AUTOMATION_PERIOD_PRESETS),
   comparison_enabled: z.boolean().default(true),
   include_detailed_report: z.boolean().default(false),
+  // Only the short lead-in of the detailed-report link is customizable; empty = default text.
+  detailed_report_intro: z.string().trim().max(300).nullish().transform((value) => (value ? value : null)),
   frequency: z.enum(AUTOMATION_FREQUENCIES).default("weekly"),
   run_weekday: z.number().int().min(1).max(7),
   run_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use o formato HH:MM."),
@@ -56,6 +58,9 @@ export const automationInputSchema = z.object({
   status: z.enum(AUTOMATION_STATUSES).default("paused"),
 });
 export type AutomationInput = z.infer<typeof automationInputSchema>;
+export type AutomationFormInput = z.input<typeof automationInputSchema>;
+// For edits: only the fields that were sent, never silently reset to a default.
+export const automationPatchSchema = automationInputSchema.partial();
 
 export interface AutomationRow {
   id: string;
@@ -67,6 +72,7 @@ export interface AutomationRow {
   period_preset: AutomationPeriodPreset;
   comparison_enabled: boolean;
   include_detailed_report: boolean;
+  detailed_report_intro: string | null;
   frequency: (typeof AUTOMATION_FREQUENCIES)[number];
   run_weekday: IsoWeekday;
   run_time: string;
@@ -128,13 +134,14 @@ export type AutomationRoutineKey = keyof typeof AUTOMATION_ROUTINES;
 
 export function buildRoutineAutomations(
   routineKey: AutomationRoutineKey,
-  base: Omit<AutomationInput, "name" | "run_weekday" | "period_preset" | "routine_key">,
+  base: Omit<AutomationFormInput, "name" | "run_weekday" | "period_preset" | "routine_key">,
+  nameBase?: string,
 ): AutomationInput[] {
   const routine = AUTOMATION_ROUTINES[routineKey];
   return routine.items.map((item) =>
     automationInputSchema.parse({
       ...base,
-      name: `${routine.label} — ${item.suffix}`,
+      name: `${nameBase?.trim() || routine.label} — ${item.suffix}`,
       routine_key: routineKey,
       run_weekday: item.run_weekday,
       period_preset: item.period_preset,

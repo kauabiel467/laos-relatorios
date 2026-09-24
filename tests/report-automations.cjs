@@ -22,10 +22,16 @@ function fakeDb() {
         select() { return query; },
         insert(values) { call.op = "insert"; call.values = values; return query; },
         update(values) { call.op = "update"; call.values = values; return query; },
+        delete() { call.op = "delete"; return query; },
         eq(key, value) { call.filters.push([key, value]); return query; },
         order() { return query; },
         limit() { return query; },
         async single() { return error ? { data: null, error } : { data: { id: "row", client_id: "client-1", ...call.values }, error: null }; },
+        // supabase-js queries can be awaited directly (bulk insert, delete, list).
+        then(resolve, reject) {
+          const rows = Array.isArray(call.values) ? call.values.map((row, index) => ({ id: `row-${index}`, ...row })) : [];
+          return Promise.resolve(error ? { data: null, error } : { data: rows, error: null }).then(resolve, reject);
+        },
       };
       return query;
     },
@@ -37,7 +43,7 @@ async function main() {
   for (const file of [
     "lib/metrics/catalog.ts", "lib/metrics/dates.ts",
     "lib/report-templates/index.ts", "lib/report-templates/from-analysis.ts",
-    ...["periods", "schedule", "model", "engine", "store"].map((name) => `lib/automations/${name}.ts`),
+    ...["periods", "schedule", "model", "engine", "store", "format", "preview"].map((name) => `lib/automations/${name}.ts`),
   ]) {
     const output = path.join(dir, file.replace(/\.ts$/, ".js"));
     fs.mkdirSync(path.dirname(output), { recursive: true });
@@ -63,6 +69,8 @@ async function main() {
   const store = load("lib/automations/store.js");
   const templates = load("lib/report-templates/index.js");
   const dates = load("lib/metrics/dates.js");
+  const format = load("lib/automations/format.js");
+  const preview = load("lib/automations/preview.js");
 
   const SP = "America/Sao_Paulo";
   // Noon local time keeps these cases independent of any timezone edge.
@@ -334,18 +342,25 @@ async function main() {
   await assert.rejects(store.createAutomation(db, "client-1", "user-1", parsed), (error) => error.message === "Não foi possível criar a automação." && !/internal/.test(error.message));
 
   // ---- migration <-> code consistency ---------------------------------------------------------------------------------
-  const sql = fs.readFileSync("supabase/migrations/20260924120000_report_automations.sql", "utf8");
+  const baseSql = fs.readFileSync("supabase/migrations/20260924120000_report_automations.sql", "utf8");
+  const introSql = fs.readFileSync("supabase/migrations/20260924180000_report_automations_detailed_intro.sql", "utf8");
+  const sql = `${baseSql}\n${introSql}`;
   const list = (text) => text.split(",").map((item) => item.trim().replace(/^'|'$/g, "")).filter(Boolean);
   const checkList = (column) => list(new RegExp(`${column} text not null check \\(${column} in \\(([^)]*)\\)`).exec(sql)[1]);
   assert.deepEqual(checkList("period_preset"), [...periods.AUTOMATION_PERIOD_PRESETS]);
   assert.deepEqual(checkList("message_template"), [...model.AUTOMATION_MESSAGE_TEMPLATES]);
   assert.deepEqual(list(/status text not null default 'paused' check \(status in \(([^)]*)\)/.exec(sql)[1]), [...model.AUTOMATION_STATUSES]);
   assert.deepEqual(list(/status text not null default 'scheduled' check \(status in \(([^)]*)\)/.exec(sql)[1]), [...model.AUTOMATION_RUN_STATUSES]);
-  const insertGrant = list(/grant insert \(([^)]*)\)/.exec(sql)[1].replace(/\s+/g, " "));
-  const updateGrant = list(/grant update \(([^)]*)\)/.exec(sql)[1].replace(/\s+/g, " "));
+  // Column grants may be spread over several migrations (the intro column added its own).
+  const grantedColumns = (kind) => [...sql.matchAll(new RegExp(`grant ${kind} \\(([^)]*)\\)`, "g"))].flatMap((match) => list(match[1].replace(/\s+/g, " ")));
+  const insertGrant = grantedColumns("insert");
+  const updateGrant = grantedColumns("update");
   for (const key of Object.keys(insert.values)) assert.ok(insertGrant.includes(key), `insert column ${key} must be granted`);
   for (const key of Object.keys(db.calls[2].values)) assert.ok(updateGrant.includes(key), `update column ${key} must be granted`);
   assert.ok(!insertGrant.includes("last_run_at") && !updateGrant.includes("last_run_at"), "last_run_at belongs to the engine");
+  for (const key of ["detailed_report_intro"]) assert.ok(insertGrant.includes(key) && updateGrant.includes(key), `${key} needs its own column grants`);
+  assert.match(introSql, /add column if not exists detailed_report_intro text/, "the intro migration is purely additive");
+  assert.doesNotMatch(introSql, /drop |alter column|delete |update public/i, "the intro migration never touches existing data");
   assert.match(sql, /alter table public\.agency_report_automations enable row level security/);
   assert.match(sql, /alter table public\.agency_report_automation_runs enable row level security/);
   assert.doesNotMatch(sql, /to anon/i, "nothing here is granted to anon");
@@ -360,6 +375,113 @@ async function main() {
   }
   assert.match(fs.readFileSync("components/projects/analysis-view.tsx", "utf8"), /reportMessageInputFromAnalysis/, "the copy button uses the shared mapping");
   assert.match(fs.readFileSync("lib/automations/engine.ts", "utf8"), /reportMessageInputFromAnalysis/);
+
+
+  // ---- screen support: labels, preview, new store operations ---------------------------------------------------
+  // Wording shown in the list.
+  assert.equal(format.scheduleLabel({ run_weekday: 1, run_time: "09:00:00", frequency: "weekly" }), "Toda segunda às 09:00");
+  assert.equal(format.scheduleLabel({ run_weekday: 5, run_time: "18:30", frequency: "weekly" }), "Toda sexta às 18:30");
+  assert.equal(format.scheduleLabel({ run_weekday: 7, run_time: "08:05", frequency: "weekly" }), "Todo domingo às 08:05");
+  assert.deepEqual(["monday_thursday", "friday_sunday", "monday_sunday"].map((preset) => format.PERIOD_PRESET_TEXT[preset].short), ["Seg → Qui", "Sex → Dom", "Seg → Dom"]);
+  assert.equal(format.PERIOD_PRESET_TEXT.friday_sunday.help, "Ideal para o relatório enviado na segunda-feira.");
+  assert.equal(format.PERIOD_PRESET_TEXT.monday_thursday.help, "Ideal para o relatório enviado na sexta-feira.");
+  assert.equal(format.PERIOD_PRESET_TEXT.monday_sunday.help, "Semana completa anterior.");
+  assert.equal(format.formatPeriod("2026-09-18", "2026-09-20"), "18/09–20/09");
+  assert.equal(format.formatPeriod("2026-09-18", "2026-09-20", " → "), "18/09 → 20/09");
+  assert.equal(format.formatInstant("2026-09-28T12:00:00.000Z", SP), "28/09 às 09:00", "shown on the automation's own clock");
+  assert.equal(format.formatInstant("2026-09-28T12:00:00.000Z", "UTC"), "28/09 às 12:00");
+  assert.equal(format.formatInstantFull("2026-09-24T12:00:00.000Z", SP), "24/09/2026 09:00");
+  assert.equal(format.nextRunLabel({ status: "paused", next_run_at: "2026-09-28T12:00:00.000Z", timezone: SP }), "Pausada", "a paused automation has no next run");
+  assert.equal(format.nextRunLabel({ status: "active", next_run_at: "2026-09-28T12:00:00.000Z", timezone: SP }), "28/09 às 09:00");
+  assert.equal(format.lastRunLabel(null), "Ainda não executada");
+  assert.equal(format.lastRunLabel({ status: "sent", scheduled_for: "2026-09-24T12:00:00.000Z", timezone: SP }), "Enviado · 24/09 às 09:00");
+  assert.equal(format.lastRunLabel({ status: "failed", scheduled_for: "2026-09-24T12:00:00.000Z", timezone: SP }), "Falhou · 24/09 às 09:00");
+  assert.equal(format.comparisonLabel({ comparison_enabled: false }), "Sem comparação");
+  assert.equal(format.weekdayOptions[0].label, "Segunda-feira");
+  assert.equal(format.weekdayOptions[6].label, "Domingo");
+
+  // Edits never reset a field the person did not touch.
+  assert.deepEqual(model.automationPatchSchema.parse({ status: "active" }), { status: "active" }, "a partial patch must not re-inject defaults");
+  assert.deepEqual(model.automationPatchSchema.parse({ detailed_report_intro: "" }), { detailed_report_intro: null });
+  assert.throws(() => model.automationPatchSchema.parse({ recipient: { type: "phone", phone: "+5511999999999", token: "x" } }));
+  assert.equal(model.automationInputSchema.parse({ ...valid, detailed_report_intro: "  Veja tudo:  " }).detailed_report_intro, "Veja tudo:");
+  assert.equal(model.automationInputSchema.parse({ ...valid, detailed_report_intro: "   " }).detailed_report_intro, null, "blank means: use the default text");
+  assert.throws(() => model.automationInputSchema.parse({ ...valid, detailed_report_intro: "x".repeat(301) }));
+  assert.equal(model.buildRoutineAutomations("rotina_laos", base, "Fresh")[0].name, "Fresh — segunda · sexta a domingo");
+
+  // The preview is the engine's own message, for the period of the NEXT run.
+  const previewForm = { message_template: "sales", period_preset: "friday_sunday", comparison_enabled: true, include_detailed_report: true, detailed_report_intro: null, timezone: SP, run_weekday: 1, run_time: "09:00" };
+  const sample = { currency: "BRL", primary_metric: "purchases", metrics: dashboardConfig.metrics, current: data.current, previous: data.previous };
+  const built = preview.buildAutomationPreview({ clientName: "Los Burguer", sample, form: previewForm, now: new Date("2026-09-25T18:00:00Z") });
+  assert.equal(built.nextRunAt.toISOString(), "2026-09-28T12:00:00.000Z");
+  assert.equal(`${built.period.since}..${built.period.until}`, "2026-09-25..2026-09-27", "the period the Monday run will compute");
+  assert.equal(`${built.period.compareSince}..${built.period.compareUntil}`, "2026-09-18..2026-09-20");
+  assert.equal(built.message.ok, true);
+  assert.equal(built.usedExample, false);
+  assert.match(built.message.text, /^\*Los Burguer\*/);
+  assert.match(built.message.text, /📆 \(25\/09 a 27\/09\)/);
+  assert.match(built.message.text, /\n\n📊 Relatório detalhado\nVeja todas as métricas, gráficos e informações:\n\n\[LINK GERADO NA EXECUÇÃO\]$/, "default lead-in and a placeholder, never a real link");
+  const custom = preview.buildAutomationPreview({ clientName: "Los Burguer", sample, form: { ...previewForm, detailed_report_intro: "Confira o completo:" }, now: new Date("2026-09-25T18:00:00Z") });
+  assert.match(custom.message.text, /\n\nConfira o completo:\n\n\[LINK GERADO NA EXECUÇÃO\]$/);
+  assert.doesNotMatch(custom.message.text, /Relatório detalhado/, "a custom lead-in replaces the default one");
+  const withoutLink = preview.buildAutomationPreview({ clientName: "Los Burguer", sample, form: { ...previewForm, include_detailed_report: false }, now: new Date("2026-09-25T18:00:00Z") });
+  assert.doesNotMatch(withoutLink.message.text, /LINK GERADO|detalhado/);
+  const withoutComparison = preview.buildAutomationPreview({ clientName: "Los Burguer", sample, form: { ...previewForm, comparison_enabled: false }, now: new Date("2026-09-25T18:00:00Z") });
+  assert.equal(withoutComparison.period.compareSince, null);
+  // Identical to what a real run produces for the same plan (minus the placeholder).
+  const realPlan = engine.planAutomationRun({ id: "x", client_id: "c", document_id: docId, detailed_report_intro: null, ...previewForm }, { now: built.nextRunAt });
+  assert.equal(built.message.text, engine.buildRunMessage(realPlan, { clientName: "Los Burguer", config: dashboardConfig, data, detailedReportLink: engine.DETAILED_REPORT_LINK_PLACEHOLDER }).text);
+  // No dashboard results yet: clearly flagged example figures instead of an empty preview.
+  const fallback = preview.buildAutomationPreview({ clientName: "Los Burguer", sample: null, form: previewForm, now: new Date("2026-09-25T18:00:00Z") });
+  assert.equal(fallback.usedExample, true);
+  assert.equal(fallback.message.ok, true);
+  assert.equal(preview.buildAutomationPreview({ clientName: "X", sample: { ...sample, metrics: ["spend"] }, form: { ...previewForm, message_template: "traffic" }, now: new Date("2026-09-25T18:00:00Z") }).message.ok, false);
+  assert.throws(() => preview.buildAutomationPreview({ clientName: "X", sample, form: { ...previewForm, run_time: "9h" } }), /Horário inválido/);
+  assert.equal(preview.previewSampleFromDocument({ config: { metrics: ["spend"], primary_metric: "purchases" }, data: null }), null);
+  assert.equal(preview.previewSampleFromDocument({ config: { metrics: ["spend"], primary_metric: "purchases" }, data: { currency: "USD", current: data.current } }).currency, "USD");
+  assert.equal(engine.appendDetailedReportLink("Oi", { link: "https://x/y" }), `Oi\n\n${engine.DEFAULT_DETAILED_REPORT_INTRO}\n\nhttps://x/y`);
+  // The link is only appended when the automation asked for it AND a link exists.
+  assert.equal(engine.buildRunMessage({ ...plan, includeDetailedReport: false }, { clientName: "F", config: dashboardConfig, data, detailedReportLink: "https://x" }).text.includes("https://x"), false);
+  assert.equal(engine.buildRunMessage(plan, { clientName: "F", config: dashboardConfig, data }).text.includes("Relatório detalhado"), false);
+
+  // Routines: created whole or not at all, and history keeps automations from being deleted.
+  const bulk = fakeDb();
+  const created2 = await store.createAutomations(bulk, "client-1", "user-1", routine, new Date("2026-09-25T18:00:00Z"));
+  assert.equal(bulk.calls.length, 1, "a routine is ONE insert statement");
+  assert.ok(Array.isArray(bulk.calls[0].values) && bulk.calls[0].values.length === 2);
+  assert.ok(bulk.calls[0].values.every((row) => row.created_by === "user-1" && row.client_id === "client-1"));
+  assert.ok(bulk.calls[0].values.every((row) => row.next_run_at === null), "paused routine: nothing scheduled");
+  const activeRoutine = model.buildRoutineAutomations("rotina_laos", { ...base, status: "active" });
+  await store.createAutomations(bulk, "client-1", "user-1", activeRoutine, new Date("2026-09-25T18:00:00Z"));
+  assert.deepEqual(bulk.calls[1].values.map((row) => row.next_run_at), ["2026-09-28T12:00:00.000Z", "2026-10-02T12:00:00.000Z"], "Monday 09:00 and Friday 09:00 (São Paulo)");
+  void created2;
+  bulk.failNext = { code: "23503" };
+  await assert.rejects(store.deleteAutomation(bulk, { id: "a", client_id: "c" }), /histórico de execuções/);
+  bulk.failNext = null;
+  await store.deleteAutomation(bulk, { id: "a", client_id: "c" });
+  assert.equal(bulk.calls.at(-1).op, "delete");
+  assert.deepEqual(bulk.calls.at(-1).filters, [["id", "a"], ["client_id", "c"]]);
+  // Pause keeps the configuration; reactivating recomputes the next run from "now".
+  const pausedRow = { ...created, status: "active" };
+  await store.setAutomationStatus(bulk, pausedRow, "paused");
+  assert.equal(bulk.calls.at(-1).values.next_run_at, null);
+  assert.deepEqual(Object.keys(bulk.calls.at(-1).values).sort(), ["next_run_at", "status"], "pausing writes nothing else");
+  await store.setAutomationStatus(bulk, { ...pausedRow, status: "paused" }, "active", new Date("2026-10-02T13:00:00Z"));
+  assert.equal(bulk.calls.at(-1).values.next_run_at, "2026-10-05T12:00:00.000Z", "reactivated after this week's slot: next Monday");
+
+  // ---- wiring: the section exists and is team-only ------------------------------------------------------------------
+  const routesSource = fs.readFileSync("lib/projects/routes.ts", "utf8");
+  assert.match(routesSource, /"automations"/);
+  assert.match(fs.readFileSync("app/_components/workspace-page.tsx", "utf8"), /\["integrations", "automations", "settings", "access"\]/, "client-role users get a 404 for automations");
+  const workspaceSource = fs.readFileSync("components/projects/workspace.tsx", "utf8");
+  assert.match(workspaceSource, /view === "automations" && staff/);
+  assert.match(workspaceSource, /\["automations", "Automações"\]/);
+  const formSource = fs.readFileSync("components/projects/automation-form.tsx", "utf8");
+  assert.match(formSource, /REPORT_MESSAGE_TEMPLATES/, "the template list comes from the Copiar relatório source");
+  assert.doesNotMatch(formSource, /Campanha de vendas|CAMPANHA DE VENDAS/, "the form does not hard-code template names");
+  const routeSource = fs.readFileSync("app/api/projects/[clientId]/automations/route.ts", "utf8");
+  assert.match(routeSource, /authorizeProject\(clientId, true\)/, "changes need owner/manager");
+  assert.match(routeSource, /rateLimit\(/);
 
   console.log("PASS: períodos operacionais (seg-qui, sex-dom, seg-dom), comparação semanal, timezone, agenda, motor, histórico imutável e consistência com a migration");
 }

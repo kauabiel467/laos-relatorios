@@ -42,7 +42,7 @@ export async function WorkspacePage({
 
   if (
     projectId &&
-    ["integrations", "settings", "access"].includes(view) &&
+    ["integrations", "automations", "settings", "access"].includes(view) &&
     !data.projectRoles[projectId]
   ) {
     notFound();

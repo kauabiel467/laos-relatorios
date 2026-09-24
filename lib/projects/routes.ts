@@ -3,6 +3,7 @@ export const PROJECT_SECTIONS = [
   "dashboards",
   "reports",
   "integrations",
+  "automations",
   "timeline",
   "goals",
   "settings",

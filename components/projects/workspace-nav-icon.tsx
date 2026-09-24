@@ -9,6 +9,7 @@ export type WorkspaceNavIconName = Extract<InterfaceIconName,
   | "dashboards"
   | "reports"
   | "integrations"
+  | "automations"
   | "timeline"
   | "goals"
   | "settings"
