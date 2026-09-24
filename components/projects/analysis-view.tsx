@@ -32,6 +32,7 @@ import {
 } from "@/lib/report-templates";
 import { InterfaceIcon } from "./interface-icon";
 import { ShareMenu } from "./share-menu";
+import { reportMessageInputFromAnalysis } from "@/lib/report-templates/from-analysis";
 import { clientPreviewPath, hasPublishedVersion, hasUnpublishedChanges } from "@/lib/projects/publication";
 import ProgressMetricCard, {
   type CardSize,
@@ -642,18 +643,21 @@ export function AnalysisView({
   const effectiveUntil = data?.effective_period?.until ?? config.until;
   const effectiveCompareSince = data?.effective_period?.compare_since ?? compare.compare_since;
   const effectiveCompareUntil = data?.effective_period?.compare_until ?? compare.compare_until;
-  const reportMessageInput: ReportMessageInput | null = data ? {
-    client: clientName,
-    since: effectiveSince,
-    until: effectiveUntil,
-    compareSince: config.comparison === "none" ? undefined : effectiveCompareSince,
-    compareUntil: config.comparison === "none" ? undefined : effectiveCompareUntil,
-    currency,
-    primaryMetric: config.primary_metric,
-    metrics: config.metrics,
-    current: data.current,
-    previous: config.comparison === "none" ? null : data.previous,
-  } : null;
+  const reportMessageInput: ReportMessageInput | null = data
+    ? reportMessageInputFromAnalysis({
+        clientName,
+        data,
+        period: {
+          since: effectiveSince,
+          until: effectiveUntil,
+          compareSince: effectiveCompareSince,
+          compareUntil: effectiveCompareUntil,
+        },
+        primaryMetric: config.primary_metric,
+        metrics: config.metrics,
+        comparisonEnabled: config.comparison !== "none",
+      })
+    : null;
   const copyReport = async (templateId: ReportMessageTemplateId) => {
     if (!reportMessageInput) return;
     try {
