@@ -74,6 +74,25 @@ Sem as credenciais, a execução falha com "O envio por WhatsApp ainda não foi 
 o erro aparece no histórico como "fora da janela de 24 horas". Grupos não têm suporte na API oficial: automações
 para grupo falham com `recipient_unsupported`.
 
+## Status de entrega (webhook do WhatsApp)
+
+"Enviado" no histórico significa **aceito pela Meta**. A entrega ao celular acontece depois, e a Meta avisa por
+webhook (`sent` → `delivered` → `read`, ou `failed` com um código de erro). O endpoint
+`/api/webhooks/whatsapp` recebe esses avisos e grava em `agency_report_automation_delivery_events`
+(somente acréscimo; a execução em si continua imutável). O histórico mostra "Entrega no WhatsApp: Entregue /
+Não entregue" com o motivo em português, e oferece **Tentar novamente** quando a entrega falhou.
+
+* `GET`: verificação da Meta (`hub.verify_token` comparado em tempo constante com `WHATSAPP_WEBHOOK_VERIFY_TOKEN`).
+* `POST`: exige `X-Hub-Signature-256` (HMAC-SHA256 do corpo com `WHATSAPP_APP_SECRET`); sem assinatura válida, 401.
+  Sem as variáveis configuradas, o endpoint responde 503. Só ids, status e códigos de erro são logados.
+* Configuração na Meta (app do WhatsApp → *WhatsApp → Configuração*): URL de callback
+  `https://laos-relatorios.vercel.app/api/webhooks/whatsapp`, o mesmo token de verificação e o campo **`messages`** assinado.
+
+| Variável | Descrição |
+| --- | --- |
+| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | texto secreto qualquer, o mesmo digitado na Meta |
+| `WHATSAPP_APP_SECRET` | *Configurações do app → Básico → Chave secreta do app* do app do WhatsApp |
+
 ## Idempotência e concorrência
 
 * Slot único `(automation_id, scheduled_for, attempt)` + `idempotency_key` único por envio pretendido.

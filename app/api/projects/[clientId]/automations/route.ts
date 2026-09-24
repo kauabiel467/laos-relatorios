@@ -12,6 +12,7 @@ import {
   type AutomationRow,
 } from "@/lib/automations/model";
 import { resolveAutomationTimezone } from "@/lib/automations/periods";
+import { listDeliverySummaries } from "@/lib/automations/delivery-store";
 import { previewSampleFromDocument } from "@/lib/automations/preview";
 import {
   AUTOMATION_COLUMNS,
@@ -73,7 +74,13 @@ export async function GET(request: NextRequest, context: { params: Promise<{ cli
     const runsFor = request.nextUrl.searchParams.get("runs");
     if (runsFor) {
       const automation = await loadOwnedAutomation(db, clientId, uuid.parse(runsFor));
-      return NextResponse.json({ runs: await listAutomationRuns(db, automation.id) }, { headers: { "Cache-Control": "private, no-store" } });
+      const runs = await listAutomationRuns(db, automation.id);
+      // What WhatsApp said after accepting each message (delivered / failed and why).
+      const deliveries = await listDeliverySummaries(db, runs.map((run) => run.id));
+      return NextResponse.json(
+        { runs: runs.map((run) => ({ ...run, delivery: deliveries.get(run.id) ?? null })) },
+        { headers: { "Cache-Control": "private, no-store" } },
+      );
     }
 
     // The integration's timezone is the second choice after the project's own. It
