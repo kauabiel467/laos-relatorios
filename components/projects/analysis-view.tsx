@@ -299,7 +299,7 @@ export function AnalysisView({
       },
       metric_charts: {
         ...(config.metric_charts ?? {}),
-        [copyId]: config.metric_charts?.[id] ?? true,
+        [copyId]: config.metric_charts?.[id] ?? config.metric_charts_default ?? true,
       },
     });
     setSelectedMetric(copyId);
@@ -312,12 +312,14 @@ export function AnalysisView({
         : [...featured, id],
     });
   };
+  const chartsDefault = config.metric_charts_default ?? true;
+  const chartVisible = (id: string) => config.metric_charts?.[id] ?? chartsDefault;
   const toggleMetricChart = (id: string) => {
-    const charts = { ...(config.metric_charts ?? {}) };
-    if (charts[id] === false) delete charts[id];
-    else charts[id] = false;
-    patch({ metric_charts: charts });
+    patch({ metric_charts: { ...(config.metric_charts ?? {}), [id]: !chartVisible(id) } });
   };
+  // One click for every card: also becomes the default for metrics added later.
+  const anyChartVisible = metricOrder.some(chartVisible);
+  const setAllCharts = (visible: boolean) => patch({ metric_charts_default: visible, metric_charts: {} });
   const openMetricGoal = (id: string) => {
     setGoalMetric(id);
     setGoalDraft(config.metric_goals?.[id] ?? defaultMetricGoal());
@@ -1454,6 +1456,13 @@ export function AnalysisView({
             <div className="pj-canvas-actions">
               <span>Edite o relatório diretamente no canvas</span>
               <div>
+                <button
+                  type="button"
+                  onClick={() => setAllCharts(!anyChartVisible)}
+                  title={anyChartVisible ? "Deixa todos os cards sem o gráfico de evolução diária" : "Mostra o gráfico de evolução diária em todos os cards"}
+                >
+                  {anyChartVisible ? "Ocultar todos os gráficos" : "Exibir todos os gráficos"}
+                </button>
                 <button type="button" onClick={() => addSection("analysis")}><InterfaceIcon name="plus" size={18} /> Adicionar análise</button>
                 <button
                   type="button"
