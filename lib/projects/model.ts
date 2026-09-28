@@ -74,6 +74,10 @@ export interface AnalysisConfig {
   metric_order?: string[];
   metric_sizes?: Record<string, MetricSize>;
   metric_charts?: Record<string, boolean>;
+  // Whether a metric card shows its daily chart when it has no entry in metric_charts.
+  // New dashboards start with charts hidden (false); configs saved before this field
+  // existed leave it undefined and keep showing them, so nothing published changes.
+  metric_charts_default?: boolean;
   metric_aliases?: Record<string, MetricKey>;
   featured_metrics?: string[];
   metric_goals?: Record<string, MetricGoal>;
@@ -278,6 +282,7 @@ export function defaultConfig(template = "sales"): AnalysisConfig {
     metric_order: [...t.metrics],
     metric_sizes: {},
     metric_charts: {},
+    metric_charts_default: false,
     metric_aliases: {},
     featured_metrics: [],
     metric_goals: {},

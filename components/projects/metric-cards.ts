@@ -195,7 +195,7 @@ export function deriveMetricCard(
       unitLabel: metricUnitLabel(definition.unit, currency),
       accent,
       data: seriesData,
-      showChart: config.metric_charts?.[id] !== false,
+      showChart: config.metric_charts?.[id] ?? config.metric_charts_default ?? true,
       featured: id === config.primary_metric,
       highlighted: (config.featured_metrics ?? []).includes(id),
       goal: goalConfig && value != null
